@@ -1,0 +1,290 @@
+# Tech Stack & Best Practices
+
+This document defines the core technologies, architecture decisions, and development practices for doc-platform.
+
+---
+
+## Overview
+
+doc-platform consists of two integrated products:
+1. **Documentation Editor** - Git-backed Markdown editor with inline comments and AI assistance
+2. **Kanban Board** - Lightweight task manager with epic/task hierarchy
+
+Both share a common infrastructure and are developed in a single monorepo.
+
+---
+
+## Core Technologies
+
+### Frontend
+
+| Technology | Purpose |
+|------------|---------|
+| Preact | UI framework (lightweight React alternative) |
+| TypeScript | Type safety (strict mode) |
+| Vite | Build tool and dev server |
+| CSS Modules | Scoped styling |
+| Vitest | Unit and component testing |
+| Electron | Desktop application wrapper |
+
+### Backend (AWS)
+
+| AWS Service | Purpose |
+|-------------|---------|
+| ECS Fargate | Container hosting for API |
+| Aurora Serverless v2 | PostgreSQL database |
+| Amazon Bedrock | AI features (Claude) |
+| Cognito | Authentication (with GitHub OAuth) |
+| S3 | File and asset storage |
+| CloudFront | CDN for static assets |
+| AWS CDK | Infrastructure as code |
+
+### Tooling
+
+| Tool | Purpose |
+|------|---------|
+| pnpm | Package manager |
+| Turborepo | Monorepo build orchestration |
+| ESLint | Code linting and formatting |
+| EditorConfig | Basic editor formatting |
+
+---
+
+## Monorepo Structure
+
+```
+doc-platform/
+├── apps/
+│   ├── web/                 # Preact web application
+│   ├── desktop/             # Electron wrapper
+│   └── api/                 # Node.js backend API
+├── packages/
+│   ├── ui/                  # Shared Preact components
+│   ├── models/              # State management (Model/SyncModel)
+│   ├── router/              # Custom router
+│   ├── fetch/               # Custom fetch wrapper
+│   └── types/               # Shared TypeScript types
+├── infra/                   # AWS CDK infrastructure
+├── docs/                    # Documentation
+│   ├── tech-stack.md        # This file
+│   └── specs/               # Detailed specifications
+├── .editorconfig
+├── eslint.config.js
+├── turbo.json
+├── pnpm-workspace.yaml
+└── package.json
+```
+
+---
+
+## Custom Infrastructure
+
+We build the following from scratch rather than using third-party libraries:
+
+### Router
+- Minimal client-side router
+- Hash-based or history API routing
+- Preact-compatible hooks API
+
+### Fetch Wrapper
+- Custom HTTP client with retry logic
+- Error handling and normalization
+- Request/response interceptors
+- TypeScript generics for typed responses
+
+### State Management
+Based on the observable Model pattern:
+
+**Model** - Base observable class:
+- Static `properties` Set defines allowed fields
+- Property accessors via Object.defineProperty
+- `on('change', callback)` for subscriptions
+- `set(data)` triggers change events
+- Immutable via Object.freeze
+
+**SyncModel** - REST-synced extension:
+- Static `url` with path-to-regexp templating
+- Auto-fetches on construction
+- `$meta.working` for loading state
+
+Future extensions:
+- Optimistic updates
+- WebSocket sync
+- Offline support with IndexedDB
+
+---
+
+## Development Workflow
+
+### Local Development
+```bash
+# Install dependencies
+pnpm install
+
+# Start all apps in development mode
+pnpm dev
+
+# Run tests
+pnpm test
+
+# Lint code
+pnpm lint
+```
+
+### Branch Strategy
+- `main` - stable, deployable code
+- Feature branches off `main`
+- Pull requests for all changes
+
+### Code Review
+- All changes require PR review
+- CI must pass before merge
+- Squash merge to main
+
+---
+
+## Coding Standards
+
+### TypeScript
+- Strict mode enabled
+- Explicit return types on exported functions
+- No `any` except when absolutely necessary
+- Prefer `unknown` over `any` for unknown types
+
+### Naming Conventions
+| Item | Convention | Example |
+|------|------------|---------|
+| Files (components) | PascalCase | `DocumentEditor.tsx` |
+| Files (utilities) | camelCase | `formatDate.ts` |
+| Components | PascalCase | `DocumentEditor` |
+| Functions | camelCase | `fetchDocument` |
+| Constants | UPPER_SNAKE | `MAX_FILE_SIZE` |
+| Types/Interfaces | PascalCase | `DocumentMetadata` |
+| CSS classes | kebab-case | `.document-editor` |
+
+### File Organization
+- One component per file
+- Co-locate tests with source (`Component.test.tsx`)
+- Co-locate styles with components (`Component.module.css`)
+
+### Imports
+- Absolute imports for packages (`@doc-platform/ui`)
+- Relative imports within a package (`./utils`)
+- Group imports: external, internal, relative
+
+---
+
+## Formatting
+
+### EditorConfig
+Basic formatting enforced via `.editorconfig`:
+- Tabs for indentation (all file types)
+- Line endings (LF)
+- Final newline
+- Trailing whitespace trimmed
+
+### ESLint
+Code quality and additional formatting via ESLint:
+- TypeScript-specific rules
+- Preact/React hooks rules
+- Import ordering
+- Stylistic rules for consistent code
+
+CI enforces ESLint on all PRs.
+
+---
+
+## Testing Strategy
+
+### Unit Tests (Vitest)
+- Test pure functions and utilities
+- Mock external dependencies
+- Aim for fast, isolated tests
+
+### Component Tests (Vitest + Testing Library)
+- Test component behavior, not implementation
+- Use `@testing-library/preact`
+- Test user interactions
+
+### E2E Tests (Future)
+- Playwright for end-to-end testing
+- Test critical user flows
+
+### Coverage
+- No strict coverage requirements
+- Focus on testing critical paths
+
+---
+
+## AWS Architecture
+
+### Compute
+ECS Fargate runs the Node.js API in containers:
+- Same Docker image runs locally and in AWS
+- Auto-scaling based on load
+- No server management
+
+### Database
+Aurora Serverless v2 (PostgreSQL):
+- Scales capacity automatically (0.5 - 128 ACUs)
+- Full PostgreSQL compatibility
+- Automatic backups
+
+### Git Operations
+- Backend handles all Git operations (clone, commit, push)
+- Uses GitHub OAuth tokens for repository access
+- Repositories stored on ECS container ephemeral storage during operations
+
+### AI Integration
+Amazon Bedrock with Claude:
+- Document improvement suggestions
+- Full document AI review
+- Sidebar chat assistance
+
+### Authentication
+Cognito with GitHub OAuth:
+- GitHub OAuth for user identity
+- JWT tokens for API authentication
+- Required for GitHub repository access
+
+### Infrastructure as Code
+AWS CDK (TypeScript):
+- All infrastructure defined in code
+- Type-safe infrastructure definitions
+- Same language as application code
+
+---
+
+## Real-time Sync
+
+Initial implementation uses polling:
+- Periodic API calls to check for updates
+- Simple to implement and debug
+
+Future: API Gateway WebSockets for real-time updates.
+
+---
+
+## Separate Specifications
+
+The following topics require deeper design documents:
+
+| Spec | File | Description |
+|------|------|-------------|
+| Markdown Editor | `docs/specs/markdown-editor.md` | Editor architecture, dual-mode implementation |
+| Authentication | `docs/specs/authentication.md` | Cognito + GitHub OAuth flow, MCP PKCE |
+| MCP Integration | `docs/specs/mcp-integration.md` | MCP server design for Claude Code |
+
+---
+
+## Decision Log
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Preact over React | Preact | Smaller bundle, compatible API |
+| Custom router | Build own | Minimal footprint, no dependencies |
+| Custom state | Model pattern | Familiar pattern, fits app needs |
+| CSS Modules | CSS Modules | Scoped styles, no runtime |
+| ECS over Lambda | ECS Fargate | Consistent local/cloud environment, better for Git ops |
+| Aurora over DynamoDB | Aurora | Relational data model, full SQL |
+| CDK over Terraform | CDK | TypeScript, same language as app |
