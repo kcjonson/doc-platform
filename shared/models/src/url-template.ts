@@ -12,7 +12,8 @@ export function compileUrl(template: string, params: Record<string, string | num
 	let url = template;
 
 	for (const [key, value] of Object.entries(params)) {
-		url = url.replace(`:${key}`, String(value));
+		const encodedValue = encodeURIComponent(String(value));
+		url = url.replaceAll(`:${key}`, encodedValue);
 	}
 
 	return url;

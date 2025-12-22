@@ -117,11 +117,12 @@ export class FetchClient {
 			url += (url.includes('?') ? '&' : '?') + searchParams.toString();
 		}
 
-		// Merge headers
+		// Merge headers (ensure we work with Record<string, string>)
+		const configHeaders = (processedConfig.headers ?? {}) as Record<string, string>;
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
 			...this.headers,
-			...(processedConfig.headers as Record<string, string> || {}),
+			...configHeaders,
 		};
 
 		// Build fetch options
@@ -165,11 +166,17 @@ export class FetchClient {
 
 			// Parse response
 			let data: T;
-			const contentType = response.headers.get('content-type');
-			if (contentType?.includes('application/json')) {
-				data = await response.json() as T;
+
+			// Handle 204 No Content and other empty responses
+			if (response.status === 204 || response.headers.get('content-length') === '0') {
+				data = undefined as T;
 			} else {
-				data = await response.text() as unknown as T;
+				const contentType = response.headers.get('content-type');
+				if (contentType?.includes('application/json')) {
+					data = await response.json() as T;
+				} else {
+					data = await response.text() as unknown as T;
+				}
 			}
 
 			// Apply response interceptors

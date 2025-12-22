@@ -47,8 +47,9 @@ export function useModel<T extends Model>(model: T): T {
 
 		model.on('change', handleChange);
 
-		// No cleanup since Model doesn't have off() - listeners persist
-		// This is intentional per the original design
+		return () => {
+			model.off('change', handleChange);
+		};
 	}, [model]);
 
 	return model;

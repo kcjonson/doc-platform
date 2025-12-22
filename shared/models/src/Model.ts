@@ -46,11 +46,10 @@ export class Model {
 			throw new Error(`Model "${this.constructor.name}" has no properties. Use @prop decorator on accessor fields.`);
 		}
 
-		// Set initial data using the setters (which are defined by @prop decorator)
+		// Set initial data directly to __data (bypassing setters to avoid change events)
 		if (initialData) {
 			for (const [key, value] of Object.entries(initialData)) {
 				if (properties.has(key)) {
-					// Use the setter, but don't emit changes during initialization
 					this.__data[key] = value;
 				}
 			}
@@ -65,6 +64,19 @@ export class Model {
 			this.__listeners[event] = [];
 		}
 		this.__listeners[event].push(callback);
+	}
+
+	/**
+	 * Unsubscribe from change events.
+	 */
+	off(event: 'change', callback: ChangeCallback): void {
+		const listeners = this.__listeners[event];
+		if (listeners) {
+			const index = listeners.indexOf(callback);
+			if (index !== -1) {
+				listeners.splice(index, 1);
+			}
+		}
 	}
 
 	/**

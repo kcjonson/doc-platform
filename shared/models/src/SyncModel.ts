@@ -2,7 +2,7 @@
  * @doc-platform/models - SyncModel class
  *
  * Extends Model with REST API synchronization.
- * Auto-fetches on construction, provides save/destroy methods.
+ * Auto-fetches on construction, provides save/delete methods.
  *
  * @example
  * ```typescript
@@ -127,7 +127,6 @@ export class SyncModel extends Model {
 				this.set(result as Partial<ModelData<this>>);
 			} else {
 				// Create new
-				const ctor = this.constructor as unknown as SyncModelConstructor;
 				const baseUrl = (ctor.url || '').replace(/\/:[\w]+$/, ''); // Remove trailing :id param
 				const result = await fetchClient.post<Record<string, unknown>>(baseUrl, data);
 				this.set(result as Partial<ModelData<this>>);
@@ -152,7 +151,7 @@ export class SyncModel extends Model {
 	/**
 	 * Deletes this record from the API.
 	 */
-	async destroy(): Promise<void> {
+	async delete(): Promise<void> {
 		this.setMeta({ working: true, error: null });
 
 		try {
