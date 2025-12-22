@@ -44,6 +44,29 @@ describe('Model', () => {
 
 			expect(() => new Empty()).toThrow('has no properties');
 		});
+
+		it('should work without an id field', () => {
+			interface SettingsData {
+				theme: string;
+				notifications: boolean;
+				[key: string]: unknown;
+			}
+
+			class Settings extends Model<SettingsData> {
+				static properties = new Set(['theme', 'notifications']);
+
+				declare theme: string;
+				declare notifications: boolean;
+			}
+
+			const settings = new Settings({ theme: 'dark', notifications: true });
+
+			expect(settings.theme).toBe('dark');
+			expect(settings.notifications).toBe(true);
+
+			settings.theme = 'light';
+			expect(settings.theme).toBe('light');
+		});
 	});
 
 	describe('property access', () => {
