@@ -5,8 +5,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'preact/hooks';
-import type { Model } from './Model';
-import type { SyncModel } from './SyncModel';
+import { Model } from './Model';
+import { SyncModel } from './SyncModel';
 import type { ModelMeta } from './types';
 
 /**
@@ -20,7 +20,7 @@ import type { ModelMeta } from './types';
  * }
  * ```
  */
-export function useModel<T extends Record<string, unknown>>(model: Model<T>): Model<T> {
+export function useModel<T extends Model>(model: T): T {
 	const [, forceUpdate] = useState(0);
 
 	useEffect(() => {
@@ -57,10 +57,10 @@ export function useModel<T extends Record<string, unknown>>(model: Model<T>): Mo
  * }
  * ```
  */
-export function useSyncModel<T extends Record<string, unknown>>(
-	model: SyncModel<T>
+export function useSyncModel<T extends SyncModel>(
+	model: T
 ): {
-	model: SyncModel<T>;
+	model: T;
 	meta: ModelMeta;
 	refetch: () => Promise<void>;
 } {

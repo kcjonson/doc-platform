@@ -3,19 +3,32 @@
  *
  * Extends Model with REST API synchronization.
  * Auto-fetches on construction, provides save/destroy methods.
+ *
+ * @example
+ * ```typescript
+ * class Post extends SyncModel {
+ *   static url = '/api/posts/:id';
+ *
+ *   @prop accessor id!: number;
+ *   @prop accessor title!: string;
+ *   @prop accessor body!: string;
+ * }
+ *
+ * const post = new Post({ id: 123 }); // Auto-fetches from /api/posts/123
+ * ```
  */
 
 import { fetchClient } from '@doc-platform/fetch';
 import { Model } from './Model';
 import { compileUrl } from './url-template';
-import type { ModelMeta } from './types';
+import type { ModelMeta, ModelData } from './types';
 
 interface SyncModelConstructor {
 	url?: string;
 	idField?: string;
 }
 
-export class SyncModel<T extends Record<string, unknown> = Record<string, unknown>> extends Model<T> {
+export class SyncModel extends Model {
 	/** URL template for API endpoint (e.g., '/api/users/:id') */
 	static url: string = '';
 
@@ -27,7 +40,7 @@ export class SyncModel<T extends Record<string, unknown> = Record<string, unknow
 
 	declare readonly $meta: ModelMeta;
 
-	constructor(params?: Record<string, string | number>, initialData?: Partial<T>) {
+	constructor(params?: Record<string, string | number>, initialData?: Record<string, unknown>) {
 		super(initialData);
 
 		// Store params for URL building
@@ -80,8 +93,8 @@ export class SyncModel<T extends Record<string, unknown> = Record<string, unknow
 		this.setMeta({ working: true, error: null });
 
 		try {
-			const data = await fetchClient.get<T>(this.buildUrl());
-			this.set(data);
+			const data = await fetchClient.get<Record<string, unknown>>(this.buildUrl());
+			this.set(data as Partial<ModelData<this>>);
 			this.setMeta({ working: false, lastFetched: Date.now() });
 		} catch (error) {
 			this.setMeta({
@@ -101,24 +114,26 @@ export class SyncModel<T extends Record<string, unknown> = Record<string, unknow
 
 		const ctor = this.constructor as unknown as SyncModelConstructor;
 		const idField = ctor.idField || 'id';
-		const id = this.__data[idField];
+		// Access internal data through protected property
+		const internalData = (this as unknown as { __data: Record<string, unknown> }).__data;
+		const id = internalData[idField];
 
 		try {
-			const data = { ...this.__data } as T;
+			const data = { ...internalData };
 
 			if (id) {
 				// Update existing
-				const result = await fetchClient.put<T>(this.buildUrl(), data);
-				this.set(result);
+				const result = await fetchClient.put<Record<string, unknown>>(this.buildUrl(), data);
+				this.set(result as Partial<ModelData<this>>);
 			} else {
 				// Create new
 				const ctor = this.constructor as unknown as SyncModelConstructor;
 				const baseUrl = (ctor.url || '').replace(/\/:[\w]+$/, ''); // Remove trailing :id param
-				const result = await fetchClient.post<T>(baseUrl, data);
-				this.set(result);
+				const result = await fetchClient.post<Record<string, unknown>>(baseUrl, data);
+				this.set(result as Partial<ModelData<this>>);
 
 				// Update params with new ID if returned
-				const newId = (result as Record<string, unknown>)[idField];
+				const newId = result[idField];
 				if (newId) {
 					this.__params[idField] = newId as string | number;
 				}

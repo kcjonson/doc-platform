@@ -16,11 +16,13 @@ export const PROPERTIES = Symbol('properties');
  *
  * @example
  * ```typescript
- * class User extends Model<UserData> {
- *   @prop accessor id: number;
- *   @prop accessor name: string;
- *   @prop accessor email: string | null;
+ * class User extends Model {
+ *   @prop accessor id!: number;
+ *   @prop accessor name!: string;
+ *   @prop accessor email!: string | null;
  * }
+ *
+ * const user = new User({ id: 1, name: 'John', email: null });
  * ```
  */
 export function prop<T, V>(

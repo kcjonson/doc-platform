@@ -3,9 +3,20 @@
  *
  * Observable state container with change subscriptions.
  * Use the @prop decorator on accessor fields to define properties.
+ *
+ * @example
+ * ```typescript
+ * class User extends Model {
+ *   @prop accessor id!: number;
+ *   @prop accessor name!: string;
+ *   @prop accessor email!: string | null;
+ * }
+ *
+ * const user = new User({ id: 1, name: 'John', email: null });
+ * ```
  */
 
-import { type ChangeCallback } from './types';
+import { type ChangeCallback, type ModelData } from './types';
 import { PROPERTIES } from './prop';
 
 /**
@@ -17,7 +28,7 @@ function getProperties(model: Model): Set<string> | undefined {
 	return metadata?.[PROPERTIES] as Set<string> | undefined;
 }
 
-export class Model<T extends Record<string, unknown> = Record<string, unknown>> {
+export class Model {
 	/** Internal data storage */
 	protected __data: Record<string, unknown> = {};
 
@@ -27,7 +38,7 @@ export class Model<T extends Record<string, unknown> = Record<string, unknown>> 
 	/** Metadata */
 	readonly $meta: Record<string, unknown> = {};
 
-	constructor(initialData?: Partial<T>) {
+	constructor(initialData?: Record<string, unknown>) {
 		// Verify properties are registered via @prop decorator
 		const properties = getProperties(this);
 
@@ -66,9 +77,12 @@ export class Model<T extends Record<string, unknown> = Record<string, unknown>> 
 	 * // Set single property
 	 * user.set('name', 'John');
 	 */
-	set(data: Partial<T>): void;
-	set(property: keyof T, value: T[keyof T]): void;
-	set(dataOrProperty: Partial<T> | keyof T, value?: T[keyof T]): void {
+	set<K extends keyof ModelData<this>>(data: Partial<ModelData<this>>): void;
+	set<K extends keyof ModelData<this>>(property: K, value: ModelData<this>[K]): void;
+	set<K extends keyof ModelData<this>>(
+		dataOrProperty: Partial<ModelData<this>> | K,
+		value?: ModelData<this>[K]
+	): void {
 		const properties = getProperties(this);
 
 		if (typeof dataOrProperty === 'object' && dataOrProperty !== null) {

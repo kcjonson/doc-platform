@@ -7,14 +7,8 @@ import { Model } from './Model';
 import { prop } from './prop';
 
 // Test model using @prop decorator with accessor
-interface UserData {
-	id: number;
-	name: string;
-	email: string | null;
-	[key: string]: unknown;
-}
-
-class User extends Model<UserData> {
+// No separate interface needed - types are inferred from the class itself
+class User extends Model {
 	@prop accessor id!: number;
 	@prop accessor name!: string;
 	@prop accessor email!: string | null;
@@ -45,13 +39,7 @@ describe('Model', () => {
 		});
 
 		it('should work without an id field', () => {
-			interface SettingsData {
-				theme: string;
-				notifications: boolean;
-				[key: string]: unknown;
-			}
-
-			class Settings extends Model<SettingsData> {
+			class Settings extends Model {
 				@prop accessor theme!: string;
 				@prop accessor notifications!: boolean;
 			}
@@ -172,7 +160,8 @@ describe('Model', () => {
 			const user = new User({ id: 1, name: 'John', email: null });
 
 			// This should warn but not throw
-			user.set('nonExistent' as keyof UserData, 'value');
+			// @ts-expect-error - Testing invalid property access
+			user.set('nonExistent', 'value');
 
 			// The property should not be set
 			// @ts-expect-error - Testing invalid property access
