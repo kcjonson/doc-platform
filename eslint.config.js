@@ -32,6 +32,8 @@ export default [
 				URLSearchParams: 'readonly',
 				AbortController: 'readonly',
 				AbortSignal: 'readonly',
+				Element: 'readonly',
+				MouseEvent: 'readonly',
 			},
 		},
 		plugins: {
