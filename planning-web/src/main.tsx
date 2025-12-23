@@ -1,4 +1,10 @@
-import { render } from 'preact';
-import { App } from './App';
+import { startRouter } from '@doc-platform/router';
+import { Board } from './pages/Board';
+import { EpicDetail } from './pages/EpicDetail';
 
-render(<App />, document.getElementById('app')!);
+const routes = [
+	{ route: '/', entry: Board },
+	{ route: '/epics/:id', entry: EpicDetail },
+];
+
+startRouter(routes, document.getElementById('app')!);
