@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2025-12-19 (Custom State Management Complete)
+Last Updated: 2025-12-23 (Custom Router Complete)
 
 ## Epic/Story/Task Template
 
@@ -26,6 +26,21 @@ Use this template for all work items:
 ---
 
 ## Recently Completed Epics (Last 4)
+
+### ✅ Custom Router
+**Spec/Documentation:** `/docs/tech-stack.md`
+**Dependencies:** Monorepo Scaffolding
+**Status:** complete
+
+**Tasks:**
+- [x] Minimal router implementation
+  - [x] Route matching with :param support
+  - [x] History API integration (popstate)
+  - [x] Automatic <a> click interception
+  - [x] Programmatic navigation (navigate function)
+- [x] Tests for route matching
+
+---
 
 ### ✅ Custom State Management
 **Spec/Documentation:** `/docs/tech-stack.md`, `.claude/plans/custom-state-management.md`
@@ -85,26 +100,6 @@ Use this template for all work items:
 ---
 
 ## Planned Epics
-
-### Custom Router
-**Spec/Documentation:** `/docs/tech-stack.md`
-**Dependencies:** Monorepo Scaffolding
-**Status:** ready
-
-**Goal:** Implement lightweight client-side router for Preact apps.
-
-**Tasks:**
-- [ ] Router core
-  - [ ] Route matching with params
-  - [ ] History API integration
-  - [ ] Programmatic navigation
-- [ ] Preact components
-  - [ ] Router provider
-  - [ ] Route component
-  - [ ] Link component
-- [ ] Route guards (auth protection)
-
----
 
 ### Authentication System
 **Spec/Documentation:** `/docs/specs/authentication.md`
