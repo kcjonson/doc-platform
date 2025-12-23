@@ -14,7 +14,8 @@
  *   { route: '/users/:id', entry: UserPage },
  * ];
  *
- * startRouter(routes, document.getElementById('app')!);
+ * const stop = startRouter(routes, document.getElementById('app')!);
+ * // Call stop() to remove event listeners (useful for HMR)
  * ```
  */
 
@@ -63,7 +64,13 @@ function matchRoute(pathname: string): { route: Route; params: Record<string, st
 			const pathPart = pathParts[i] as string;
 
 			if (patternPart.startsWith(':')) {
-				params[patternPart.slice(1)] = decodeURIComponent(pathPart);
+				const paramName = patternPart.slice(1);
+				try {
+					params[paramName] = decodeURIComponent(pathPart);
+				} catch {
+					// Fall back to raw value if decoding fails
+					params[paramName] = pathPart;
+				}
 			} else if (patternPart !== pathPart) {
 				matched = false;
 				break;
@@ -95,16 +102,25 @@ function renderCurrentRoute(): void {
 }
 
 /**
+ * Get current URL (pathname + search + hash).
+ */
+function getCurrentUrl(): string {
+	return window.location.pathname + window.location.search + window.location.hash;
+}
+
+/**
  * Navigate to a path programmatically.
+ * Supports query strings and hash fragments.
  *
  * @example
  * ```ts
- * // After form submission
  * navigate('/dashboard');
+ * navigate('/search?q=test');
+ * navigate('/docs#section');
  * ```
  */
 export function navigate(path: string): void {
-	if (path !== window.location.pathname) {
+	if (path !== getCurrentUrl()) {
 		window.history.pushState(null, '', path);
 		renderCurrentRoute();
 	}
@@ -113,21 +129,29 @@ export function navigate(path: string): void {
 /**
  * Start the router.
  * Intercepts <a> clicks and handles browser navigation.
+ * Returns a cleanup function to remove event listeners.
  *
  * @example
  * ```tsx
- * startRouter(routes, document.getElementById('app')!);
+ * const stop = startRouter(routes, document.getElementById('app')!);
+ * // Call stop() to cleanup (useful for HMR or tests)
  * ```
  */
-export function startRouter(routes: Route[], container: Element): void {
+export function startRouter(routes: Route[], container: Element): () => void {
 	currentRoutes = routes;
 	currentContainer = container;
 
 	// Handle browser back/forward
-	window.addEventListener('popstate', renderCurrentRoute);
+	const handlePopState = (): void => {
+		renderCurrentRoute();
+	};
+	window.addEventListener('popstate', handlePopState);
 
 	// Intercept <a> clicks
-	document.addEventListener('click', (e) => {
+	const handleClick = (e: MouseEvent): void => {
+		// Only handle left clicks
+		if (e.button !== 0) return;
+
 		const target = e.target as Element;
 		const anchor = target.closest('a');
 
@@ -136,7 +160,7 @@ export function startRouter(routes: Route[], container: Element): void {
 		const href = anchor.getAttribute('href');
 		if (!href) return;
 
-		// Skip external links, hash links, and modified clicks
+		// Skip external links, hash-only links, and modified clicks
 		if (
 			href.startsWith('http') ||
 			href.startsWith('//') ||
@@ -153,8 +177,15 @@ export function startRouter(routes: Route[], container: Element): void {
 
 		e.preventDefault();
 		navigate(href);
-	});
+	};
+	document.addEventListener('click', handleClick);
 
 	// Initial render
 	renderCurrentRoute();
+
+	// Return cleanup function
+	return () => {
+		window.removeEventListener('popstate', handlePopState);
+		document.removeEventListener('click', handleClick);
+	};
 }
