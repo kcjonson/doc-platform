@@ -1,12 +1,10 @@
-import { useState, useEffect, useMemo } from 'preact/hooks';
+import { useState, useMemo } from 'preact/hooks';
 import type { JSX } from 'preact';
 import type { RouteProps } from '@doc-platform/router';
 import { navigate } from '@doc-platform/router';
-import { useModel, createEpicsCollection, type EpicModel, type Status } from '@doc-platform/models';
+import { useModel, EpicsCollection, type EpicModel, type Status } from '@doc-platform/models';
 import { Column } from '../components/Column';
 import styles from './Board.module.css';
-
-const API_BASE = 'http://localhost:3001';
 
 const COLUMNS: { status: Status; title: string }[] = [
 	{ status: 'ready', title: 'Ready' },
@@ -15,33 +13,11 @@ const COLUMNS: { status: Status; title: string }[] = [
 ];
 
 export function Board(_props: RouteProps): JSX.Element {
-	// Create collection once, subscribe to changes with useModel
-	const epics = useMemo(() => createEpicsCollection(), []);
+	// Collection auto-fetches on construction, useModel subscribes to changes
+	const epics = useMemo(() => new EpicsCollection(), []);
 	useModel(epics);
 
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
 	const [selectedEpicId, setSelectedEpicId] = useState<string | undefined>();
-
-	useEffect(() => {
-		fetchEpics();
-	}, []);
-
-	async function fetchEpics(): Promise<void> {
-		try {
-			setLoading(true);
-			const res = await fetch(`${API_BASE}/api/epics`);
-			if (!res.ok) throw new Error('Failed to fetch epics');
-			const data = await res.json();
-			// Populate collection with fetched data
-			epics.clear(data);
-			setError(null);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Unknown error');
-		} finally {
-			setLoading(false);
-		}
-	}
 
 	function getEpicsByStatus(status: Status): EpicModel[] {
 		return epics
@@ -65,28 +41,20 @@ export function Board(_props: RouteProps): JSX.Element {
 	}
 
 	function handleDragEnd(): void {
-		// Drag ended - could add visual feedback here
+		// Drag ended
 	}
 
 	async function handleDropEpic(epicId: string, newStatus: Status, _index: number): Promise<void> {
-		// Find the epic and update optimistically
 		const epic = epics.find((e) => e.id === epicId);
 		if (!epic) return;
 
 		const oldStatus = epic.status;
-		epic.status = newStatus; // Triggers change event via Model
+		epic.status = newStatus; // Optimistic update triggers re-render
 
 		try {
-			const res = await fetch(`${API_BASE}/api/epics/${epicId}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ status: newStatus }),
-			});
-			if (!res.ok) throw new Error('Failed to update epic');
-		} catch (err) {
-			// Revert on error
-			epic.status = oldStatus;
-			console.error('Failed to move epic:', err);
+			await epic.save(); // SyncModel handles the PUT
+		} catch {
+			epic.status = oldStatus; // Revert on error
 		}
 	}
 
@@ -95,21 +63,14 @@ export function Board(_props: RouteProps): JSX.Element {
 		if (!title) return;
 
 		try {
-			const res = await fetch(`${API_BASE}/api/epics`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ title }),
-			});
-			if (!res.ok) throw new Error('Failed to create epic');
-			const newEpic = await res.json();
-			// Add to collection (triggers change event)
-			epics.add(newEpic);
+			await epics.add({ title, status: 'ready', rank: epics.length + 1 });
 		} catch (err) {
 			console.error('Failed to create epic:', err);
 		}
 	}
 
-	if (loading) {
+	// Loading state from collection's $meta
+	if (epics.$meta.working && epics.length === 0) {
 		return (
 			<div class={styles.container}>
 				<div class={styles.loading}>Loading...</div>
@@ -117,10 +78,11 @@ export function Board(_props: RouteProps): JSX.Element {
 		);
 	}
 
-	if (error) {
+	// Error state from collection's $meta
+	if (epics.$meta.error) {
 		return (
 			<div class={styles.container}>
-				<div class={styles.error}>Error: {error}</div>
+				<div class={styles.error}>Error: {epics.$meta.error.message}</div>
 			</div>
 		);
 	}

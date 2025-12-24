@@ -5,17 +5,17 @@
  */
 
 import { Model } from './Model';
+import { SyncModel } from './SyncModel';
 import { prop } from './prop';
 import { collection } from './collection-decorator';
 import type { Collection } from './Collection';
-import { createCollection } from './Collection';
-import type { ModelData } from './types';
+import { createSyncCollectionClass, type SyncCollection } from './SyncCollection';
 
 /** Status type for epics and tasks */
 export type Status = 'ready' | 'in_progress' | 'done';
 
 /**
- * Task model
+ * Task model (non-syncing for now, nested within Epic)
  */
 export class TaskModel extends Model {
 	@prop accessor id!: string;
@@ -36,9 +36,11 @@ export interface TaskStats {
 }
 
 /**
- * Epic model with nested tasks collection
+ * Epic model - syncs with /api/epics/:id
  */
-export class EpicModel extends Model {
+export class EpicModel extends SyncModel {
+	static override url = '/api/epics/:id';
+
 	@prop accessor id!: string;
 	@prop accessor title!: string;
 	@prop accessor description!: string | undefined;
@@ -61,10 +63,20 @@ export class EpicModel extends Model {
 }
 
 /**
- * Create a collection of epics for the board
+ * Collection of epics - syncs with /api/epics
+ * Auto-fetches on construction.
+ *
+ * @example
+ * ```tsx
+ * const epics = new EpicsCollection();
+ * useModel(epics);
+ *
+ * if (epics.$meta.working) return <Loading />;
+ *
+ * await epics.add({ title: 'New Epic' });
+ * ```
  */
-export function createEpicsCollection(
-	initialData?: Array<Partial<ModelData<EpicModel>>>
-): Collection<EpicModel> {
-	return createCollection(EpicModel, initialData as Array<Record<string, unknown>>);
-}
+export const EpicsCollection = createSyncCollectionClass('/api/epics', EpicModel);
+
+// Re-export for type usage
+export type { SyncCollection };
