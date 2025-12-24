@@ -299,8 +299,8 @@ export function createSyncCollectionClass<T extends SyncModel>(
 	ModelClass: SyncModelConstructor<T>
 ): new () => SyncCollection<T> {
 	class CustomSyncCollection extends SyncCollectionBase<T> {
-		static override url = url;
-		static override Model = ModelClass as SyncModelConstructor<SyncModel>;
+		static url = url;
+		static Model = ModelClass as SyncModelConstructor<SyncModel>;
 	}
 
 	// Return a constructor that creates a proxied instance

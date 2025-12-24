@@ -82,8 +82,8 @@ export class EpicModel extends SyncModel {
  * ```
  */
 class EpicsCollectionBase extends SyncCollectionBase<EpicModel> {
-	static override url = '/api/epics';
-	static override Model = EpicModel;
+	static url = '/api/epics';
+	static Model = EpicModel;
 
 	/**
 	 * Get epics filtered by status, sorted by rank.
