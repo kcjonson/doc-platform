@@ -46,14 +46,14 @@ export interface CollectionMeta {
 }
 
 /** SyncCollection type with array index access */
-export type SyncCollection<T extends SyncModel> = SyncCollectionImpl<T> & {
+export type SyncCollection<T extends SyncModel> = SyncCollectionBase<T> & {
 	readonly [index: number]: T;
 };
 
 /**
  * Creates a Proxy that enables array index access on SyncCollection.
  */
-function createProxy<T extends SyncModel>(collection: SyncCollectionImpl<T>): SyncCollection<T> {
+function createProxy<T extends SyncModel>(collection: SyncCollectionBase<T>): SyncCollection<T> {
 	return new Proxy(collection, {
 		get(target, prop, receiver) {
 			if (typeof prop === 'string' && /^\d+$/.test(prop)) {
@@ -70,7 +70,7 @@ function createProxy<T extends SyncModel>(collection: SyncCollectionImpl<T>): Sy
 	}) as SyncCollection<T>;
 }
 
-class SyncCollectionImpl<T extends SyncModel> implements Observable {
+export class SyncCollectionBase<T extends SyncModel> implements Observable {
 	/** URL for the collection endpoint */
 	static url: string = '';
 
@@ -102,12 +102,12 @@ class SyncCollectionImpl<T extends SyncModel> implements Observable {
 
 	/** Get the Model class from static property */
 	private getModelClass(): SyncModelConstructor<T> {
-		return (this.constructor as typeof SyncCollectionImpl).Model as SyncModelConstructor<T>;
+		return (this.constructor as typeof SyncCollectionBase).Model as SyncModelConstructor<T>;
 	}
 
 	/** Get the URL from static property */
 	private getUrl(): string {
-		return (this.constructor as typeof SyncCollectionImpl).url;
+		return (this.constructor as typeof SyncCollectionBase).url;
 	}
 
 	/** Update $meta and emit change */
@@ -280,13 +280,25 @@ class SyncCollectionImpl<T extends SyncModel> implements Observable {
 }
 
 /**
+ * Wrap a SyncCollectionBase instance with a Proxy for array index access.
+ * Use this when extending SyncCollectionBase directly.
+ */
+export function wrapCollection<T extends SyncModel>(
+	collection: SyncCollectionBase<T>
+): SyncCollection<T> {
+	return createProxy(collection);
+}
+
+/**
  * Create a SyncCollection class for a given SyncModel.
+ * For collections that need custom methods, extend SyncCollectionBase directly
+ * and use wrapCollection() in the constructor.
  */
 export function createSyncCollectionClass<T extends SyncModel>(
 	url: string,
 	ModelClass: SyncModelConstructor<T>
 ): new () => SyncCollection<T> {
-	class CustomSyncCollection extends SyncCollectionImpl<T> {
+	class CustomSyncCollection extends SyncCollectionBase<T> {
 		static override url = url;
 		static override Model = ModelClass as SyncModelConstructor<SyncModel>;
 	}

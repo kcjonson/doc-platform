@@ -19,12 +19,6 @@ export function Board(_props: RouteProps): JSX.Element {
 
 	const [selectedEpicId, setSelectedEpicId] = useState<string | undefined>();
 
-	function getEpicsByStatus(status: Status): EpicModel[] {
-		return epics
-			.filter((e) => e.status === status)
-			.sort((a, b) => a.rank - b.rank);
-	}
-
 	function handleSelectEpic(epic: EpicModel): void {
 		setSelectedEpicId(epic.id);
 	}
@@ -94,7 +88,7 @@ export function Board(_props: RouteProps): JSX.Element {
 						key={status}
 						status={status}
 						title={title}
-						epics={getEpicsByStatus(status)}
+						epics={epics.byStatus(status)}
 						selectedEpicId={selectedEpicId}
 						onSelectEpic={handleSelectEpic}
 						onOpenEpic={handleOpenEpic}

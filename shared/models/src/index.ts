@@ -14,7 +14,7 @@ export { Model } from './Model';
 export { SyncModel } from './SyncModel';
 export { createCollection } from './Collection';
 export type { Collection } from './Collection';
-export { createSyncCollectionClass } from './SyncCollection';
+export { SyncCollectionBase, wrapCollection, createSyncCollectionClass } from './SyncCollection';
 export type { SyncCollection, CollectionMeta } from './SyncCollection';
 
 // Hooks

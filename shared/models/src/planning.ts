@@ -9,7 +9,11 @@ import { SyncModel } from './SyncModel';
 import { prop } from './prop';
 import { collection } from './collection-decorator';
 import type { Collection } from './Collection';
-import { createSyncCollectionClass, type SyncCollection } from './SyncCollection';
+import {
+	SyncCollectionBase,
+	wrapCollection,
+	type SyncCollection,
+} from './SyncCollection';
 
 /** Status type for epics and tasks */
 export type Status = 'ready' | 'in_progress' | 'done';
@@ -73,10 +77,31 @@ export class EpicModel extends SyncModel {
  *
  * if (epics.$meta.working) return <Loading />;
  *
- * await epics.add({ title: 'New Epic' });
+ * epics.add({ title: 'New Epic' });
+ * const readyEpics = epics.byStatus('ready');
  * ```
  */
-export const EpicsCollection = createSyncCollectionClass('/api/epics', EpicModel);
+class EpicsCollectionBase extends SyncCollectionBase<EpicModel> {
+	static override url = '/api/epics';
+	static override Model = EpicModel;
+
+	/**
+	 * Get epics filtered by status, sorted by rank.
+	 */
+	byStatus(status: Status): EpicModel[] {
+		return this.filter((e) => e.status === status).sort((a, b) => a.rank - b.rank);
+	}
+}
+
+/** EpicsCollection with array index access */
+export type EpicsCollectionType = SyncCollection<EpicModel> & EpicsCollectionBase;
+
+/** EpicsCollection class - use `new EpicsCollection()` */
+export const EpicsCollection = class {
+	constructor() {
+		return wrapCollection(new EpicsCollectionBase()) as EpicsCollectionType;
+	}
+} as unknown as new () => EpicsCollectionType;
 
 // Re-export for type usage
 export type { SyncCollection };
