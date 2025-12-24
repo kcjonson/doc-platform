@@ -1,0 +1,50 @@
+.card {
+	background: var(--color-card);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-card);
+	transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+/* Variants */
+.default {
+	border: 1px solid transparent;
+}
+
+.interactive {
+	border: 1px solid transparent;
+}
+
+.interactive:hover {
+	box-shadow: var(--shadow-card-hover);
+}
+
+.selected {
+	border: 2px solid var(--color-primary);
+}
+
+/* Clickable state */
+.clickable {
+	cursor: pointer;
+}
+
+.clickable:focus {
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+}
+
+/* Padding variants */
+.padding-none {
+	padding: 0;
+}
+
+.padding-sm {
+	padding: var(--space-2);
+}
+
+.padding-md {
+	padding: var(--space-3);
+}
+
+.padding-lg {
+	padding: var(--space-6);
+}
