@@ -57,14 +57,21 @@ export class Model implements Observable {
 	/** Event listeners */
 	protected __listeners: Record<string, ChangeCallback[]> = {};
 
+	/** Flag to suppress change emissions during batch operations */
+	protected __batching = false;
+
 	/** Metadata */
 	readonly $meta: Record<string, unknown> = {};
 
 	/**
 	 * Bound callback for child models/collections to notify parent of changes.
 	 * Defined once per instance to avoid creating new function instances.
+	 * Respects __batching flag to prevent double-emission during batch updates.
 	 */
 	protected readonly __notifyChange: ChangeCallback = () => {
+		if (this.__batching) {
+			return;
+		}
 		const listeners = this.__listeners['change'];
 		if (listeners) {
 			for (const listener of listeners) {
@@ -178,24 +185,31 @@ export class Model implements Observable {
 		const nestedModels = getNestedModels(this);
 
 		if (typeof dataOrProperty === 'object' && dataOrProperty !== null) {
-			// Batch update - set all properties, emit once
-			for (const [property, propValue] of Object.entries(dataOrProperty)) {
-				if (properties?.has(property)) {
-					this.__data[property] = propValue;
-				} else if (collections?.has(property)) {
-					// For collections, clear and replace items
-					const col = this.__data[property] as Collection<Model>;
-					col.clear(
-						Array.isArray(propValue)
-							? (propValue as Array<Record<string, unknown>>)
-							: undefined
-					);
-				} else if (nestedModels?.has(property)) {
-					// For nested models, use the setter to handle subscription management
-					(this as Record<string, unknown>)[property] = propValue;
-				} else {
-					console.warn(`Skipping set: property "${property}" is invalid on "${this.constructor.name}" model`);
+			// Batch update - suppress emissions until end, then emit once
+			this.__batching = true;
+			try {
+				for (const [property, propValue] of Object.entries(dataOrProperty)) {
+					if (properties?.has(property)) {
+						this.__data[property] = propValue;
+					} else if (collections?.has(property)) {
+						// For collections, clear and replace items
+						const col = this.__data[property] as Collection<Model> | undefined;
+						if (col) {
+							col.clear(
+								Array.isArray(propValue)
+									? (propValue as Array<Record<string, unknown>>)
+									: undefined
+							);
+						}
+					} else if (nestedModels?.has(property)) {
+						// For nested models, use the setter to handle subscription management
+						(this as Record<string, unknown>)[property] = propValue;
+					} else {
+						console.warn(`Skipping set: property "${property}" is invalid on "${this.constructor.name}" model`);
+					}
 				}
+			} finally {
+				this.__batching = false;
 			}
 			// Emit single change event
 			const listeners = this.__listeners['change'];

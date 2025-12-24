@@ -296,6 +296,8 @@ class CollectionImpl<T extends Model> implements Observable {
 
 	/**
 	 * Move an item from one index to another.
+	 * No-op if either index is out of bounds or indices are equal.
+	 * Does not emit change event for no-op cases.
 	 */
 	move(fromIndex: number, toIndex: number): void {
 		if (fromIndex < 0 || fromIndex >= this.__items.length) {

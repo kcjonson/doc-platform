@@ -456,4 +456,53 @@ describe('@model decorator', () => {
 		expect(project.settings).toBeInstanceOf(Settings);
 		expect(project.settings.theme).toBe('light');
 	});
+
+	it('should emit only once during batch updates with nested models', () => {
+		const project = new Project({
+			id: 'p1',
+			name: 'Test',
+			settings: { theme: 'dark', notifications: true },
+			epics: [],
+		});
+		const callback = vi.fn();
+
+		project.on('change', callback);
+
+		// Batch update with multiple properties including nested model
+		project.set({
+			name: 'Updated',
+			// @ts-expect-error - Testing raw data in batch
+			settings: { theme: 'light', notifications: false },
+		});
+
+		// Should only emit ONCE, not twice (once for settings, once for batch)
+		expect(callback).toHaveBeenCalledTimes(1);
+		expect(project.name).toBe('Updated');
+		expect(project.settings.theme).toBe('light');
+	});
+
+	it('should emit only once during batch updates with collections', () => {
+		const project = new Project({
+			id: 'p1',
+			name: 'Test',
+			settings: { theme: 'dark', notifications: true },
+			epics: [{ id: 'e1', title: 'Epic 1', tasks: [] }],
+		});
+		const callback = vi.fn();
+
+		project.on('change', callback);
+
+		// Batch update with collection replacement
+		project.set({
+			name: 'Updated',
+			// @ts-expect-error - Testing raw data in batch
+			epics: [{ id: 'e2', title: 'Epic 2', tasks: [] }],
+		});
+
+		// Should only emit ONCE
+		expect(callback).toHaveBeenCalledTimes(1);
+		expect(project.name).toBe('Updated');
+		expect(project.epics.length).toBe(1);
+		expect(project.epics[0]?.title).toBe('Epic 2');
+	});
 });

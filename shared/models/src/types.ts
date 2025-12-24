@@ -20,6 +20,23 @@ export interface Observable {
 export interface ModelInternal {
 	__data: Record<string, unknown>;
 	__listeners: Record<string, ChangeCallback[]>;
+	__batching: boolean;
+}
+
+/**
+ * Emit change event to all listeners on a model.
+ * Respects __batching flag to prevent double-emission during batch updates.
+ */
+export function emitChange(self: ModelInternal): void {
+	if (self.__batching) {
+		return;
+	}
+	const listeners = self.__listeners['change'];
+	if (listeners) {
+		for (const listener of listeners) {
+			listener();
+		}
+	}
 }
 
 export interface ModelMeta {

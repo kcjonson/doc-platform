@@ -17,20 +17,7 @@ import 'polyfill-symbol-metadata';
 
 import type { Model } from './Model';
 import { createCollection, type Collection, type ModelConstructor } from './Collection';
-import type { ModelInternal } from './types';
-
-/**
- * Emit change event to all listeners on a model.
- * Defined once to avoid creating new function instances.
- */
-function emitChange(self: ModelInternal): void {
-	const listeners = self.__listeners['change'];
-	if (listeners) {
-		for (const listener of listeners) {
-			listener();
-		}
-	}
-}
+import { emitChange, type ModelInternal } from './types';
 
 /** Symbol for storing collection configs in decorator metadata */
 export const COLLECTIONS = Symbol('collections');
