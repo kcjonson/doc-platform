@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2025-12-24 (Collection & Nested Models Complete)
+Last Updated: 2025-12-24 (API Stub & Board Layout Complete)
 
 ## Epic/Story/Task Template
 
@@ -90,21 +90,21 @@ Use this template for all work items:
 **Goal:** Build lightweight planning board with drag-drop and keyboard navigation.
 
 **Tasks:**
-- [ ] API stub (Hono with in-memory data)
-  - [ ] Epic CRUD endpoints
-  - [ ] Task CRUD endpoints
-- [ ] Board layout
-  - [ ] Three-column layout (Ready, In Progress, Done)
-  - [ ] Column component
-  - [ ] Epic card component
+- [x] API stub (Hono with in-memory data)
+  - [x] Epic CRUD endpoints
+  - [x] Task CRUD endpoints
+- [x] Board layout
+  - [x] Three-column layout (Ready, In Progress, Done)
+  - [x] Column component
+  - [x] Epic card component
 - [ ] Drag and drop
-  - [ ] Native drag events
-  - [ ] Drop zone highlighting
-  - [ ] Optimistic reordering
-- [ ] Epic detail modal
-  - [ ] Task list
-  - [ ] Linked documents
-  - [ ] Status/assignee controls
+  - [x] Native drag events
+  - [x] Drop zone highlighting
+  - [ ] Optimistic reordering within columns
+- [x] Epic detail dialog
+  - [x] Task list
+  - [x] Status/assignee controls
+  - [ ] Linked documents (stubbed)
 - [ ] Keyboard navigation
   - [ ] Arrow key navigation
   - [ ] Keyboard shortcuts

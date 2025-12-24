@@ -1,9 +1,9 @@
 import { useState, useMemo } from 'preact/hooks';
 import type { JSX } from 'preact';
 import type { RouteProps } from '@doc-platform/router';
-import { navigate } from '@doc-platform/router';
 import { useModel, EpicsCollection, type EpicModel, type Status } from '@doc-platform/models';
 import { Column } from '../components/Column';
+import { EpicDialog } from '../components/EpicDialog';
 import styles from './Board.module.css';
 
 const COLUMNS: { status: Status; title: string }[] = [
@@ -18,13 +18,23 @@ export function Board(_props: RouteProps): JSX.Element {
 	useModel(epics);
 
 	const [selectedEpicId, setSelectedEpicId] = useState<string | undefined>();
+	const [dialogEpic, setDialogEpic] = useState<EpicModel | null>(null);
 
 	function handleSelectEpic(epic: EpicModel): void {
 		setSelectedEpicId(epic.id);
 	}
 
 	function handleOpenEpic(epic: EpicModel): void {
-		navigate(`/epics/${epic.id}`);
+		setDialogEpic(epic);
+	}
+
+	function handleCloseDialog(): void {
+		setDialogEpic(null);
+	}
+
+	function handleDeleteEpic(epic: EpicModel): void {
+		epics.remove(epic);
+		setDialogEpic(null);
 	}
 
 	function handleDragStart(e: DragEvent, epic: EpicModel): void {
@@ -98,6 +108,14 @@ export function Board(_props: RouteProps): JSX.Element {
 					/>
 				))}
 			</div>
+
+			{dialogEpic && (
+				<EpicDialog
+					epic={dialogEpic}
+					onClose={handleCloseDialog}
+					onDelete={handleDeleteEpic}
+				/>
+			)}
 		</div>
 	);
 }
