@@ -20,7 +20,7 @@
 import { type ChangeCallback, type ModelData, type Observable } from './types';
 import { PROPERTIES } from './prop';
 import { COLLECTIONS, type CollectionConfig } from './collection-decorator';
-import { NESTED_MODELS, type NestedModelConfig } from './model-decorator';
+import { NESTED_MODELS, PARENT_CALLBACK, type NestedModelConfig } from './model-decorator';
 import { createCollection, type Collection, type ModelConstructor } from './Collection';
 
 /**
@@ -110,8 +110,12 @@ export class Model implements Observable {
 				else if (nestedModels?.has(key)) {
 					const config = nestedModels.get(key)!;
 					if (value && typeof value === 'object') {
-						const nested = new config.ModelClass(value as Record<string, unknown>);
-						nested.on('change', createParentCallback());
+						const nested = new config.ModelClass(value as Record<string, unknown>) as Model & {
+							[PARENT_CALLBACK]?: ChangeCallback;
+						};
+						const callback = createParentCallback();
+						nested[PARENT_CALLBACK] = callback;
+						nested.on('change', callback);
 						this.__data[key] = nested;
 					}
 				}

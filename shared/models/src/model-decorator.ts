@@ -26,6 +26,9 @@ import type { ChangeCallback } from './types';
 /** Symbol for storing nested model configs in decorator metadata */
 export const NESTED_MODELS = Symbol('nestedModels');
 
+/** Symbol for storing parent callback on child models (for cleanup) */
+export const PARENT_CALLBACK = Symbol('parentCallback');
+
 /** Configuration for a nested model property */
 export interface NestedModelConfig<T extends Model> {
 	ModelClass: ModelConstructor<T>;
@@ -63,9 +66,6 @@ export function model<T extends Model>(
 		(context.metadata[NESTED_MODELS] as Map<string, NestedModelConfig<Model>>).set(name, {
 			ModelClass: ModelClass as ModelConstructor<Model>,
 		});
-
-		// Symbol to store the parent callback on the child model
-		const PARENT_CALLBACK = Symbol('parentCallback');
 
 		// Return getter/setter that uses __data
 		return {

@@ -420,6 +420,28 @@ describe('@model decorator', () => {
 		expect(project.settings.theme).toBe('light');
 	});
 
+	it('should unsubscribe from old nested model when replaced', () => {
+		const project = new Project({
+			id: 'p1',
+			name: 'Test',
+			settings: { theme: 'dark', notifications: true },
+			epics: [],
+		});
+		const callback = vi.fn();
+
+		const oldSettings = project.settings;
+		project.on('change', callback);
+
+		// Replace settings
+		project.settings = new Settings({ theme: 'light', notifications: false });
+		callback.mockClear();
+
+		// Changing OLD settings should NOT trigger parent
+		oldSettings.theme = 'dark';
+
+		expect(callback).not.toHaveBeenCalled();
+	});
+
 	it('should handle setting nested model with raw data', () => {
 		const project = new Project({
 			id: 'p1',

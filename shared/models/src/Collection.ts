@@ -1,7 +1,7 @@
 /**
- * @doc-platform/models - Collection class
+ * @doc-platform/models - Collection type
  *
- * A collection of child models with event bubbling.
+ * A typed collection of child models with event bubbling.
  * Implements Observable for use with useModel hook.
  * Supports array index access: collection[0], collection[1], etc.
  *
@@ -56,7 +56,9 @@ function createProxy<T extends Model>(collection: CollectionImpl<T>): Collection
 		set(target, prop, value, receiver) {
 			// Prevent direct index assignment (use add/insert instead)
 			if (typeof prop === 'string' && /^\d+$/.test(prop)) {
-				throw new Error('Cannot set collection items by index. Use add(), insert(), or modify the item directly.');
+				throw new Error(
+					"Cannot replace collection items by index. Use add() or insert() to add items, or modify the item's properties directly."
+				);
 			}
 			return Reflect.set(target, prop, value, receiver);
 		},
@@ -249,12 +251,15 @@ class CollectionImpl<T extends Model> implements Observable {
 
 	/**
 	 * Insert a new item at a specific index.
+	 * Index is clamped to valid bounds (0 to length).
 	 * @returns The newly created model instance.
 	 */
 	insert(index: number, data: Partial<ModelData<T>>): T {
+		// Clamp index to valid bounds
+		const clampedIndex = Math.max(0, Math.min(index, this.__items.length));
 		const item = new this.__ModelClass(data as Record<string, unknown>);
 		this.__subscribeToChild(item);
-		this.__items.splice(index, 0, item);
+		this.__items.splice(clampedIndex, 0, item);
 		this.__emitChange();
 		return item;
 	}
