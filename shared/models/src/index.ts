@@ -12,7 +12,8 @@ export { model } from './model-decorator';
 // Classes
 export { Model } from './Model';
 export { SyncModel } from './SyncModel';
-export { Collection } from './Collection';
+export { createCollection } from './Collection';
+export type { Collection } from './Collection';
 
 // Hooks
 export { useModel } from './hooks';

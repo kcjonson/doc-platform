@@ -16,7 +16,7 @@
 import 'polyfill-symbol-metadata';
 
 import type { Model } from './Model';
-import { Collection, type ModelConstructor } from './Collection';
+import { createCollection, type Collection, type ModelConstructor } from './Collection';
 
 /** Symbol for storing collection configs in decorator metadata */
 export const COLLECTIONS = Symbol('collections');
@@ -67,7 +67,7 @@ export function collection<T extends Model>(
 
 				// Lazily create empty collection if not set
 				if (!col) {
-					col = new Collection(ModelClass) as V;
+					col = createCollection(ModelClass) as V;
 					self.__data[name] = col;
 					// Wire up parent callback
 					(col as Collection<T>).__setParentCallback(() => {
@@ -93,12 +93,13 @@ export function collection<T extends Model>(
 				// If setting raw array data, convert to Collection
 				let col: Collection<T>;
 				if (Array.isArray(value)) {
-					col = new Collection(ModelClass, value as Array<Record<string, unknown>>);
-				} else if (value instanceof Collection) {
-					col = value;
+					col = createCollection(ModelClass, value as Array<Record<string, unknown>>);
+				} else if (value && typeof value === 'object' && '__setParentCallback' in value) {
+					// Already a Collection
+					col = value as Collection<T>;
 				} else {
 					// Create empty collection for null/undefined
-					col = new Collection(ModelClass);
+					col = createCollection(ModelClass);
 				}
 
 				// Wire up parent callback for event bubbling

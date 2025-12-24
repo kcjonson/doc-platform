@@ -21,7 +21,7 @@ import { type ChangeCallback, type ModelData, type Observable } from './types';
 import { PROPERTIES } from './prop';
 import { COLLECTIONS, type CollectionConfig } from './collection-decorator';
 import { NESTED_MODELS, type NestedModelConfig } from './model-decorator';
-import { Collection, type ModelConstructor } from './Collection';
+import { createCollection, type Collection, type ModelConstructor } from './Collection';
 
 /**
  * Gets the properties Set from decorator metadata.
@@ -99,7 +99,7 @@ export class Model implements Observable {
 				// Handle @collection properties
 				else if (collections?.has(key)) {
 					const config = collections.get(key)!;
-					const col = new Collection(
+					const col = createCollection(
 						config.ModelClass as ModelConstructor<Model>,
 						Array.isArray(value) ? (value as Array<Record<string, unknown>>) : []
 					);
@@ -122,7 +122,7 @@ export class Model implements Observable {
 		if (collections) {
 			for (const [key, config] of collections) {
 				if (!(key in this.__data)) {
-					const col = new Collection(config.ModelClass as ModelConstructor<Model>);
+					const col = createCollection(config.ModelClass as ModelConstructor<Model>);
 					col.__setParentCallback(createParentCallback());
 					this.__data[key] = col;
 				}

@@ -3,6 +3,7 @@
  *
  * A collection of child models with event bubbling.
  * Implements Observable for use with useModel hook.
+ * Supports array index access: collection[0], collection[1], etc.
  *
  * @example
  * ```typescript
@@ -12,7 +13,7 @@
  * }
  *
  * const epic = new Epic({ id: '1', tasks: [{ id: 't1', title: 'Task 1' }] });
- * epic.tasks.at(0).title = 'Updated'; // Bubbles change to epic
+ * epic.tasks[0].title = 'Updated'; // Bubbles change to epic
  * ```
  */
 
@@ -24,7 +25,45 @@ export interface ModelConstructor<T extends Model> {
 	new (initialData?: Record<string, unknown>): T;
 }
 
-export class Collection<T extends Model> implements Observable {
+/** Collection type with array index access */
+export type Collection<T extends Model> = CollectionImpl<T> & {
+	readonly [index: number]: T;
+};
+
+/**
+ * Creates a proxied Collection with array index access.
+ */
+export function createCollection<T extends Model>(
+	ModelClass: ModelConstructor<T>,
+	initialData?: Array<Record<string, unknown>>
+): Collection<T> {
+	const collection = new CollectionImpl<T>(ModelClass, initialData);
+	return createProxy(collection);
+}
+
+/**
+ * Creates a Proxy that enables array index access on Collection.
+ */
+function createProxy<T extends Model>(collection: CollectionImpl<T>): Collection<T> {
+	return new Proxy(collection, {
+		get(target, prop, receiver) {
+			// Handle numeric index access
+			if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+				return target.__getItem(parseInt(prop, 10));
+			}
+			return Reflect.get(target, prop, receiver);
+		},
+		set(target, prop, value, receiver) {
+			// Prevent direct index assignment (use add/insert instead)
+			if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+				throw new Error('Cannot set collection items by index. Use add(), insert(), or modify the item directly.');
+			}
+			return Reflect.set(target, prop, value, receiver);
+		},
+	}) as Collection<T>;
+}
+
+class CollectionImpl<T extends Model> implements Observable {
 	/** The Model class used to instantiate items */
 	private readonly __ModelClass: ModelConstructor<T>;
 
@@ -47,6 +86,13 @@ export class Collection<T extends Model> implements Observable {
 				this.__items.push(item);
 			}
 		}
+	}
+
+	/**
+	 * Get item at index (used by Proxy for index access).
+	 */
+	__getItem(index: number): T | undefined {
+		return this.__items[index];
 	}
 
 	/**
@@ -119,7 +165,7 @@ export class Collection<T extends Model> implements Observable {
 	}
 
 	// ─────────────────────────────────────────────────────────────────────────────
-	// Read access (immutable)
+	// Read access
 	// ─────────────────────────────────────────────────────────────────────────────
 
 	/**
@@ -127,13 +173,6 @@ export class Collection<T extends Model> implements Observable {
 	 */
 	get length(): number {
 		return this.__items.length;
-	}
-
-	/**
-	 * Get item at index.
-	 */
-	at(index: number): T | undefined {
-		return this.__items[index];
 	}
 
 	/**

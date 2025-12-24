@@ -7,7 +7,7 @@ import { Model } from './Model';
 import { prop } from './prop';
 import { collection } from './collection-decorator';
 import { model } from './model-decorator';
-import { Collection } from './Collection';
+import type { Collection } from './Collection';
 
 // Test models
 class Task extends Model {
@@ -47,8 +47,8 @@ describe('Collection', () => {
 			});
 
 			expect(epic.tasks.length).toBe(2);
-			expect(epic.tasks.at(0)?.title).toBe('Login');
-			expect(epic.tasks.at(1)?.status).toBe('doing');
+			expect(epic.tasks[0]?.title).toBe('Login');
+			expect(epic.tasks[1]?.status).toBe('doing');
 		});
 
 		it('should initialize empty collection when no data provided', () => {
@@ -64,7 +64,7 @@ describe('Collection', () => {
 				tasks: [{ id: 't1', title: 'Login', status: 'todo' }],
 			});
 
-			const task = epic.tasks.at(0);
+			const task = epic.tasks[0];
 			expect(task).toBeInstanceOf(Task);
 		});
 	});
@@ -80,9 +80,9 @@ describe('Collection', () => {
 				],
 			});
 
-			expect(epic.tasks.at(0)?.id).toBe('t1');
-			expect(epic.tasks.at(1)?.id).toBe('t2');
-			expect(epic.tasks.at(2)).toBeUndefined();
+			expect(epic.tasks[0]?.id).toBe('t1');
+			expect(epic.tasks[1]?.id).toBe('t2');
+			expect(epic.tasks[2]).toBeUndefined();
 		});
 
 		it('should support iteration', () => {
@@ -171,7 +171,7 @@ describe('Collection', () => {
 
 			expect(epic.tasks.length).toBe(1);
 			expect(task).toBeInstanceOf(Task);
-			expect(epic.tasks.at(0)).toBe(task);
+			expect(epic.tasks[0]).toBe(task);
 		});
 
 		it('should insert items at index', () => {
@@ -187,7 +187,7 @@ describe('Collection', () => {
 			epic.tasks.insert(1, { id: 't2', title: 'Second', status: 'todo' });
 
 			expect(epic.tasks.length).toBe(3);
-			expect(epic.tasks.at(1)?.title).toBe('Second');
+			expect(epic.tasks[1]?.title).toBe('Second');
 		});
 
 		it('should remove items', () => {
@@ -197,7 +197,7 @@ describe('Collection', () => {
 				tasks: [{ id: 't1', title: 'Login', status: 'todo' }],
 			});
 
-			const task = epic.tasks.at(0)!;
+			const task = epic.tasks[0]!;
 			const removed = epic.tasks.remove(task);
 
 			expect(removed).toBe(true);
@@ -218,7 +218,7 @@ describe('Collection', () => {
 
 			expect(removed?.id).toBe('t1');
 			expect(epic.tasks.length).toBe(1);
-			expect(epic.tasks.at(0)?.id).toBe('t2');
+			expect(epic.tasks[0]?.id).toBe('t2');
 		});
 
 		it('should move items', () => {
@@ -234,9 +234,9 @@ describe('Collection', () => {
 
 			epic.tasks.move(0, 2);
 
-			expect(epic.tasks.at(0)?.id).toBe('t2');
-			expect(epic.tasks.at(1)?.id).toBe('t3');
-			expect(epic.tasks.at(2)?.id).toBe('t1');
+			expect(epic.tasks[0]?.id).toBe('t2');
+			expect(epic.tasks[1]?.id).toBe('t3');
+			expect(epic.tasks[2]?.id).toBe('t1');
 		});
 
 		it('should clear all items', () => {
@@ -267,7 +267,7 @@ describe('Collection', () => {
 			]);
 
 			expect(epic.tasks.length).toBe(2);
-			expect(epic.tasks.at(0)?.title).toBe('New1');
+			expect(epic.tasks[0]?.title).toBe('New1');
 		});
 	});
 
@@ -281,7 +281,7 @@ describe('Collection', () => {
 			const callback = vi.fn();
 
 			epic.on('change', callback);
-			epic.tasks.at(0)!.status = 'doing';
+			epic.tasks[0]!.status = 'doing';
 
 			expect(callback).toHaveBeenCalledTimes(1);
 		});
@@ -322,7 +322,7 @@ describe('Collection', () => {
 			epic.tasks.on('change', collectionCallback);
 			epic.on('change', epicCallback);
 
-			epic.tasks.at(0)!.title = 'Updated';
+			epic.tasks[0]!.title = 'Updated';
 
 			expect(collectionCallback).toHaveBeenCalledTimes(1);
 			expect(epicCallback).toHaveBeenCalledTimes(1);
@@ -336,7 +336,7 @@ describe('Collection', () => {
 			});
 			const callback = vi.fn();
 
-			const task = epic.tasks.at(0)!;
+			const task = epic.tasks[0]!;
 			epic.on('change', callback);
 
 			epic.tasks.remove(task);
@@ -368,7 +368,7 @@ describe('Collection', () => {
 			project.on('change', callback);
 
 			// Change deep nested task
-			project.epics.at(0)!.tasks.at(0)!.status = 'doing';
+			project.epics[0]!.tasks[0]!.status = 'doing';
 
 			expect(callback).toHaveBeenCalledTimes(1);
 		});
