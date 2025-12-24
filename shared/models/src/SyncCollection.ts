@@ -6,24 +6,19 @@
  *
  * @example
  * ```typescript
- * class Epic extends SyncModel {
- *   static url = '/api/epics/:id';
- *   @prop accessor id!: string;
- *   @prop accessor title!: string;
- * }
- *
- * class EpicsCollection extends SyncCollection<Epic> {
+ * class EpicsCollection extends SyncCollection<EpicModel> {
  *   static url = '/api/epics';
- *   static Model = Epic;
+ *   static Model = EpicModel;
+ *
+ *   byStatus(status: Status): EpicModel[] {
+ *     return this.filter((e) => e.status === status);
+ *   }
  * }
  *
  * const epics = new EpicsCollection(); // Auto-fetches
- * // epics.$meta.working === true while loading
- * // epics.$meta.error if fetch failed
- *
- * await epics.add({ title: 'New Epic' }); // POSTs to API
- * epics[0].status = 'done';
- * await epics[0].save(); // PUTs to API
+ * epics.$meta.working // true while loading
+ * epics[0] // index access works
+ * epics.byStatus('ready') // custom methods work
  * ```
  */
 
@@ -45,32 +40,13 @@ export interface CollectionMeta {
 	lastFetched: number | null;
 }
 
-/** SyncCollection type with array index access */
-export type SyncCollection<T extends SyncModel> = SyncCollectionBase<T> & {
-	readonly [index: number]: T;
-};
-
 /**
- * Creates a Proxy that enables array index access on SyncCollection.
+ * SyncCollection - a collection that syncs with a REST API.
+ *
+ * Extend this class and set static `url` and `Model` properties.
+ * The constructor returns a Proxy that enables array index access.
  */
-function createProxy<T extends SyncModel>(collection: SyncCollectionBase<T>): SyncCollection<T> {
-	return new Proxy(collection, {
-		get(target, prop, receiver) {
-			if (typeof prop === 'string' && /^\d+$/.test(prop)) {
-				return target.__getItem(parseInt(prop, 10));
-			}
-			return Reflect.get(target, prop, receiver);
-		},
-		set(target, prop, value, receiver) {
-			if (typeof prop === 'string' && /^\d+$/.test(prop)) {
-				throw new Error('Cannot replace collection items by index. Use add() or modify item properties directly.');
-			}
-			return Reflect.set(target, prop, value, receiver);
-		},
-	}) as SyncCollection<T>;
-}
-
-export class SyncCollectionBase<T extends SyncModel> implements Observable {
+export class SyncCollection<T extends SyncModel> implements Observable {
 	/** URL for the collection endpoint */
 	static url: string = '';
 
@@ -93,21 +69,34 @@ export class SyncCollectionBase<T extends SyncModel> implements Observable {
 	constructor() {
 		// Auto-fetch on construction
 		this.fetch();
-	}
 
-	/** Get item at index */
-	__getItem(index: number): T | undefined {
-		return this.__items[index];
+		// Return a Proxy that enables array index access (e.g., collection[0])
+		return new Proxy(this, {
+			get(target, prop, receiver) {
+				if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+					return target.__items[parseInt(prop, 10)];
+				}
+				return Reflect.get(target, prop, receiver);
+			},
+			set(target, prop, value, receiver) {
+				if (typeof prop === 'string' && /^\d+$/.test(prop)) {
+					throw new Error(
+						'Cannot replace collection items by index. Use add() or modify item properties directly.'
+					);
+				}
+				return Reflect.set(target, prop, value, receiver);
+			},
+		});
 	}
 
 	/** Get the Model class from static property */
 	private getModelClass(): SyncModelConstructor<T> {
-		return (this.constructor as typeof SyncCollectionBase).Model as SyncModelConstructor<T>;
+		return (this.constructor as typeof SyncCollection).Model as SyncModelConstructor<T>;
 	}
 
 	/** Get the URL from static property */
 	private getUrl(): string {
-		return (this.constructor as typeof SyncCollectionBase).url;
+		return (this.constructor as typeof SyncCollection).url;
 	}
 
 	/** Update $meta and emit change */
@@ -222,7 +211,6 @@ export class SyncCollectionBase<T extends SyncModel> implements Observable {
 			}
 
 			// Create new model instances from data
-			// Pass initialData but no params (we already have the data, no need to fetch)
 			this.__items = data.map((itemData) => {
 				const item = new ModelClass(undefined, itemData);
 				this.__subscribeToChild(item);
@@ -279,34 +267,7 @@ export class SyncCollectionBase<T extends SyncModel> implements Observable {
 	}
 }
 
-/**
- * Wrap a SyncCollectionBase instance with a Proxy for array index access.
- * Use this when extending SyncCollectionBase directly.
- */
-export function wrapCollection<T extends SyncModel>(
-	collection: SyncCollectionBase<T>
-): SyncCollection<T> {
-	return createProxy(collection);
-}
-
-/**
- * Create a SyncCollection class for a given SyncModel.
- * For collections that need custom methods, extend SyncCollectionBase directly
- * and use wrapCollection() in the constructor.
- */
-export function createSyncCollectionClass<T extends SyncModel>(
-	url: string,
-	ModelClass: SyncModelConstructor<T>
-): new () => SyncCollection<T> {
-	class CustomSyncCollection extends SyncCollectionBase<T> {
-		static url = url;
-		static Model = ModelClass as SyncModelConstructor<SyncModel>;
-	}
-
-	// Return a constructor that creates a proxied instance
-	return class {
-		constructor() {
-			return createProxy(new CustomSyncCollection());
-		}
-	} as unknown as new () => SyncCollection<T>;
+/** Add index signature via declaration merging */
+export interface SyncCollection<T extends SyncModel> {
+	readonly [index: number]: T;
 }

@@ -9,11 +9,7 @@ import { SyncModel } from './SyncModel';
 import { prop } from './prop';
 import { collection } from './collection-decorator';
 import type { Collection } from './Collection';
-import {
-	SyncCollectionBase,
-	wrapCollection,
-	type SyncCollection,
-} from './SyncCollection';
+import { SyncCollection } from './SyncCollection';
 
 /** Status type for epics and tasks */
 export type Status = 'ready' | 'in_progress' | 'done';
@@ -81,7 +77,7 @@ export class EpicModel extends SyncModel {
  * const readyEpics = epics.byStatus('ready');
  * ```
  */
-class EpicsCollectionBase extends SyncCollectionBase<EpicModel> {
+export class EpicsCollection extends SyncCollection<EpicModel> {
 	static url = '/api/epics';
 	static Model = EpicModel;
 
@@ -92,16 +88,3 @@ class EpicsCollectionBase extends SyncCollectionBase<EpicModel> {
 		return this.filter((e) => e.status === status).sort((a, b) => a.rank - b.rank);
 	}
 }
-
-/** EpicsCollection with array index access */
-export type EpicsCollectionType = SyncCollection<EpicModel> & EpicsCollectionBase;
-
-/** EpicsCollection class - use `new EpicsCollection()` */
-export const EpicsCollection = class {
-	constructor() {
-		return wrapCollection(new EpicsCollectionBase()) as EpicsCollectionType;
-	}
-} as unknown as new () => EpicsCollectionType;
-
-// Re-export for type usage
-export type { SyncCollection };
