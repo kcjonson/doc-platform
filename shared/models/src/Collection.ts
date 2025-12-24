@@ -309,31 +309,24 @@ class CollectionImpl<T extends Model> implements Observable {
 	}
 
 	/**
-	 * Remove all items from the collection.
+	 * Clear all items, optionally replacing with new data.
 	 */
-	clear(): void {
-		for (const item of this.__items) {
-			this.__unsubscribeFromChild(item);
-		}
-		this.__items = [];
-		this.__emitChange();
-	}
-
-	/**
-	 * Replace all items in the collection with new data.
-	 */
-	reset(dataArray: Array<Partial<ModelData<T>>>): void {
+	clear(dataArray?: Array<Partial<ModelData<T>>>): void {
 		// Unsubscribe from all current items
 		for (const item of this.__items) {
 			this.__unsubscribeFromChild(item);
 		}
 
-		// Create new items
-		this.__items = dataArray.map((data) => {
-			const item = new this.__ModelClass(data as Record<string, unknown>);
-			this.__subscribeToChild(item);
-			return item;
-		});
+		// Create new items if provided
+		if (dataArray && dataArray.length > 0) {
+			this.__items = dataArray.map((data) => {
+				const item = new this.__ModelClass(data as Record<string, unknown>);
+				this.__subscribeToChild(item);
+				return item;
+			});
+		} else {
+			this.__items = [];
+		}
 
 		this.__emitChange();
 	}

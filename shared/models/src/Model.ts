@@ -179,12 +179,12 @@ export class Model implements Observable {
 				if (properties?.has(property)) {
 					this.__data[property] = propValue;
 				} else if (collections?.has(property)) {
-					// For collections, reset the existing collection (don't replace it)
+					// For collections, clear and replace items
 					const col = this.__data[property] as Collection<Model>;
-					col.reset(
+					col.clear(
 						Array.isArray(propValue)
 							? (propValue as Array<Record<string, unknown>>)
-							: []
+							: undefined
 					);
 				} else if (nestedModels?.has(property)) {
 					// For nested models, use the setter to handle subscription management

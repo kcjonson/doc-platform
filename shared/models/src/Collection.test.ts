@@ -254,14 +254,14 @@ describe('Collection', () => {
 			expect(epic.tasks.length).toBe(0);
 		});
 
-		it('should reset with new data', () => {
+		it('should clear and replace with new data', () => {
 			const epic = new Epic({
 				id: 'e1',
 				title: 'Auth',
 				tasks: [{ id: 't1', title: 'Old', status: 'todo' }],
 			});
 
-			epic.tasks.reset([
+			epic.tasks.clear([
 				{ id: 't2', title: 'New1', status: 'doing' },
 				{ id: 't3', title: 'New2', status: 'done' },
 			]);
