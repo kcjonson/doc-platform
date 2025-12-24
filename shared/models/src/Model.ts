@@ -60,6 +60,19 @@ export class Model implements Observable {
 	/** Metadata */
 	readonly $meta: Record<string, unknown> = {};
 
+	/**
+	 * Bound callback for child models/collections to notify parent of changes.
+	 * Defined once per instance to avoid creating new function instances.
+	 */
+	protected readonly __notifyChange: ChangeCallback = () => {
+		const listeners = this.__listeners['change'];
+		if (listeners) {
+			for (const listener of listeners) {
+				listener();
+			}
+		}
+	};
+
 	constructor(initialData?: Record<string, unknown>) {
 		// Get metadata
 		const properties = getProperties(this);
@@ -77,18 +90,6 @@ export class Model implements Observable {
 			);
 		}
 
-		// Helper to create parent change callback
-		const createParentCallback = (): ChangeCallback => {
-			return () => {
-				const listeners = this.__listeners['change'];
-				if (listeners) {
-					for (const listener of listeners) {
-						listener();
-					}
-				}
-			};
-		};
-
 		// Set initial data directly to __data (bypassing setters to avoid change events)
 		if (initialData) {
 			for (const [key, value] of Object.entries(initialData)) {
@@ -103,7 +104,7 @@ export class Model implements Observable {
 						config.ModelClass as ModelConstructor<Model>,
 						Array.isArray(value) ? (value as Array<Record<string, unknown>>) : []
 					);
-					col.__setParentCallback(createParentCallback());
+					col.__setParentCallback(this.__notifyChange);
 					this.__data[key] = col;
 				}
 				// Handle @model (nested model) properties
@@ -113,9 +114,8 @@ export class Model implements Observable {
 						const nested = new config.ModelClass(value as Record<string, unknown>) as Model & {
 							[PARENT_CALLBACK]?: ChangeCallback;
 						};
-						const callback = createParentCallback();
-						nested[PARENT_CALLBACK] = callback;
-						nested.on('change', callback);
+						nested[PARENT_CALLBACK] = this.__notifyChange;
+						nested.on('change', this.__notifyChange);
 						this.__data[key] = nested;
 					}
 				}
@@ -127,7 +127,7 @@ export class Model implements Observable {
 			for (const [key, config] of collections) {
 				if (!(key in this.__data)) {
 					const col = createCollection(config.ModelClass as ModelConstructor<Model>);
-					col.__setParentCallback(createParentCallback());
+					col.__setParentCallback(this.__notifyChange);
 					this.__data[key] = col;
 				}
 			}

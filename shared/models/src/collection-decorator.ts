@@ -17,6 +17,20 @@ import 'polyfill-symbol-metadata';
 
 import type { Model } from './Model';
 import { createCollection, type Collection, type ModelConstructor } from './Collection';
+import type { ModelInternal } from './types';
+
+/**
+ * Emit change event to all listeners on a model.
+ * Defined once to avoid creating new function instances.
+ */
+function emitChange(self: ModelInternal): void {
+	const listeners = self.__listeners['change'];
+	if (listeners) {
+		for (const listener of listeners) {
+			listener();
+		}
+	}
+}
 
 /** Symbol for storing collection configs in decorator metadata */
 export const COLLECTIONS = Symbol('collections');
@@ -62,7 +76,7 @@ export function collection<T extends Model>(
 		// Return getter/setter that uses __data
 		return {
 			get(this: This): V {
-				const self = this as unknown as { __data: Record<string, unknown> };
+				const self = this as unknown as ModelInternal;
 				let col = self.__data[name] as V | undefined;
 
 				// Lazily create empty collection if not set
@@ -70,25 +84,13 @@ export function collection<T extends Model>(
 					col = createCollection(ModelClass) as V;
 					self.__data[name] = col;
 					// Wire up parent callback
-					(col as Collection<T>).__setParentCallback(() => {
-						const listeners = (
-							this as unknown as { __listeners: Record<string, Array<() => void>> }
-						).__listeners['change'];
-						if (listeners) {
-							for (const listener of listeners) {
-								listener();
-							}
-						}
-					});
+					(col as Collection<T>).__setParentCallback(() => emitChange(self));
 				}
 
 				return col;
 			},
 			set(this: This, value: V): void {
-				const self = this as unknown as {
-					__data: Record<string, unknown>;
-					__listeners: Record<string, Array<() => void>>;
-				};
+				const self = this as unknown as ModelInternal;
 
 				// If setting raw array data, convert to Collection
 				let col: Collection<T>;
@@ -103,24 +105,12 @@ export function collection<T extends Model>(
 				}
 
 				// Wire up parent callback for event bubbling
-				col.__setParentCallback(() => {
-					const listeners = self.__listeners['change'];
-					if (listeners) {
-						for (const listener of listeners) {
-							listener();
-						}
-					}
-				});
+				col.__setParentCallback(() => emitChange(self));
 
 				self.__data[name] = col;
 
 				// Emit change event
-				const listeners = self.__listeners['change'];
-				if (listeners) {
-					for (const listener of listeners) {
-						listener();
-					}
-				}
+				emitChange(self);
 			},
 		};
 	};

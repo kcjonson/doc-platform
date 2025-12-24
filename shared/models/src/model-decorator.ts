@@ -21,7 +21,20 @@ import 'polyfill-symbol-metadata';
 
 import type { Model } from './Model';
 import type { ModelConstructor } from './Collection';
-import type { ChangeCallback } from './types';
+import type { ChangeCallback, ModelInternal } from './types';
+
+/**
+ * Emit change event to all listeners on a model.
+ * Defined once to avoid creating new function instances.
+ */
+function emitChange(self: ModelInternal): void {
+	const listeners = self.__listeners['change'];
+	if (listeners) {
+		for (const listener of listeners) {
+			listener();
+		}
+	}
+}
 
 /** Symbol for storing nested model configs in decorator metadata */
 export const NESTED_MODELS = Symbol('nestedModels');
@@ -70,24 +83,11 @@ export function model<T extends Model>(
 		// Return getter/setter that uses __data
 		return {
 			get(this: This): V {
-				const self = this as unknown as { __data: Record<string, unknown> };
+				const self = this as unknown as ModelInternal;
 				return self.__data[name] as V;
 			},
 			set(this: This, value: V): void {
-				const self = this as unknown as {
-					__data: Record<string, unknown>;
-					__listeners: Record<string, ChangeCallback[]>;
-				};
-
-				// Helper to emit change on parent
-				const emitChange = (): void => {
-					const listeners = self.__listeners['change'];
-					if (listeners) {
-						for (const listener of listeners) {
-							listener();
-						}
-					}
-				};
+				const self = this as unknown as ModelInternal;
 
 				// Unsubscribe from old model if exists
 				const oldModel = self.__data[name] as (Model & { [PARENT_CALLBACK]?: ChangeCallback }) | undefined;
@@ -104,12 +104,12 @@ export function model<T extends Model>(
 				} else {
 					// Can't create model from null/undefined
 					self.__data[name] = undefined;
-					emitChange();
+					emitChange(self);
 					return;
 				}
 
-				// Create and store callback for later cleanup
-				const parentCallback: ChangeCallback = emitChange;
+				// Create callback that references self for later cleanup
+				const parentCallback: ChangeCallback = () => emitChange(self);
 				newModel[PARENT_CALLBACK] = parentCallback;
 
 				// Subscribe to child changes
@@ -117,7 +117,7 @@ export function model<T extends Model>(
 				self.__data[name] = newModel;
 
 				// Emit change event
-				emitChange();
+				emitChange(self);
 			},
 		};
 	};

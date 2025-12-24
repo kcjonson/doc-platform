@@ -308,7 +308,11 @@ class CollectionImpl<T extends Model> implements Observable {
 			return;
 		}
 
-		const [item] = this.__items.splice(fromIndex, 1) as [T];
+		const removed = this.__items.splice(fromIndex, 1);
+		const item = removed[0];
+		if (!item) {
+			return;
+		}
 		this.__items.splice(toIndex, 0, item);
 		this.__emitChange();
 	}

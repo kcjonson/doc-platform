@@ -13,6 +13,15 @@ export interface Observable {
 	off(event: 'change', callback: ChangeCallback): void;
 }
 
+/**
+ * Internal interface for Model instances.
+ * Used by decorators to access internal storage without casting to unknown.
+ */
+export interface ModelInternal {
+	__data: Record<string, unknown>;
+	__listeners: Record<string, ChangeCallback[]>;
+}
+
 export interface ModelMeta {
 	working: boolean;
 	error: Error | null;
