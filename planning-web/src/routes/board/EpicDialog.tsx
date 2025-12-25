@@ -1,16 +1,20 @@
 import { useEffect, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
-import type { EpicModel } from '@doc-platform/models';
+import type { EpicModel, Status } from '@doc-platform/models';
 import { EpicView } from '../epic/EpicView';
 import styles from './EpicDialog.module.css';
 
 interface EpicDialogProps {
-	epic: EpicModel;
+	epic?: EpicModel;
 	onClose: () => void;
 	onDelete?: (epic: EpicModel) => void;
+	/** Called when creating a new epic */
+	onCreate?: (data: { title: string; description?: string; status: Status }) => void;
+	/** Whether this is a new epic being created */
+	isNew?: boolean;
 }
 
-export function EpicDialog({ epic, onClose, onDelete }: EpicDialogProps): JSX.Element {
+export function EpicDialog({ epic, onClose, onDelete, onCreate, isNew = false }: EpicDialogProps): JSX.Element {
 	// Handle escape key
 	const handleKeyDown = useCallback(
 		(e: KeyboardEvent) => {
@@ -48,7 +52,13 @@ export function EpicDialog({ epic, onClose, onDelete }: EpicDialogProps): JSX.El
 			aria-labelledby="epic-dialog-title"
 		>
 			<div class={styles.dialog}>
-				<EpicView epic={epic} onClose={onClose} onDelete={onDelete} />
+				<EpicView
+					epic={epic}
+					onClose={onClose}
+					onDelete={onDelete}
+					onCreate={onCreate}
+					isNew={isNew}
+				/>
 			</div>
 		</div>
 	);
