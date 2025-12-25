@@ -10,15 +10,22 @@
 		"start": "node dist/index.js",
 		"lint": "eslint src",
 		"lint:fix": "eslint src --fix",
-		"clean": "rm -rf dist"
+		"clean": "rm -rf dist",
+		"migrate": "node-pg-migrate --migrations-dir migrations --tsconfig tsconfig.json",
+		"migrate:up": "pnpm migrate up",
+		"migrate:down": "pnpm migrate down",
+		"migrate:create": "pnpm migrate create --template-file-name migrations/template.ts"
 	},
 	"dependencies": {
 		"@doc-platform/core": "workspace:*",
 		"@hono/node-server": "^1.19.7",
-		"hono": "^4.11.1"
+		"hono": "^4.11.1",
+		"pg": "^8.16.3"
 	},
 	"devDependencies": {
 		"@types/node": "^22.10.2",
+		"@types/pg": "^8.16.0",
+		"node-pg-migrate": "^8.0.4",
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.2"
 	}
