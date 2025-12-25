@@ -9,7 +9,6 @@ import { Hono } from 'hono';
 import { Redis } from 'ioredis';
 import { authMiddleware, type AuthVariables } from '@doc-platform/auth';
 import { renderLoginPage } from './pages/login.js';
-import { renderSignupPage } from './pages/signup.js';
 
 const app = new Hono<{ Variables: AuthVariables }>();
 
@@ -33,16 +32,11 @@ app.get('/login', (c) => {
 	return c.html(renderLoginPage());
 });
 
-// Signup page (no auth required)
-app.get('/signup', (c) => {
-	return c.html(renderSignupPage());
-});
-
 // Auth middleware for all other routes
 app.use(
 	'*',
 	authMiddleware(redis, {
-		excludePaths: ['/health', '/login', '/signup'],
+		excludePaths: ['/health', '/login'],
 		onUnauthenticated: () => {
 			return Response.redirect('/login', 302);
 		},

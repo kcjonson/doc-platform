@@ -112,22 +112,6 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 		.error.hidden {
 			display: none;
 		}
-
-		.signup-link {
-			text-align: center;
-			margin-top: 1.5rem;
-			font-size: 0.875rem;
-			color: #666;
-		}
-
-		.signup-link a {
-			color: #0066cc;
-			text-decoration: none;
-		}
-
-		.signup-link a:hover {
-			text-decoration: underline;
-		}
 	</style>
 </head>
 <body>
@@ -163,9 +147,6 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 			<button type="submit" id="submit-btn">Sign In</button>
 		</form>
 
-		<div class="signup-link">
-			Don't have an account? <a href="/signup">Sign up</a>
-		</div>
 	</div>
 
 	<script>
