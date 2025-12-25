@@ -268,6 +268,7 @@ export class SyncCollection<T extends SyncModel> implements Observable {
 }
 
 /** Add index signature via declaration merging */
+// eslint-disable-next-line no-redeclare
 export interface SyncCollection<T extends SyncModel> {
 	readonly [index: number]: T;
 }
