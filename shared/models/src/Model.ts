@@ -174,7 +174,7 @@ export class Model implements Observable {
 	 * // Set single property
 	 * user.set('name', 'John');
 	 */
-	set<K extends keyof ModelData<this>>(data: Partial<ModelData<this>>): void;
+	set(data: Partial<ModelData<this>>): void;
 	set<K extends keyof ModelData<this>>(property: K, value: ModelData<this>[K]): void;
 	set<K extends keyof ModelData<this>>(
 		dataOrProperty: Partial<ModelData<this>> | K,
