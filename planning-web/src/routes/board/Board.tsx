@@ -7,13 +7,8 @@ import { Button, UserMenu } from '@doc-platform/ui';
 import { Column } from './Column';
 import { EpicDialog } from './EpicDialog';
 import { useKeyboardNavigation } from './useKeyboardNavigation';
+import { useAuth } from '../../hooks/useAuth';
 import styles from './Board.module.css';
-
-// TODO: Replace with actual user data from auth context
-const mockUser = {
-	displayName: 'John Doe',
-	email: 'john@example.com',
-};
 
 const COLUMNS: { status: Status; title: string }[] = [
 	{ status: 'ready', title: 'Ready' },
@@ -22,6 +17,9 @@ const COLUMNS: { status: Status; title: string }[] = [
 ];
 
 export function Board(_props: RouteProps): JSX.Element {
+	// Auth state
+	const { user, loading: authLoading, logout } = useAuth();
+
 	// Collection auto-fetches on construction, useModel subscribes to changes
 	const epics = useMemo(() => new EpicsCollection(), []);
 	useModel(epics);
@@ -102,8 +100,9 @@ export function Board(_props: RouteProps): JSX.Element {
 		navigate('/settings');
 	}
 
-	function handleLogoutClick(): void {
-		// TODO: Implement actual logout when auth is implemented
+	async function handleLogoutClick(): Promise<void> {
+		await logout();
+		navigate('/');
 	}
 
 	function handleDragStart(e: DragEvent, epic: EpicModel): void {
@@ -185,8 +184,8 @@ export function Board(_props: RouteProps): JSX.Element {
 		});
 	}
 
-	// Loading state from collection's $meta
-	if (epics.$meta.working && epics.length === 0) {
+	// Loading state
+	if (authLoading || (epics.$meta.working && epics.length === 0)) {
 		return (
 			<div class={styles.container}>
 				<div class={styles.loading}>Loading...</div>
@@ -209,12 +208,14 @@ export function Board(_props: RouteProps): JSX.Element {
 				<h1 class={styles.title}>Planning Board</h1>
 				<div class={styles.actions}>
 					<Button onClick={handleOpenNewEpicDialog}>+ New Epic</Button>
-					<UserMenu
-						displayName={mockUser.displayName}
-						email={mockUser.email}
-						onSettingsClick={handleSettingsClick}
-						onLogoutClick={handleLogoutClick}
-					/>
+					{user && (
+						<UserMenu
+							displayName={user.displayName}
+							email={user.email}
+							onSettingsClick={handleSettingsClick}
+							onLogoutClick={handleLogoutClick}
+						/>
+					)}
 				</div>
 			</header>
 

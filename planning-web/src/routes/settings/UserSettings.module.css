@@ -82,3 +82,11 @@
 .actions {
 	margin-top: var(--space-4);
 }
+
+.loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: var(--space-8);
+	color: var(--color-text-muted);
+}
