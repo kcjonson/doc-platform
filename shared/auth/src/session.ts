@@ -54,7 +54,14 @@ export async function getSession(
 		return null;
 	}
 
-	const session: Session = JSON.parse(data);
+	let session: Session;
+	try {
+		session = JSON.parse(data);
+	} catch {
+		// Corrupted session data - delete and return null
+		await redis.del(key);
+		return null;
+	}
 
 	// Update last accessed time and refresh TTL
 	session.lastAccessedAt = Date.now();
@@ -65,15 +72,26 @@ export async function getSession(
 
 /**
  * Update session data (e.g., after token refresh)
+ * Uses atomic get + update to avoid race conditions
  */
 export async function updateSession(
 	redis: Redis,
 	sessionId: string,
 	updates: Partial<Omit<Session, 'createdAt' | 'lastAccessedAt'>>
 ): Promise<boolean> {
-	const session = await getSession(redis, sessionId);
+	const key = sessionKey(sessionId);
+	const data = await redis.get(key);
 
-	if (!session) {
+	if (!data) {
+		return false;
+	}
+
+	let session: Session;
+	try {
+		session = JSON.parse(data);
+	} catch {
+		// Corrupted session data - delete and return false
+		await redis.del(key);
 		return false;
 	}
 
@@ -83,11 +101,7 @@ export async function updateSession(
 		lastAccessedAt: Date.now(),
 	};
 
-	await redis.setex(
-		sessionKey(sessionId),
-		SESSION_TTL_SECONDS,
-		JSON.stringify(updated)
-	);
+	await redis.setex(key, SESSION_TTL_SECONDS, JSON.stringify(updated));
 
 	return true;
 }

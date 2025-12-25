@@ -42,10 +42,10 @@ editor-desktop
 planning-desktop
 *-desktop
 
-# Web apps (not needed for API container)
+# Web apps (not needed for API container, but frontend needs planning-web)
 editor-web
-planning-web
-*-web
+# planning-web is needed for frontend container
+!planning-web
 
 # Infrastructure (not needed in container)
 infra

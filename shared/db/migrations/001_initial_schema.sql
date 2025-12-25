@@ -67,7 +67,7 @@ CREATE TABLE oauth_codes (
 
 -- Indexes for common queries
 CREATE INDEX idx_user_emails_user_id ON user_emails(user_id);
-CREATE INDEX idx_github_connections_user_id ON github_connections(user_id);
+-- Note: github_connections.user_id already has a UNIQUE constraint which creates an index
 CREATE INDEX idx_mcp_tokens_user_id ON mcp_tokens(user_id);
 CREATE INDEX idx_mcp_tokens_expires_at ON mcp_tokens(expires_at);
 CREATE INDEX idx_oauth_codes_expires_at ON oauth_codes(expires_at);

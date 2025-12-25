@@ -118,7 +118,7 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 	<div class="login-container">
 		<h1>Sign In</h1>
 
-		<div id="error" class="error${error ? '' : ' hidden'}">${error || ''}</div>
+		<div id="error" class="error${error ? '' : ' hidden'}">${error ? escapeHtml(error) : ''}</div>
 
 		<form id="login-form">
 			<div class="form-group">

@@ -4,6 +4,11 @@ export * from './types.js';
 
 const { Pool } = pg;
 
+// Validate DATABASE_URL is set
+if (!process.env.DATABASE_URL) {
+	throw new Error('DATABASE_URL environment variable is required');
+}
+
 // Connection pool - reused across requests
 const pool = new Pool({
 	connectionString: process.env.DATABASE_URL,
