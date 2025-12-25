@@ -10,9 +10,15 @@ WORKDIR /app
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 
 # Copy only package.json files to install dependencies
+# Frontend server dependencies
 COPY shared/core/package.json ./shared/core/
 COPY shared/auth/package.json ./shared/auth/
 COPY frontend/package.json ./frontend/
+# Planning-web SPA dependencies
+COPY shared/ui/package.json ./shared/ui/
+COPY shared/models/package.json ./shared/models/
+COPY shared/router/package.json ./shared/router/
+COPY shared/fetch/package.json ./shared/fetch/
 COPY planning-web/package.json ./planning-web/
 
 # Install dependencies
@@ -21,12 +27,20 @@ RUN pnpm install --frozen-lockfile
 # Copy source code
 COPY shared/core ./shared/core
 COPY shared/auth ./shared/auth
+COPY shared/ui ./shared/ui
+COPY shared/models ./shared/models
+COPY shared/router ./shared/router
+COPY shared/fetch ./shared/fetch
 COPY frontend ./frontend
 COPY planning-web ./planning-web
 
 # Build shared packages first, then frontend server, then SPA
+# Order matters: core first, then packages that depend on it
 RUN pnpm --filter @doc-platform/core build && \
     pnpm --filter @doc-platform/auth build && \
+    pnpm --filter @doc-platform/fetch build && \
+    pnpm --filter @doc-platform/router build && \
+    pnpm --filter @doc-platform/models build && \
     pnpm --filter @doc-platform/frontend build && \
     pnpm --filter planning-web build
 
