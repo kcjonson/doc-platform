@@ -122,6 +122,7 @@ Use this template for all work items:
 - [x] Card component (default, interactive, selected variants)
 - [x] Badge component (default, primary, success, warning, error)
 - [x] StatusDot component (ready, in_progress, done)
+- [x] UserMenu component (avatar with initials + dropdown menu)
 - [x] Demo page at /ui route
 - [ ] Migrate existing planning-web components to use @doc-platform/ui
 
@@ -149,11 +150,15 @@ Use this template for all work items:
 - [x] Epic detail dialog
   - [x] Task list
   - [x] Status/assignee controls
+  - [x] Open in new tab link
   - [ ] Linked documents (stubbed)
+- [x] New epic dialog (reuses EpicView component)
+- [x] User menu in header (avatar with settings/logout dropdown)
+- [x] User settings page (/settings route)
 - [x] Keyboard navigation
   - [x] Arrow key navigation
   - [x] Keyboard shortcuts (N, 1/2/3, Enter, Escape)
-  - [x] Quick create (N for epic)
+  - [x] Quick create (N for epic) - now opens dialog
 
 ---
 
