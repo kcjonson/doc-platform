@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths-ignore:
       - 'docs/**'
-      - '*.md'
+      - '**/*.md'
       - '.github/workflows/ci.yml'
   workflow_dispatch:
 
@@ -34,9 +34,24 @@ jobs:
         id: check
         run: |
           # Get the latest commit on main
-          LATEST=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/commits/main" \
-            | jq -r '.sha')
+          RESPONSE=$(curl -sf -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/commits/main")
+
+          if [ $? -ne 0 ]; then
+            echo "Failed to fetch latest commit from GitHub API"
+            echo "Proceeding with deploy to avoid blocking on API issues"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          LATEST=$(echo "$RESPONSE" | jq -r '.sha')
+
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            echo "Failed to parse commit SHA from API response"
+            echo "Proceeding with deploy to avoid blocking on API issues"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
 
           echo "This workflow commit: ${{ github.sha }}"
           echo "Latest main commit:   $LATEST"
