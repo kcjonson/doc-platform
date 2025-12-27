@@ -74,30 +74,17 @@ Both containers share authentication state via Redis sessions:
 -- Users table (primary identity)
 CREATE TABLE users (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	username VARCHAR(255) NOT NULL UNIQUE,  -- Immutable after creation
 	display_name VARCHAR(255) NOT NULL,
+	email VARCHAR(255) NOT NULL UNIQUE,     -- Current email, can be changed
+	email_verified BOOLEAN DEFAULT FALSE,
+	email_verified_at TIMESTAMP WITH TIME ZONE,
 	avatar_url TEXT,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- User emails (multiple per user)
-CREATE TABLE user_emails (
-	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-	email VARCHAR(255) NOT NULL,
-	is_primary BOOLEAN DEFAULT FALSE,
-	is_verified BOOLEAN DEFAULT FALSE,
-	verified_at TIMESTAMP WITH TIME ZONE,
-	created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-	UNIQUE(email)
-);
-
--- Ensure one primary email per user
-CREATE UNIQUE INDEX idx_user_primary_email
-	ON user_emails(user_id)
-	WHERE is_primary = TRUE;
-
--- User passwords (for email/password auth)
+-- User passwords (for username/password auth)
 CREATE TABLE user_passwords (
 	user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
 	password_hash VARCHAR(255) NOT NULL,
@@ -108,7 +95,8 @@ CREATE TABLE user_passwords (
 -- Email verification tokens
 CREATE TABLE email_verification_tokens (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-	email_id UUID NOT NULL REFERENCES user_emails(id) ON DELETE CASCADE,
+	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	email VARCHAR(255) NOT NULL,  -- Email being verified (may differ from current)
 	token_hash VARCHAR(255) NOT NULL,
 	expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -169,7 +157,7 @@ CREATE TABLE oauth_codes (
 ```
 session:{session_id}:
   user_id: UUID
-  email: string
+  username: string
   display_name: string
   created_at: timestamp
   last_accessed: timestamp
@@ -181,20 +169,22 @@ TTL: 30 days (sliding expiration)
 
 ## Authentication Flows
 
-### 1. User Registration (Email/Password)
+### 1. User Registration
 
 ```
 Browser                        API                      PostgreSQL
    │                            │                            │
    │ POST /api/auth/signup      │                            │
-   │ {email, password, name}    │                            │
+   │ {username, email,          │                            │
+   │  password, display_name}   │                            │
    │───────────────────────────►│                            │
    │                            │                            │
+   │                            │ Check username not taken   │
    │                            │ Check email not taken      │
    │                            │───────────────────────────►│
    │                            │                            │
    │                            │ Hash password (bcrypt)     │
-   │                            │ Create user + email        │
+   │                            │ Create user                │
    │                            │───────────────────────────►│
    │                            │                            │
    │                            │ Generate verification token│
@@ -207,22 +197,26 @@ Browser                        API                      PostgreSQL
    │                            │                            │
    │ GET /api/auth/verify?t=xxx │                            │
    │───────────────────────────►│                            │
-   │                            │ Verify token, mark email   │
+   │                            │ Verify token               │
+   │                            │ Mark email_verified=true   │
    │                            │───────────────────────────►│
    │◄───────────────────────────│                            │
    │ Redirect to login          │                            │
 ```
 
-### 2. User Login (Email/Password)
+### 2. User Login (Username or Email)
+
+Users can log in with either their username or email address.
 
 ```
 Browser                        API                    PostgreSQL    Redis
    │                            │                        │           │
    │ POST /api/auth/login       │                        │           │
-   │ {email, password}          │                        │           │
+   │ {identifier, password}     │  (username or email)   │           │
    │───────────────────────────►│                        │           │
    │                            │                        │           │
-   │                            │ Get user by email      │           │
+   │                            │ Get user by username   │           │
+   │                            │ OR by email            │           │
    │                            │───────────────────────►│           │
    │                            │◄───────────────────────│           │
    │                            │ {user, password_hash}  │           │
