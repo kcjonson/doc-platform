@@ -1,14 +1,22 @@
+import { useMemo } from 'preact/hooks';
 import type { JSX } from 'preact';
 import type { RouteProps } from '@doc-platform/router';
 import { navigate } from '@doc-platform/router';
-import { AppHeader } from '@doc-platform/ui';
+import { AppHeader, type NavTab } from '@doc-platform/ui';
 import { useAuth } from '@shared/planning';
 import { FileBrowser } from '../FileBrowser/FileBrowser';
 import { CommentsPanel } from '../CommentsPanel/CommentsPanel';
 import styles from './Editor.module.css';
 
-export function Editor(_props: RouteProps): JSX.Element {
+export function Editor(props: RouteProps): JSX.Element {
+	const projectId = props.params.projectId || 'demo';
 	const { user, loading: authLoading, logout } = useAuth();
+
+	// Navigation tabs
+	const navTabs: NavTab[] = useMemo(() => [
+		{ id: 'planning', label: 'Planning', href: `/projects/${projectId}/planning` },
+		{ id: 'pages', label: 'Pages', href: `/projects/${projectId}/pages` },
+	], [projectId]);
 
 	function handleSettingsClick(): void {
 		navigate('/settings');
@@ -32,7 +40,9 @@ export function Editor(_props: RouteProps): JSX.Element {
 	return (
 		<div class={styles.container}>
 			<AppHeader
-				title="Pages"
+				projectName={projectId}
+				navTabs={navTabs}
+				activeTab="pages"
 				user={user ? { displayName: user.displayName, email: user.email } : undefined}
 				onSettingsClick={handleSettingsClick}
 				onLogoutClick={handleLogoutClick}

@@ -3,7 +3,7 @@ import type { JSX } from 'preact';
 import type { RouteProps } from '@doc-platform/router';
 import { navigate } from '@doc-platform/router';
 import { useModel, EpicsCollection, type EpicModel, type Status } from '@doc-platform/models';
-import { Button, AppHeader } from '@doc-platform/ui';
+import { Button, AppHeader, type NavTab } from '@doc-platform/ui';
 import { Column } from '../Column/Column';
 import { EpicDialog } from '../EpicDialog/EpicDialog';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
@@ -16,7 +16,9 @@ const COLUMNS: { status: Status; title: string }[] = [
 	{ status: 'done', title: 'Done' },
 ];
 
-export function Board(_props: RouteProps): JSX.Element {
+export function Board(props: RouteProps): JSX.Element {
+	const projectId = props.params.projectId || 'demo';
+
 	// Auth state
 	const { user, loading: authLoading, logout } = useAuth();
 
@@ -27,6 +29,12 @@ export function Board(_props: RouteProps): JSX.Element {
 	const [selectedEpicId, setSelectedEpicId] = useState<string | undefined>();
 	const [dialogEpic, setDialogEpic] = useState<EpicModel | null>(null);
 	const [isNewEpicDialogOpen, setIsNewEpicDialogOpen] = useState(false);
+
+	// Navigation tabs
+	const navTabs: NavTab[] = useMemo(() => [
+		{ id: 'planning', label: 'Planning', href: `/projects/${projectId}/planning` },
+		{ id: 'pages', label: 'Pages', href: `/projects/${projectId}/pages` },
+	], [projectId]);
 
 	// Memoize epics by status for keyboard navigation
 	const epicsByStatus = useMemo(
@@ -205,7 +213,9 @@ export function Board(_props: RouteProps): JSX.Element {
 	return (
 		<div class={styles.container}>
 			<AppHeader
-				title="Planning Board"
+				projectName={projectId}
+				navTabs={navTabs}
+				activeTab="planning"
 				actions={<Button onClick={handleOpenNewEpicDialog}>+ New Epic</Button>}
 				user={user ? { displayName: user.displayName, email: user.email } : undefined}
 				onSettingsClick={handleSettingsClick}
