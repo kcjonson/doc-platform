@@ -14,9 +14,10 @@ This specification defines the REST API endpoints and database schema for doc-pl
 │             │       │                 │       │  connections│
 │  id (PK)    │◄──────│  user_id (FK)   │       │             │
 │  username   │       │  password_hash  │       │  user_id(FK)│──►│
-│  email      │       └─────────────────┘       │  github_    │
-│  display_   │                                 │   user_id   │
-│   name      │                                 └─────────────┘
+│  first_name │       └─────────────────┘       │  github_    │
+│  last_name  │                                 │   user_id   │
+│  email      │                                 └─────────────┘
+│  phone      │
 └─────────────┘
        │
        │
@@ -53,10 +54,12 @@ This specification defines the REST API endpoints and database schema for doc-pl
 CREATE TABLE users (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	username VARCHAR(255) NOT NULL UNIQUE,
-	display_name VARCHAR(255) NOT NULL,
+	first_name VARCHAR(255) NOT NULL,
+	last_name VARCHAR(255) NOT NULL,
 	email VARCHAR(255) NOT NULL UNIQUE,
 	email_verified BOOLEAN DEFAULT FALSE,
 	email_verified_at TIMESTAMPTZ,
+	phone_number VARCHAR(50),
 	avatar_url TEXT,
 	created_at TIMESTAMPTZ DEFAULT NOW(),
 	updated_at TIMESTAMPTZ DEFAULT NOW()

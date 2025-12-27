@@ -75,10 +75,12 @@ Both containers share authentication state via Redis sessions:
 CREATE TABLE users (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	username VARCHAR(255) NOT NULL UNIQUE,  -- Immutable after creation
-	display_name VARCHAR(255) NOT NULL,
+	first_name VARCHAR(255) NOT NULL,
+	last_name VARCHAR(255) NOT NULL,
 	email VARCHAR(255) NOT NULL UNIQUE,     -- Current email, can be changed
 	email_verified BOOLEAN DEFAULT FALSE,
 	email_verified_at TIMESTAMP WITH TIME ZONE,
+	phone_number VARCHAR(50),               -- Optional, E.164 format
 	avatar_url TEXT,
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 	updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -163,7 +165,7 @@ session:{session_id}:
 TTL: 30 days (sliding expiration)
 ```
 
-Sessions are auth-only. User details (username, display_name, avatar, etc.) are fetched via `/api/auth/me` or `/api/users/:id`.
+Sessions are auth-only. User details (username, first_name, last_name, avatar, etc.) are fetched via `/api/auth/me` or `/api/users/:id`.
 
 ---
 
@@ -175,8 +177,8 @@ Sessions are auth-only. User details (username, display_name, avatar, etc.) are 
 Browser                        API                      PostgreSQL
    │                            │                            │
    │ POST /api/auth/signup      │                            │
-   │ {username, email,          │                            │
-   │  password, display_name}   │                            │
+   │ {username, email, password,│                            │
+   │  first_name, last_name}    │                            │
    │───────────────────────────►│                            │
    │                            │                            │
    │                            │ Check username not taken   │
@@ -483,10 +485,21 @@ app.use('*', authMiddleware({
 
 ## Security Considerations
 
-### Password Security
+### Password Requirements
 
+| Requirement | Value |
+|-------------|-------|
+| Minimum length | 12 characters |
+| Maximum length | 512 characters |
+| Uppercase | At least 1 |
+| Lowercase | At least 1 |
+| Digit | At least 1 |
+| Special character | At least 1 |
+| Common password check | Block passwords in common list |
+
+**Implementation:**
 - bcrypt with cost factor 12
-- Minimum 8 characters required
+- Check against common password list (npm: `common-password-checker`)
 - Passwords never logged or stored in plaintext
 
 ### Session Security
