@@ -1,5 +1,6 @@
 import type { JSX } from 'preact';
-import styles from './Textarea.module.css';
+
+export type TextareaSize = 'sm' | 'md' | 'lg';
 
 export interface TextareaProps {
 	/** Textarea value (controlled) */
@@ -20,9 +21,13 @@ export interface TextareaProps {
 	disabled?: boolean;
 	/** Read-only state */
 	readOnly?: boolean;
+	/** Size */
+	size?: TextareaSize;
+	/** Error state */
+	error?: boolean;
 	/** Resize behavior */
 	resize?: 'none' | 'vertical' | 'horizontal' | 'both';
-	/** Additional CSS class (use error for error state) */
+	/** Additional CSS class */
 	class?: string;
 	/** Textarea name */
 	name?: string;
@@ -42,15 +47,25 @@ export function Textarea({
 	onFocus,
 	disabled = false,
 	readOnly = false,
+	size = 'md',
+	error = false,
 	resize = 'vertical',
 	class: className,
 	name,
 	id,
 	autoFocus,
 }: TextareaProps): JSX.Element {
+	const classes = [
+		size !== 'md' ? `size-${size}` : '',
+		error ? 'error' : '',
+		className || '',
+	]
+		.filter(Boolean)
+		.join(' ');
+
 	return (
 		<textarea
-			class={`${styles.textarea} ${className || ''}`}
+			class={classes || undefined}
 			value={value}
 			placeholder={placeholder}
 			rows={rows}

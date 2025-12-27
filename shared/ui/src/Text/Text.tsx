@@ -1,5 +1,6 @@
 import type { JSX } from 'preact';
-import styles from './Text.module.css';
+
+export type TextSize = 'sm' | 'md' | 'lg';
 
 export interface TextProps {
 	/** Input value (controlled) */
@@ -20,7 +21,11 @@ export interface TextProps {
 	disabled?: boolean;
 	/** Read-only state */
 	readOnly?: boolean;
-	/** Additional CSS class (use size-sm, size-lg, error for modifiers) */
+	/** Size */
+	size?: TextSize;
+	/** Error state */
+	error?: boolean;
+	/** Additional CSS class */
 	class?: string;
 	/** Input name */
 	name?: string;
@@ -42,16 +47,26 @@ export function Text({
 	onFocus,
 	disabled = false,
 	readOnly = false,
+	size = 'md',
+	error = false,
 	class: className,
 	name,
 	id,
 	autoFocus,
 	autoComplete,
 }: TextProps): JSX.Element {
+	const classes = [
+		size !== 'md' ? `size-${size}` : '',
+		error ? 'error' : '',
+		className || '',
+	]
+		.filter(Boolean)
+		.join(' ');
+
 	return (
 		<input
 			type={type}
-			class={`${styles.text} ${className || ''}`}
+			class={classes || undefined}
 			value={value}
 			placeholder={placeholder}
 			onInput={onInput}

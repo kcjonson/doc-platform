@@ -9,8 +9,9 @@ import { Editor } from '@shared/pages';
 import { UserSettings } from './routes/settings/UserSettings';
 import { UIDemo } from './routes/ui-demo/UIDemo';
 
-// Global styles - shared UI tokens first, then app-specific tokens
+// Global styles - shared UI tokens and element styles first, then app-specific
 import '@doc-platform/ui/tokens.css';
+import '@doc-platform/ui/elements.css';
 import './styles/tokens.css';
 import './styles/global.css';
 

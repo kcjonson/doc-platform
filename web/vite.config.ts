@@ -15,6 +15,7 @@ export default defineConfig({
 			// Workspace packages (resolve to dist)
 			'@doc-platform/ui': resolve(__dirname, '../shared/ui/src'),
 			'@doc-platform/ui/tokens.css': resolve(__dirname, '../shared/ui/src/tokens.css'),
+			'@doc-platform/ui/elements.css': resolve(__dirname, '../shared/ui/src/elements.css'),
 			'@doc-platform/router': resolve(__dirname, '../shared/router/dist'),
 			'@doc-platform/models': resolve(__dirname, '../shared/models/dist'),
 			'@doc-platform/fetch': resolve(__dirname, '../shared/fetch/dist'),
