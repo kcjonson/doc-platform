@@ -16,8 +16,14 @@ const COLUMNS: { status: Status; title: string }[] = [
 	{ status: 'done', title: 'Done' },
 ];
 
+// Format project ID as display name (capitalize first letter)
+function formatProjectName(id: string): string {
+	return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
 export function Board(props: RouteProps): JSX.Element {
 	const projectId = props.params.projectId || 'demo';
+	const projectName = formatProjectName(projectId);
 
 	// Auth state
 	const { user, loading: authLoading, logout } = useAuth();
@@ -213,14 +219,17 @@ export function Board(props: RouteProps): JSX.Element {
 	return (
 		<div class={styles.container}>
 			<AppHeader
-				projectName={projectId}
+				projectName={projectName}
 				navTabs={navTabs}
 				activeTab="planning"
-				actions={<Button onClick={handleOpenNewEpicDialog}>+ New Epic</Button>}
 				user={user ? { displayName: user.displayName, email: user.email } : undefined}
 				onSettingsClick={handleSettingsClick}
 				onLogoutClick={handleLogoutClick}
 			/>
+
+			<div class={styles.toolbar}>
+				<Button onClick={handleOpenNewEpicDialog}>+ New Epic</Button>
+			</div>
 
 			<div class={styles.board}>
 				{COLUMNS.map(({ status, title }) => (

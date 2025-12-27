@@ -8,8 +8,14 @@ import { FileBrowser } from '../FileBrowser/FileBrowser';
 import { CommentsPanel } from '../CommentsPanel/CommentsPanel';
 import styles from './Editor.module.css';
 
+// Format project ID as display name (capitalize first letter)
+function formatProjectName(id: string): string {
+	return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
 export function Editor(props: RouteProps): JSX.Element {
 	const projectId = props.params.projectId || 'demo';
+	const projectName = formatProjectName(projectId);
 	const { user, loading: authLoading, logout } = useAuth();
 
 	// Navigation tabs
@@ -40,7 +46,7 @@ export function Editor(props: RouteProps): JSX.Element {
 	return (
 		<div class={styles.container}>
 			<AppHeader
-				projectName={projectId}
+				projectName={projectName}
 				navTabs={navTabs}
 				activeTab="pages"
 				user={user ? { displayName: user.displayName, email: user.email } : undefined}
