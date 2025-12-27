@@ -17,6 +17,7 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Login - Doc Platform</title>
+	<link rel="stylesheet" href="/assets/shared.css">
 	<style>
 		* {
 			box-sizing: border-box;
@@ -26,7 +27,8 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 
 		body {
 			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-			background: #f5f5f5;
+			background: var(--color-bg);
+			color: var(--color-text);
 			min-height: 100vh;
 			display: flex;
 			align-items: center;
@@ -35,8 +37,8 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 		}
 
 		.login-container {
-			background: white;
-			border-radius: 8px;
+			background: var(--color-surface);
+			border-radius: var(--radius-lg);
 			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 			padding: 2rem;
 			width: 100%;
@@ -48,68 +50,19 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 			font-weight: 600;
 			margin-bottom: 1.5rem;
 			text-align: center;
-			color: #333;
 		}
 
-		.form-group {
-			margin-bottom: 1rem;
-		}
-
-		label {
-			display: block;
-			font-size: 0.875rem;
-			font-weight: 500;
-			margin-bottom: 0.5rem;
-			color: #555;
-		}
-
-		input {
-			width: 100%;
+		.error-message {
+			background: var(--color-error-bg, #fee);
+			border: 1px solid var(--color-error);
+			color: var(--color-error);
 			padding: 0.75rem;
-			font-size: 1rem;
-			border: 1px solid #ddd;
-			border-radius: 4px;
-			transition: border-color 0.15s;
-		}
-
-		input:focus {
-			outline: none;
-			border-color: #0066cc;
-		}
-
-		button {
-			width: 100%;
-			padding: 0.75rem;
-			font-size: 1rem;
-			font-weight: 500;
-			color: white;
-			background: #0066cc;
-			border: none;
-			border-radius: 4px;
-			cursor: pointer;
-			transition: background 0.15s;
-		}
-
-		button:hover {
-			background: #0052a3;
-		}
-
-		button:disabled {
-			background: #999;
-			cursor: not-allowed;
-		}
-
-		.error {
-			background: #fee;
-			border: 1px solid #fcc;
-			color: #c00;
-			padding: 0.75rem;
-			border-radius: 4px;
+			border-radius: var(--radius-md);
 			margin-bottom: 1rem;
 			font-size: 0.875rem;
 		}
 
-		.error.hidden {
+		.error-message.hidden {
 			display: none;
 		}
 	</style>
@@ -118,7 +71,7 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 	<div class="login-container">
 		<h1>Sign In</h1>
 
-		<div id="error" class="error${error ? '' : ' hidden'}">${error ? escapeHtml(error) : ''}</div>
+		<div id="error" class="error-message${error ? '' : ' hidden'}">${error ? escapeHtml(error) : ''}</div>
 
 		<form id="login-form">
 			<div class="form-group">

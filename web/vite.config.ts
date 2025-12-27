@@ -6,6 +6,21 @@ export default defineConfig({
 	plugins: [preact()],
 	build: {
 		outDir: 'dist',
+		rollupOptions: {
+			input: {
+				main: resolve(__dirname, 'index.html'),
+				'shared-styles': resolve(__dirname, 'src/shared-styles.ts'),
+			},
+			output: {
+				// Stable filename for shared CSS (no hash) so SSR pages can reference it
+				assetFileNames: (assetInfo) => {
+					if (assetInfo.name === 'shared-styles.css') {
+						return 'assets/shared.css';
+					}
+					return 'assets/[name]-[hash][extname]';
+				},
+			},
+		},
 	},
 	resolve: {
 		alias: {
@@ -16,6 +31,7 @@ export default defineConfig({
 			'@doc-platform/ui': resolve(__dirname, '../shared/ui/src'),
 			'@doc-platform/ui/tokens.css': resolve(__dirname, '../shared/ui/src/tokens.css'),
 			'@doc-platform/ui/elements.css': resolve(__dirname, '../shared/ui/src/elements.css'),
+			'@doc-platform/ui/shared.css': resolve(__dirname, '../shared/ui/src/shared.css'),
 			'@doc-platform/router': resolve(__dirname, '../shared/router/dist'),
 			'@doc-platform/models': resolve(__dirname, '../shared/models/dist'),
 			'@doc-platform/fetch': resolve(__dirname, '../shared/fetch/dist'),
