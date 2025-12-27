@@ -9,8 +9,8 @@ CREATE TABLE epics (
     creator UUID REFERENCES users(id) ON DELETE SET NULL,
     assignee UUID REFERENCES users(id) ON DELETE SET NULL,
     rank DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-    "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Tasks table
@@ -22,8 +22,8 @@ CREATE TABLE tasks (
     assignee UUID REFERENCES users(id) ON DELETE SET NULL,
     "dueDate" DATE,
     rank DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-    "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Indexes for common queries
