@@ -121,7 +121,7 @@ app.get('/api/auth/me', async (c) => {
 app.use(
 	'*',
 	authMiddleware(redis, {
-		excludePaths: ['/health', '/login', '/assets/', '/api/auth/login', '/api/auth/logout', '/api/auth/me'],
+		excludePaths: ['/health', '/login', '/api/auth/login', '/api/auth/logout', '/api/auth/me', sharedCssPath, loginCssPath].filter(Boolean) as string[],
 		onUnauthenticated: (requestUrl) => {
 			// Redirect to login using the request's origin
 			return Response.redirect(new URL('/login', requestUrl.origin).toString(), 302);
