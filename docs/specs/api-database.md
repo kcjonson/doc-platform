@@ -13,9 +13,9 @@ This specification defines the REST API endpoints and database schema for doc-pl
 │   users     │       │  user_emails    │       │  github_    │
 │             │       │                 │       │  connections│
 │  id (PK)    │◄──────│  user_id (FK)   │       │             │
-│  cognito_sub│       │  email          │       │  user_id(FK)│──►│
-│  display_   │       │  is_primary     │       │  github_    │
-│   name      │       │  is_verified    │       │   user_id   │
+│  display_   │       │  email          │       │  user_id(FK)│──►│
+│   name      │       │  is_primary     │       │  github_    │
+│  avatar_url │       │  is_verified    │       │   user_id   │
 └─────────────┘       └─────────────────┘       └─────────────┘
        │
        │
@@ -49,9 +49,16 @@ This specification defines the REST API endpoints and database schema for doc-pl
 -- Users (core identity)
 CREATE TABLE users (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-	cognito_sub VARCHAR(255) UNIQUE NOT NULL,
 	display_name VARCHAR(255) NOT NULL,
 	avatar_url TEXT,
+	created_at TIMESTAMPTZ DEFAULT NOW(),
+	updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- User passwords (for email/password auth)
+CREATE TABLE user_passwords (
+	user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+	password_hash VARCHAR(255) NOT NULL,
 	created_at TIMESTAMPTZ DEFAULT NOW(),
 	updated_at TIMESTAMPTZ DEFAULT NOW()
 );

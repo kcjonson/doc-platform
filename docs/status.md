@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2025-12-27 (Pages Layout Setup)
+Last Updated: 2025-12-27 (Auth spec update - PostgreSQL + bcrypt)
 
 ## Epic/Story/Task Template
 
@@ -26,6 +26,36 @@ Use this template for all work items:
 ---
 
 ## Recently Completed Epics (Last 4)
+
+### ✅ UI Component Library
+**Spec/Documentation:** `shared/ui/src/`
+**Dependencies:** Monorepo Scaffolding
+**Status:** complete
+
+**Tasks:**
+- [x] Create tokens.css with design system values
+- [x] Add dark mode support (prefers-color-scheme)
+- [x] Button, Dialog, Text, Textarea, Select components
+- [x] Card, Badge, StatusDot components
+- [x] UserMenu, AppHeader components
+- [x] Demo page at /ui route
+- [x] Migrate to shared/planning using @doc-platform/ui
+
+---
+
+### ✅ Planning UI
+**Spec/Documentation:** `/docs/specs/kanban-ui.md`
+**Dependencies:** Custom State Management, Custom Router
+**Status:** complete
+
+**Tasks:**
+- [x] Board layout (three-column, drag-drop)
+- [x] Epic/Task CRUD endpoints (PostgreSQL-backed)
+- [x] Epic detail dialog with task list
+- [x] Keyboard navigation (arrows, N, 1/2/3, Enter, Escape)
+- [x] User menu and settings page
+
+---
 
 ### ✅ Pages Layout Setup
 **Spec/Documentation:** `docs/specs/kanban-ui.md` (header layout)
@@ -70,48 +100,6 @@ Use this template for all work items:
 
 ---
 
-### ✅ GitHub Actions CI
-**Spec/Documentation:** `.github/workflows/ci.yml`
-**Dependencies:** None
-**Status:** complete
-
-**Tasks:**
-- [x] Create CI workflow for build, test, lint
-- [x] Add missing DOM globals to ESLint config
-- [x] Fix existing lint errors in models package
-
----
-
-### ✅ Collection & Nested Models
-**Spec/Documentation:** `shared/models/src/`
-**Dependencies:** Custom State Management
-**Status:** complete
-
-**Tasks:**
-- [x] Create Observable interface for Model and Collection
-- [x] Implement Collection<T> class with event bubbling
-- [x] Create @collection decorator for child model arrays
-- [x] Create @model decorator for single nested models
-- [x] Update useModel hook to accept Observable
-- [x] Write comprehensive tests (26 new tests)
-
----
-
-### ✅ Custom Router
-**Spec/Documentation:** `/docs/tech-stack.md`
-**Dependencies:** Monorepo Scaffolding
-**Status:** complete
-
-**Tasks:**
-- [x] Minimal router implementation
-  - [x] Route matching with :param support
-  - [x] History API integration (popstate)
-  - [x] Automatic <a> click interception
-  - [x] Programmatic navigation (navigate function)
-- [x] Tests for route matching
-
----
-
 ## In Progress Epics
 
 ### Staging Deployment
@@ -139,105 +127,51 @@ Use this template for all work items:
 
 ---
 
-### UI Component Library
-**Spec/Documentation:** `shared/ui/src/`
-**Dependencies:** Monorepo Scaffolding
-**Status:** in progress
-
-**Goal:** Build reusable UI component library for consistent design across apps.
-
-**Tasks:**
-- [x] Create tokens.css with design system values
-- [x] Add dark mode support (respects system preference via prefers-color-scheme)
-- [x] Button component (primary, secondary, text, danger, icon variants)
-- [x] Dialog component (modal with backdrop)
-- [x] Text component (text input field)
-- [x] Textarea component
-- [x] Select component
-- [x] Card component (default, interactive, selected variants)
-- [x] Badge component (default, primary, success, warning, error)
-- [x] StatusDot component (ready, in_progress, done)
-- [x] UserMenu component (avatar with initials + dropdown menu)
-- [x] AppHeader component (project name, nav tabs, user menu)
-- [x] Demo page at /ui route
-- [x] Migrate components to shared/planning using @doc-platform/ui
-
----
-
-### Planning UI
-**Spec/Documentation:** `/docs/specs/kanban-ui.md`
-**Dependencies:** Custom State Management, Custom Router
-**Status:** in progress
-
-**Goal:** Build lightweight planning board with drag-drop and keyboard navigation.
-
-**Tasks:**
-- [x] API stub (Hono with in-memory data)
-  - [x] Epic CRUD endpoints
-  - [x] Task CRUD endpoints
-- [x] Board layout
-  - [x] Three-column layout (Ready, In Progress, Done)
-  - [x] Column component
-  - [x] Epic card component
-- [x] Drag and drop
-  - [x] Native drag events
-  - [x] Drop zone highlighting
-  - [x] Optimistic reordering within columns
-- [x] Epic detail dialog
-  - [x] Task list
-  - [x] Status/assignee controls
-  - [x] Open in new tab link
-  - [ ] Linked documents (stubbed)
-- [x] New epic dialog (reuses EpicView component)
-- [x] User menu in header (avatar with settings/logout dropdown)
-- [x] User settings page (/settings route)
-- [x] Keyboard navigation
-  - [x] Arrow key navigation
-  - [x] Keyboard shortcuts (N, 1/2/3, Enter, Escape)
-  - [x] Quick create (N for epic) - now opens dialog
-
----
-
 ### Authentication System
 **Spec/Documentation:** `/docs/specs/authentication.md`
 **Dependencies:** Monorepo Scaffolding
 **Status:** in progress
 
-**Goal:** Session-based auth with Cognito identity, Redis sessions shared between containers.
+**Goal:** Session-based auth with PostgreSQL users + bcrypt, Redis sessions shared between containers.
 
 **Tasks:**
 - [x] Container infrastructure
-  - [x] Docker Compose for local dev
+  - [x] Docker Compose for local dev (includes Redis)
   - [x] API Dockerfile
+  - [x] Frontend Dockerfile
   - [x] CI Docker build verification
 - [x] Database foundation
   - [x] @doc-platform/db package
   - [x] PostgreSQL connection pool
   - [x] Migration runner (raw SQL)
   - [x] Initial schema migration (users, emails, connections)
-- [ ] Session infrastructure
-  - [ ] Add Redis to Docker Compose
-  - [ ] @doc-platform/auth package
-  - [ ] Session middleware for Hono
-- [ ] Frontend container
-  - [ ] Hono server for static files
-  - [ ] Frontend Dockerfile
-  - [ ] Auth middleware integration
-- [ ] AWS Cognito setup
-  - [ ] CDK stack for User Pool
-  - [ ] App client configuration
-  - [ ] Post-confirmation Lambda trigger
-- [ ] Auth API endpoints
-  - [ ] Signup/login/logout
-  - [ ] Session creation in Redis
-  - [ ] Password reset
+- [x] Session infrastructure
+  - [x] Redis in Docker Compose
+  - [x] @doc-platform/auth package
+  - [x] Session middleware for Hono
+- [x] Frontend container
+  - [x] Hono server for static files
+  - [x] Auth middleware integration
+  - [x] Login page (server-rendered)
+  - [x] Auth proxy endpoints (/api/auth/*)
+- [x] Auth API endpoints (mock users)
+  - [x] Login/logout handlers
+  - [x] Session creation in Redis
+  - [x] /api/auth/me endpoint
+- [ ] Real user auth (PostgreSQL + bcrypt)
+  - [ ] Add bcrypt to @doc-platform/auth
+  - [ ] Database migration for user_passwords table
+  - [ ] Signup endpoint with email verification
+  - [ ] Login against database users
+  - [ ] Password reset flow
+- [ ] Email sending (SES)
+  - [ ] Verification emails
+  - [ ] Password reset emails
 - [ ] GitHub OAuth
-  - [ ] Connect flow
+  - [ ] Connect flow (link to existing account)
   - [ ] Token encryption (KMS)
   - [ ] GitHub API proxy
-- [ ] Frontend auth UI
-  - [ ] Login/signup forms
-  - [ ] Protected routes redirect
+  - [ ] Login with GitHub (future)
 
 ---
 
