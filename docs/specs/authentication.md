@@ -157,13 +157,13 @@ CREATE TABLE oauth_codes (
 ```
 session:{session_id}:
   user_id: UUID
-  username: string
-  display_name: string
   created_at: timestamp
   last_accessed: timestamp
 
 TTL: 30 days (sliding expiration)
 ```
+
+Sessions are auth-only. User details (username, display_name, avatar, etc.) are fetched via `/api/auth/me` or `/api/users/:id`.
 
 ---
 
