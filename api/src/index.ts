@@ -156,7 +156,7 @@ interface TaskStats {
 	done: number;
 }
 
-// Transform database rows to API format
+// Transform database rows to API format (snake_case DB → camelCase API)
 function dbEpicToApi(epic: DbEpic): ApiEpic {
 	return {
 		id: epic.id,
@@ -166,19 +166,19 @@ function dbEpicToApi(epic: DbEpic): ApiEpic {
 		creator: epic.creator ?? undefined,
 		assignee: epic.assignee ?? undefined,
 		rank: epic.rank,
-		createdAt: epic.createdAt.toISOString(),
-		updatedAt: epic.updatedAt.toISOString(),
+		createdAt: epic.created_at.toISOString(),
+		updatedAt: epic.updated_at.toISOString(),
 	};
 }
 
 function dbTaskToApi(task: DbTask): ApiTask {
 	return {
 		id: task.id,
-		epicId: task.epicId,
+		epicId: task.epic_id,
 		title: task.title,
 		status: task.status,
 		assignee: task.assignee ?? undefined,
-		dueDate: task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : undefined,
+		dueDate: task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : undefined,
 		rank: task.rank,
 	};
 }
@@ -308,18 +308,18 @@ app.get('/api/epics', async (c) => {
 		`);
 
 		// Get task stats for each epic
-		const statsResult = await query<{ epicId: string; total: string; done: string }>(`
+		const statsResult = await query<{ epic_id: string; total: string; done: string }>(`
 			SELECT
-				"epicId",
+				epic_id,
 				COUNT(*)::text as total,
 				COUNT(*) FILTER (WHERE status = 'done')::text as done
 			FROM tasks
-			GROUP BY "epicId"
+			GROUP BY epic_id
 		`);
 
 		const statsMap = new Map(
 			statsResult.rows.map((row) => [
-				row.epicId,
+				row.epic_id,
 				{ total: parseInt(row.total, 10), done: parseInt(row.done, 10) },
 			])
 		);
@@ -356,7 +356,7 @@ app.get('/api/epics/:id', async (c) => {
 		}
 
 		const tasksResult = await query<DbTask>(
-			`SELECT * FROM tasks WHERE "epicId" = $1 ORDER BY rank ASC`,
+			`SELECT * FROM tasks WHERE epic_id = $1 ORDER BY rank ASC`,
 			[id]
 		);
 
@@ -584,7 +584,7 @@ app.get('/api/epics/:epicId/tasks', async (c) => {
 		}
 
 		const result = await query<DbTask>(
-			`SELECT * FROM tasks WHERE "epicId" = $1 ORDER BY rank ASC`,
+			`SELECT * FROM tasks WHERE epic_id = $1 ORDER BY rank ASC`,
 			[epicId]
 		);
 
@@ -636,13 +636,13 @@ app.post('/api/epics/:epicId/tasks', async (c) => {
 		// Calculate next rank
 		// Note: Concurrent inserts may result in duplicate ranks, which is acceptable
 		const rankResult = await query<{ max_rank: number | null }>(
-			`SELECT MAX(rank) as max_rank FROM tasks WHERE "epicId" = $1`,
+			`SELECT MAX(rank) as max_rank FROM tasks WHERE epic_id = $1`,
 			[epicId]
 		);
 		const maxRank = rankResult.rows[0]?.max_rank ?? 0;
 
 		const result = await query<DbTask>(
-			`INSERT INTO tasks ("epicId", title, status, assignee, "dueDate", rank)
+			`INSERT INTO tasks (epic_id, title, status, assignee, due_date, rank)
 			 VALUES ($1, $2, $3, $4, $5, $6)
 			 RETURNING *`,
 			[
@@ -717,7 +717,7 @@ app.put('/api/tasks/:id', async (c) => {
 			values.push(normalized === undefined ? null : normalized);
 		}
 		if (body.dueDate !== undefined) {
-			updates.push(`"dueDate" = $${paramIndex++}`);
+			updates.push(`due_date = $${paramIndex++}`);
 			values.push(body.dueDate || null);
 		}
 		if (body.rank !== undefined) {

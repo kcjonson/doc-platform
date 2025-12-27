@@ -70,18 +70,18 @@ export interface Epic {
 	creator: string | null;
 	assignee: string | null;
 	rank: number;
-	createdAt: Date;
-	updatedAt: Date;
+	created_at: Date;
+	updated_at: Date;
 }
 
 export interface Task {
 	id: string;
-	epicId: string;
+	epic_id: string;
 	title: string;
 	status: EpicStatus;
 	assignee: string | null;
-	dueDate: Date | null;
+	due_date: Date | null;
 	rank: number;
-	createdAt: Date;
-	updatedAt: Date;
+	created_at: Date;
+	updated_at: Date;
 }
