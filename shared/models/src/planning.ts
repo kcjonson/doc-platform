@@ -22,7 +22,7 @@ export class TaskModel extends Model {
 	@prop accessor epicId!: string;
 	@prop accessor title!: string;
 	@prop accessor status!: Status;
-	@prop accessor assignee!: string | undefined;
+	@prop accessor userId!: string | undefined;
 	@prop accessor dueDate!: string | undefined;
 	@prop accessor rank!: number;
 }
@@ -45,7 +45,7 @@ export class EpicModel extends SyncModel {
 	@prop accessor title!: string;
 	@prop accessor description!: string | undefined;
 	@prop accessor status!: Status;
-	@prop accessor assignee!: string | undefined;
+	@prop accessor userId!: string | undefined;
 	@prop accessor rank!: number;
 	@prop accessor createdAt!: string;
 	@prop accessor updatedAt!: string;

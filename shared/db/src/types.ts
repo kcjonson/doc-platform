@@ -67,20 +67,20 @@ export interface Epic {
 	title: string;
 	description: string | null;
 	status: EpicStatus;
-	assignee: string | null;
+	userId: string | null;
 	rank: number;
-	created_at: Date;
-	updated_at: Date;
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 export interface Task {
 	id: string;
-	epic_id: string;
+	epicId: string;
 	title: string;
 	status: EpicStatus;
-	assignee: string | null;
-	due_date: Date | null;
+	userId: string | null;
+	dueDate: Date | null;
 	rank: number;
-	created_at: Date;
-	updated_at: Date;
+	createdAt: Date;
+	updatedAt: Date;
 }

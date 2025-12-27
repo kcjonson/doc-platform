@@ -74,13 +74,20 @@ function isValidEmail(email: string): boolean {
 	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// Valid status values
+const VALID_STATUSES: EpicStatus[] = ['ready', 'in_progress', 'done'];
+
+function isValidStatus(status: unknown): status is EpicStatus {
+	return typeof status === 'string' && VALID_STATUSES.includes(status as EpicStatus);
+}
+
 // API types (camelCase for JSON responses)
 interface ApiTask {
 	id: string;
 	epicId: string;
 	title: string;
 	status: EpicStatus;
-	assignee?: string;
+	userId?: string;
 	dueDate?: string;
 	rank: number;
 }
@@ -90,7 +97,7 @@ interface ApiEpic {
 	title: string;
 	description?: string;
 	status: EpicStatus;
-	assignee?: string;
+	userId?: string;
 	rank: number;
 	createdAt: string;
 	updatedAt: string;
@@ -108,21 +115,21 @@ function dbEpicToApi(epic: DbEpic): ApiEpic {
 		title: epic.title,
 		description: epic.description ?? undefined,
 		status: epic.status,
-		assignee: epic.assignee ?? undefined,
+		userId: epic.userId ?? undefined,
 		rank: epic.rank,
-		createdAt: epic.created_at.toISOString(),
-		updatedAt: epic.updated_at.toISOString(),
+		createdAt: epic.createdAt.toISOString(),
+		updatedAt: epic.updatedAt.toISOString(),
 	};
 }
 
 function dbTaskToApi(task: DbTask): ApiTask {
 	return {
 		id: task.id,
-		epicId: task.epic_id,
+		epicId: task.epicId,
 		title: task.title,
 		status: task.status,
-		assignee: task.assignee ?? undefined,
-		dueDate: task.due_date?.toISOString().split('T')[0],
+		userId: task.userId ?? undefined,
+		dueDate: task.dueDate?.toISOString().split('T')[0],
 		rank: task.rank,
 	};
 }
@@ -251,18 +258,18 @@ app.get('/api/epics', async (c) => {
 	`);
 
 	// Get task stats for each epic
-	const statsResult = await query<{ epic_id: string; total: string; done: string }>(`
+	const statsResult = await query<{ epicId: string; total: string; done: string }>(`
 		SELECT
-			epic_id,
+			"epicId",
 			COUNT(*)::text as total,
 			COUNT(*) FILTER (WHERE status = 'done')::text as done
 		FROM tasks
-		GROUP BY epic_id
+		GROUP BY "epicId"
 	`);
 
 	const statsMap = new Map(
 		statsResult.rows.map((row) => [
-			row.epic_id,
+			row.epicId,
 			{ total: parseInt(row.total, 10), done: parseInt(row.done, 10) },
 		])
 	);
@@ -286,7 +293,7 @@ app.get('/api/epics/:id', async (c) => {
 	const epic = epicResult.rows[0]!;
 
 	const tasksResult = await query<DbTask>(
-		`SELECT * FROM tasks WHERE epic_id = $1 ORDER BY rank ASC`,
+		`SELECT * FROM tasks WHERE "epicId" = $1 ORDER BY rank ASC`,
 		[id]
 	);
 
@@ -307,6 +314,11 @@ app.post('/api/epics', async (c) => {
 	const body = await c.req.json<Partial<ApiEpic>>();
 	const status = body.status || 'ready';
 
+	// Validate status
+	if (body.status !== undefined && !isValidStatus(body.status)) {
+		return c.json({ error: 'Invalid status. Must be one of: ready, in_progress, done' }, 400);
+	}
+
 	// Calculate next rank for the status column
 	const rankResult = await query<{ max_rank: number | null }>(
 		`SELECT MAX(rank) as max_rank FROM epics WHERE status = $1`,
@@ -315,10 +327,10 @@ app.post('/api/epics', async (c) => {
 	const maxRank = rankResult.rows[0]?.max_rank ?? 0;
 
 	const result = await query<DbEpic>(
-		`INSERT INTO epics (title, description, status, assignee, rank)
+		`INSERT INTO epics (title, description, status, "userId", rank)
 		 VALUES ($1, $2, $3, $4, $5)
 		 RETURNING *`,
-		[body.title || 'Untitled Epic', body.description || null, status, body.assignee || null, maxRank + 1]
+		[body.title || 'Untitled Epic', body.description || null, status, body.userId || null, maxRank + 1]
 	);
 
 	const epic = result.rows[0]!;
@@ -328,6 +340,11 @@ app.post('/api/epics', async (c) => {
 app.put('/api/epics/:id', async (c) => {
 	const id = c.req.param('id');
 	const body = await c.req.json<Partial<ApiEpic>>();
+
+	// Validate status if provided
+	if (body.status !== undefined && !isValidStatus(body.status)) {
+		return c.json({ error: 'Invalid status. Must be one of: ready, in_progress, done' }, 400);
+	}
 
 	// Build dynamic update query
 	const updates: string[] = [];
@@ -346,9 +363,9 @@ app.put('/api/epics/:id', async (c) => {
 		updates.push(`status = $${paramIndex++}`);
 		values.push(body.status);
 	}
-	if (body.assignee !== undefined) {
-		updates.push(`assignee = $${paramIndex++}`);
-		values.push(body.assignee || null);
+	if (body.userId !== undefined) {
+		updates.push(`"userId" = $${paramIndex++}`);
+		values.push(body.userId || null);
 	}
 	if (body.rank !== undefined) {
 		updates.push(`rank = $${paramIndex++}`);
@@ -401,7 +418,7 @@ app.get('/api/epics/:epicId/tasks', async (c) => {
 	}
 
 	const result = await query<DbTask>(
-		`SELECT * FROM tasks WHERE epic_id = $1 ORDER BY rank ASC`,
+		`SELECT * FROM tasks WHERE "epicId" = $1 ORDER BY rank ASC`,
 		[epicId]
 	);
 
@@ -419,22 +436,27 @@ app.post('/api/epics/:epicId/tasks', async (c) => {
 
 	const body = await c.req.json<Partial<ApiTask>>();
 
+	// Validate status if provided
+	if (body.status !== undefined && !isValidStatus(body.status)) {
+		return c.json({ error: 'Invalid status. Must be one of: ready, in_progress, done' }, 400);
+	}
+
 	// Calculate next rank
 	const rankResult = await query<{ max_rank: number | null }>(
-		`SELECT MAX(rank) as max_rank FROM tasks WHERE epic_id = $1`,
+		`SELECT MAX(rank) as max_rank FROM tasks WHERE "epicId" = $1`,
 		[epicId]
 	);
 	const maxRank = rankResult.rows[0]?.max_rank ?? 0;
 
 	const result = await query<DbTask>(
-		`INSERT INTO tasks (epic_id, title, status, assignee, due_date, rank)
+		`INSERT INTO tasks ("epicId", title, status, "userId", "dueDate", rank)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING *`,
 		[
 			epicId,
 			body.title || 'Untitled Task',
 			body.status || 'ready',
-			body.assignee || null,
+			body.userId || null,
 			body.dueDate || null,
 			maxRank + 1,
 		]
@@ -447,6 +469,11 @@ app.post('/api/epics/:epicId/tasks', async (c) => {
 app.put('/api/tasks/:id', async (c) => {
 	const id = c.req.param('id');
 	const body = await c.req.json<Partial<ApiTask>>();
+
+	// Validate status if provided
+	if (body.status !== undefined && !isValidStatus(body.status)) {
+		return c.json({ error: 'Invalid status. Must be one of: ready, in_progress, done' }, 400);
+	}
 
 	// Build dynamic update query
 	const updates: string[] = [];
@@ -461,12 +488,12 @@ app.put('/api/tasks/:id', async (c) => {
 		updates.push(`status = $${paramIndex++}`);
 		values.push(body.status);
 	}
-	if (body.assignee !== undefined) {
-		updates.push(`assignee = $${paramIndex++}`);
-		values.push(body.assignee || null);
+	if (body.userId !== undefined) {
+		updates.push(`"userId" = $${paramIndex++}`);
+		values.push(body.userId || null);
 	}
 	if (body.dueDate !== undefined) {
-		updates.push(`due_date = $${paramIndex++}`);
+		updates.push(`"dueDate" = $${paramIndex++}`);
 		values.push(body.dueDate || null);
 	}
 	if (body.rank !== undefined) {
