@@ -90,7 +90,7 @@ app.get('/api/auth/me', async (c) => {
 app.use(
 	'*',
 	authMiddleware(redis, {
-		excludePaths: ['/health', '/login', '/assets/shared.css', '/api/auth/login', '/api/auth/logout', '/api/auth/me'],
+		excludePaths: ['/health', '/login', '/assets/shared.css', '/assets/login.css', '/api/auth/login', '/api/auth/logout', '/api/auth/me'],
 		onUnauthenticated: (requestUrl) => {
 			// Redirect to login using the request's origin
 			return Response.redirect(new URL('/login', requestUrl.origin).toString(), 302);

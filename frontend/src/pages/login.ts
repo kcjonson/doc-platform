@@ -18,54 +18,7 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Login - Doc Platform</title>
 	<link rel="stylesheet" href="/assets/shared.css">
-	<style>
-		* {
-			box-sizing: border-box;
-			margin: 0;
-			padding: 0;
-		}
-
-		body {
-			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-			background: var(--color-bg);
-			color: var(--color-text);
-			min-height: 100vh;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			padding: 1rem;
-		}
-
-		.login-container {
-			background: var(--color-surface);
-			border-radius: var(--radius-lg);
-			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-			padding: 2rem;
-			width: 100%;
-			max-width: 400px;
-		}
-
-		h1 {
-			font-size: 1.5rem;
-			font-weight: 600;
-			margin-bottom: 1.5rem;
-			text-align: center;
-		}
-
-		.error-message {
-			background: var(--color-error-bg, #fee);
-			border: 1px solid var(--color-error);
-			color: var(--color-error);
-			padding: 0.75rem;
-			border-radius: var(--radius-md);
-			margin-bottom: 1rem;
-			font-size: 0.875rem;
-		}
-
-		.error-message.hidden {
-			display: none;
-		}
-	</style>
+	<link rel="stylesheet" href="/assets/login.css">
 </head>
 <body>
 	<div class="login-container">
