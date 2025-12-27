@@ -1,4 +1,5 @@
-import { startRouter } from '@doc-platform/router';
+import { startRouter, navigate } from '@doc-platform/router';
+import type { RouteProps } from '@doc-platform/router';
 
 // Shared feature components
 import { Board, EpicDetail } from '@shared/planning';
@@ -13,20 +14,28 @@ import '@doc-platform/ui/tokens.css';
 import './styles/tokens.css';
 import './styles/global.css';
 
+// Stub project ID until we have real project management
+const DEFAULT_PROJECT_ID = 'demo';
+
+// Redirect component for root path
+function RootRedirect(_props: RouteProps): null {
+	// Redirect to default project's planning board
+	navigate(`/projects/${DEFAULT_PROJECT_ID}/planning`);
+	return null;
+}
+
 const routes = [
-	// Planning routes
-	{ route: '/planning', entry: Board },
-	{ route: '/planning/epics/:id', entry: EpicDetail },
+	// Project-scoped routes
+	{ route: '/projects/:projectId/planning', entry: Board },
+	{ route: '/projects/:projectId/planning/epics/:id', entry: EpicDetail },
+	{ route: '/projects/:projectId/pages', entry: Editor },
 
-	// Pages routes
-	{ route: '/pages', entry: Editor },
-
-	// App routes
+	// App routes (not project-scoped)
 	{ route: '/settings', entry: UserSettings },
 	{ route: '/ui', entry: UIDemo },
 
 	// Default redirect to planning
-	{ route: '/', entry: Board },
+	{ route: '/', entry: RootRedirect },
 ];
 
 startRouter(routes, document.getElementById('app')!);

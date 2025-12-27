@@ -3,7 +3,7 @@ import type { JSX } from 'preact';
 import type { RouteProps } from '@doc-platform/router';
 import { navigate } from '@doc-platform/router';
 import { useModel, EpicsCollection, type EpicModel, type Status } from '@doc-platform/models';
-import { Button, UserMenu } from '@doc-platform/ui';
+import { Button, AppHeader, type NavTab } from '@doc-platform/ui';
 import { Column } from '../Column/Column';
 import { EpicDialog } from '../EpicDialog/EpicDialog';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
@@ -16,7 +16,15 @@ const COLUMNS: { status: Status; title: string }[] = [
 	{ status: 'done', title: 'Done' },
 ];
 
-export function Board(_props: RouteProps): JSX.Element {
+// Format project ID as display name (capitalize first letter)
+function formatProjectName(id: string): string {
+	return id.charAt(0).toUpperCase() + id.slice(1);
+}
+
+export function Board(props: RouteProps): JSX.Element {
+	const projectId = props.params.projectId || 'demo';
+	const projectName = formatProjectName(projectId);
+
 	// Auth state
 	const { user, loading: authLoading, logout } = useAuth();
 
@@ -27,6 +35,12 @@ export function Board(_props: RouteProps): JSX.Element {
 	const [selectedEpicId, setSelectedEpicId] = useState<string | undefined>();
 	const [dialogEpic, setDialogEpic] = useState<EpicModel | null>(null);
 	const [isNewEpicDialogOpen, setIsNewEpicDialogOpen] = useState(false);
+
+	// Navigation tabs
+	const navTabs: NavTab[] = useMemo(() => [
+		{ id: 'planning', label: 'Planning', href: `/projects/${projectId}/planning` },
+		{ id: 'pages', label: 'Pages', href: `/projects/${projectId}/pages` },
+	], [projectId]);
 
 	// Memoize epics by status for keyboard navigation
 	const epicsByStatus = useMemo(
@@ -204,20 +218,18 @@ export function Board(_props: RouteProps): JSX.Element {
 
 	return (
 		<div class={styles.container}>
-			<header class={styles.header}>
-				<h1 class={styles.title}>Planning Board</h1>
-				<div class={styles.actions}>
-					<Button onClick={handleOpenNewEpicDialog}>+ New Epic</Button>
-					{user && (
-						<UserMenu
-							displayName={user.displayName}
-							email={user.email}
-							onSettingsClick={handleSettingsClick}
-							onLogoutClick={handleLogoutClick}
-						/>
-					)}
-				</div>
-			</header>
+			<AppHeader
+				projectName={projectName}
+				navTabs={navTabs}
+				activeTab="planning"
+				user={user ? { displayName: user.displayName, email: user.email } : undefined}
+				onSettingsClick={handleSettingsClick}
+				onLogoutClick={handleLogoutClick}
+			/>
+
+			<div class={styles.toolbar}>
+				<Button onClick={handleOpenNewEpicDialog}>+ New Epic</Button>
+			</div>
 
 			<div class={styles.board}>
 				{COLUMNS.map(({ status, title }) => (
