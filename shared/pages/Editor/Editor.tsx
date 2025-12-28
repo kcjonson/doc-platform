@@ -30,7 +30,7 @@ export function Editor(props: RouteProps): JSX.Element {
 
 	async function handleLogoutClick(): Promise<void> {
 		await logout();
-		navigate('/login');
+		window.location.href = '/login';
 	}
 
 	if (authLoading) {

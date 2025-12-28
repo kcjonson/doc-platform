@@ -116,7 +116,7 @@ export function Board(props: RouteProps): JSX.Element {
 
 	async function handleLogoutClick(): Promise<void> {
 		await logout();
-		navigate('/login');
+		window.location.href = '/login';
 	}
 
 	function handleDragStart(e: DragEvent, epic: EpicModel): void {
