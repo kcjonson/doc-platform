@@ -95,6 +95,9 @@ function toggleBlock(editor: Editor, format: CustomElement['type']): void {
 	}
 
 	if (!isActive && isList) {
+		// Wrap selected list-items in a list container.
+		// Note: children:[] is a TypeScript requirement; Slate replaces it with
+		// the matched nodes during the wrap operation. The empty array is never used.
 		const block: CustomElement = { type: format, children: [] };
 		Transforms.wrapNodes(editor, block);
 	}
@@ -224,7 +227,9 @@ export function MarkdownEditor({
 
 	return (
 		<div class={styles.container}>
-			<Slate editor={editor} initialValue={model.content} onChange={handleChange}>
+			{/* Key on documentId forces Slate to re-mount when loading different documents.
+			    Slate's initialValue is only read on mount, so we need a new instance for new docs. */}
+			<Slate key={model.documentId} editor={editor} initialValue={model.content} onChange={handleChange}>
 				{!readOnly && (
 					<Toolbar
 						isMarkActive={(mark) => isMarkActive(editor, mark)}
