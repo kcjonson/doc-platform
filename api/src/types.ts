@@ -2,7 +2,7 @@
  * API types (camelCase for JSON responses)
  */
 
-import type { EpicStatus } from '@doc-platform/db';
+import type { EpicStatus, TaskStatus } from '@doc-platform/db';
 
 export interface ApiEpic {
 	id: string;
@@ -20,7 +20,7 @@ export interface ApiTask {
 	id: string;
 	epicId: string;
 	title: string;
-	status: EpicStatus;
+	status: TaskStatus;
 	assignee?: string;
 	dueDate?: string;
 	rank: number;
