@@ -11,6 +11,7 @@ import { Redis } from 'ioredis';
 import { authMiddleware, type AuthVariables } from '@doc-platform/auth';
 import { renderLoginPage } from './pages/login.js';
 import { renderSignupPage } from './pages/signup.js';
+import { renderNotFoundPage } from './pages/not-found.js';
 
 // Load Vite manifest for asset paths
 interface ManifestEntry {
@@ -38,6 +39,8 @@ function getAssetPath(entry: string): string | undefined {
 
 const sharedCssPath = getAssetPath('src/shared-styles.ts');
 const loginCssPath = getAssetPath('src/login-styles.ts');
+const signupCssPath = getAssetPath('src/signup-styles.ts');
+const notFoundCssPath = getAssetPath('src/not-found-styles.ts');
 
 const app = new Hono<{ Variables: AuthVariables }>();
 
@@ -66,7 +69,10 @@ app.get('/login', (c) => {
 
 // Signup page (no auth required)
 app.get('/signup', (c) => {
-	return c.html(renderSignupPage());
+	return c.html(renderSignupPage({
+		sharedCssPath,
+		signupCssPath,
+	}));
 });
 
 // Proxy auth requests to API
@@ -149,7 +155,7 @@ app.get('/api/auth/me', async (c) => {
 app.use(
 	'*',
 	authMiddleware(redis, {
-		excludePaths: ['/health', '/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me', sharedCssPath, loginCssPath].filter(Boolean) as string[],
+		excludePaths: ['/health', '/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me', sharedCssPath, loginCssPath, signupCssPath, notFoundCssPath].filter(Boolean) as string[],
 		onUnauthenticated: (requestUrl) => {
 			// Redirect to login using the request's origin
 			return Response.redirect(new URL('/login', requestUrl.origin).toString(), 302);
@@ -189,6 +195,14 @@ app.get('*', async (c) => {
 	} catch {
 		return c.notFound();
 	}
+});
+
+// Custom 404 handler - friendly page for all not found requests
+app.notFound((c) => {
+	return c.html(renderNotFoundPage({
+		sharedCssPath,
+		notFoundCssPath,
+	}), 404);
 });
 
 // Start server

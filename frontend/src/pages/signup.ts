@@ -10,12 +10,19 @@ export interface SignupPageOptions {
 	email?: string;
 	firstName?: string;
 	lastName?: string;
+	sharedCssPath?: string;
+	signupCssPath?: string;
 }
 
 export function renderSignupPage(options: SignupPageOptions = {}): string {
-	const { error, errors, username = '', email = '', firstName = '', lastName = '' } = options;
+	const { error, errors, username = '', email = '', firstName = '', lastName = '', sharedCssPath, signupCssPath } = options;
 	const firstError = errors?.[0];
 	const errorMessage = error || (firstError ? firstError.message : '');
+
+	const cssLinks = [sharedCssPath, signupCssPath]
+		.filter(Boolean)
+		.map(path => `<link rel="stylesheet" href="${path}">`)
+		.join('\n\t');
 
 	return `<!DOCTYPE html>
 <html lang="en">
@@ -23,139 +30,13 @@ export function renderSignupPage(options: SignupPageOptions = {}): string {
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Sign Up - Doc Platform</title>
-	<style>
-		* {
-			box-sizing: border-box;
-			margin: 0;
-			padding: 0;
-		}
-
-		body {
-			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-			background: #f5f5f5;
-			min-height: 100vh;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			padding: 1rem;
-		}
-
-		.signup-container {
-			background: white;
-			border-radius: 8px;
-			box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-			padding: 2rem;
-			width: 100%;
-			max-width: 400px;
-		}
-
-		h1 {
-			font-size: 1.5rem;
-			font-weight: 600;
-			margin-bottom: 1.5rem;
-			text-align: center;
-			color: #333;
-		}
-
-		.form-group {
-			margin-bottom: 1rem;
-		}
-
-		.form-row {
-			display: flex;
-			gap: 1rem;
-		}
-
-		.form-row .form-group {
-			flex: 1;
-		}
-
-		label {
-			display: block;
-			font-size: 0.875rem;
-			font-weight: 500;
-			margin-bottom: 0.5rem;
-			color: #555;
-		}
-
-		input {
-			width: 100%;
-			padding: 0.75rem;
-			font-size: 1rem;
-			border: 1px solid #ddd;
-			border-radius: 4px;
-			transition: border-color 0.15s;
-		}
-
-		input:focus {
-			outline: none;
-			border-color: #0066cc;
-		}
-
-		button {
-			width: 100%;
-			padding: 0.75rem;
-			font-size: 1rem;
-			font-weight: 500;
-			color: white;
-			background: #0066cc;
-			border: none;
-			border-radius: 4px;
-			cursor: pointer;
-			transition: background 0.15s;
-		}
-
-		button:hover {
-			background: #0052a3;
-		}
-
-		button:disabled {
-			background: #999;
-			cursor: not-allowed;
-		}
-
-		.error {
-			background: #fee;
-			border: 1px solid #fcc;
-			color: #c00;
-			padding: 0.75rem;
-			border-radius: 4px;
-			margin-bottom: 1rem;
-			font-size: 0.875rem;
-		}
-
-		.error.hidden {
-			display: none;
-		}
-
-		.password-hint {
-			font-size: 0.75rem;
-			color: #666;
-			margin-top: 0.25rem;
-		}
-
-		.login-link {
-			text-align: center;
-			margin-top: 1.5rem;
-			font-size: 0.875rem;
-			color: #666;
-		}
-
-		.login-link a {
-			color: #0066cc;
-			text-decoration: none;
-		}
-
-		.login-link a:hover {
-			text-decoration: underline;
-		}
-	</style>
+	${cssLinks}
 </head>
 <body>
 	<div class="signup-container">
 		<h1>Create Account</h1>
 
-		<div id="error" class="error${errorMessage ? '' : ' hidden'}">${errorMessage ? escapeHtml(errorMessage) : ''}</div>
+		<div id="error" class="error-message${errorMessage ? '' : ' hidden'}">${errorMessage ? escapeHtml(errorMessage) : ''}</div>
 
 		<form id="signup-form">
 			<div class="form-row">
