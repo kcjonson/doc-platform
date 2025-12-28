@@ -32,6 +32,7 @@ export function CommentsMargin({
 }: CommentsMarginProps): JSX.Element {
 	const [positions, setPositions] = useState<CommentPosition[]>([]);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const rafIdRef = useRef<number>(0);
 
 	// Calculate positions for each comment based on highlighted text positions
 	useEffect(() => {
@@ -74,29 +75,36 @@ export function CommentsMargin({
 			setPositions(newPositions);
 		}
 
+		// Schedule position update after browser layout is complete
+		function scheduleUpdate(): void {
+			cancelAnimationFrame(rafIdRef.current);
+			rafIdRef.current = requestAnimationFrame(updatePositions);
+		}
+
 		// Update positions initially
-		updatePositions();
+		scheduleUpdate();
 
 		// Update on scroll and resize
 		const editor = editorRef.current;
 		const scrollContainer = editor?.closest('[class*="editorWrapper"]');
 
 		if (scrollContainer) {
-			scrollContainer.addEventListener('scroll', updatePositions);
+			scrollContainer.addEventListener('scroll', scheduleUpdate);
 		}
-		window.addEventListener('resize', updatePositions);
+		window.addEventListener('resize', scheduleUpdate);
 
-		// Also observe DOM changes in case content changes
-		const observer = new MutationObserver(updatePositions);
+		// Observe DOM changes - use RAF to ensure layout is complete before measuring
+		const observer = new MutationObserver(scheduleUpdate);
 		if (editor) {
 			observer.observe(editor, { childList: true, subtree: true, characterData: true });
 		}
 
 		return () => {
+			cancelAnimationFrame(rafIdRef.current);
 			if (scrollContainer) {
-				scrollContainer.removeEventListener('scroll', updatePositions);
+				scrollContainer.removeEventListener('scroll', scheduleUpdate);
 			}
-			window.removeEventListener('resize', updatePositions);
+			window.removeEventListener('resize', scheduleUpdate);
 			observer.disconnect();
 		};
 	}, [comments, editorRef]);
