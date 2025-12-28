@@ -1,7 +1,13 @@
 import bcrypt from 'bcrypt';
 import commonPasswordsList from './common-passwords.json' with { type: 'json' };
 
-const BCRYPT_COST = 12;
+// bcrypt cost factor - configurable via env with safe defaults
+// Minimum of 10 for security, default 12 for good balance of security/performance
+const BCRYPT_COST_ENV = process.env.BCRYPT_COST;
+const BCRYPT_COST = BCRYPT_COST_ENV !== undefined
+	? Math.max(10, Number.parseInt(BCRYPT_COST_ENV, 10) || 12)
+	: 12;
+
 const MIN_LENGTH = 12;
 const MAX_LENGTH = 512;
 

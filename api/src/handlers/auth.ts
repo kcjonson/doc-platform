@@ -53,22 +53,24 @@ export async function handleLogin(
 	}
 
 	try {
-		// Find user by username or email
+		// Find user by username or email (case-insensitive)
 		const userResult = await query<User & { password_hash: string }>(`
 			SELECT u.*, up.password_hash
 			FROM users u
 			JOIN user_passwords up ON up.user_id = u.id
-			WHERE u.username = $1 OR u.email = $1
-		`, [identifier.toLowerCase()]);
+			WHERE LOWER(u.username) = LOWER($1) OR LOWER(u.email) = LOWER($1)
+		`, [identifier]);
 
 		const user = userResult.rows[0];
-		if (!user) {
-			return context.json({ error: 'Invalid credentials' }, 401);
-		}
 
-		// Verify password
-		const isValid = await verifyPassword(password, user.password_hash);
-		if (!isValid) {
+		// Perform bcrypt verification regardless of whether user exists
+		// This prevents timing attacks that could enumerate valid usernames
+		// We use a dummy hash when user doesn't exist to maintain constant time
+		const dummyHash = '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/X4.V4ferE5xGpMSPa';
+		const hashToVerify = user?.password_hash ?? dummyHash;
+		const isValid = await verifyPassword(password, hashToVerify);
+
+		if (!user || !isValid) {
 			return context.json({ error: 'Invalid credentials' }, 401);
 		}
 
@@ -141,17 +143,22 @@ export async function handleSignup(
 	}
 
 	// Validate password
+	// Use generic error message to avoid revealing password requirements to attackers
 	const passwordValidation = validatePassword(password);
-	const firstError = passwordValidation.errors[0];
-	if (!passwordValidation.valid && firstError) {
+	if (!passwordValidation.valid) {
 		return context.json(
-			{ error: firstError.message, errors: passwordValidation.errors },
+			{ error: 'Password does not meet the required complexity. Must be 12+ characters with uppercase, lowercase, digit, and special character.' },
 			400
 		);
 	}
 
-	// Validate names
-	if (first_name.length > 255 || last_name.length > 255) {
+	// Validate names (check trimmed length to catch whitespace-only input)
+	const trimmedFirstName = first_name.trim();
+	const trimmedLastName = last_name.trim();
+	if (!trimmedFirstName || !trimmedLastName) {
+		return context.json({ error: 'First name and last name are required' }, 400);
+	}
+	if (trimmedFirstName.length > 255 || trimmedLastName.length > 255) {
 		return context.json({ error: 'Name is too long' }, 400);
 	}
 
@@ -182,7 +189,7 @@ export async function handleSignup(
 			`INSERT INTO users (username, first_name, last_name, email, email_verified)
 			 VALUES ($1, $2, $3, $4, false)
 			 RETURNING *`,
-			[username.toLowerCase(), first_name.trim(), last_name.trim(), email.toLowerCase()]
+			[username.toLowerCase(), trimmedFirstName, trimmedLastName, email.toLowerCase()]
 		);
 
 		const user = userResult.rows[0];

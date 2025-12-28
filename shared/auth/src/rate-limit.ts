@@ -10,6 +10,7 @@
 
 import type { Context, MiddlewareHandler } from 'hono';
 import type { Redis } from 'ioredis';
+import crypto from 'node:crypto';
 
 export interface RateLimitConfig {
 	/** Maximum number of requests allowed in the window */
@@ -40,15 +41,22 @@ export interface RateLimitMiddlewareOptions {
 
 /**
  * Get client IP from request headers or connection
+ *
+ * In production behind a trusted proxy/load balancer (like ALB), the proxy
+ * appends the real client IP to X-Forwarded-For. We use the LAST IP in the
+ * chain as it's the one added by our trusted proxy, not client-supplied.
  */
 function getClientIp(c: Context): string {
 	// Check common proxy headers
 	const forwarded = c.req.header('X-Forwarded-For');
 	if (forwarded) {
-		// X-Forwarded-For can contain multiple IPs, take the first one
-		const firstIp = forwarded.split(',')[0];
-		if (firstIp) {
-			return firstIp.trim();
+		// X-Forwarded-For contains comma-separated IPs
+		// The LAST IP is the one appended by our trusted proxy (ALB)
+		// Using first IP would allow client spoofing
+		const ips = forwarded.split(',').map((ip) => ip.trim());
+		const lastIp = ips[ips.length - 1];
+		if (lastIp) {
+			return lastIp;
 		}
 	}
 
@@ -88,35 +96,34 @@ async function checkRateLimit(
 	const now = Math.floor(Date.now() / 1000);
 	const windowStart = now - windowSeconds;
 
-	// Use Redis pipeline for atomic operations
-	const pipeline = redis.pipeline();
+	// First, check current count BEFORE adding (to avoid off-by-one error)
+	const checkPipeline = redis.pipeline();
+	checkPipeline.zremrangebyscore(key, 0, windowStart);
+	checkPipeline.zcard(key);
+	const checkResults = await checkPipeline.exec();
 
-	// Remove old entries outside the window
-	pipeline.zremrangebyscore(key, 0, windowStart);
-
-	// Count current entries in window
-	pipeline.zcard(key);
-
-	// Add current request timestamp
-	pipeline.zadd(key, now.toString(), `${now}-${Math.random()}`);
-
-	// Set expiry on the key
-	pipeline.expire(key, windowSeconds);
-
-	const results = await pipeline.exec();
-
-	if (!results) {
-		// Redis error - allow the request but log
+	if (!checkResults) {
 		console.error('Rate limit Redis error');
 		return { allowed: true, remaining: maxRequests, resetIn: windowSeconds };
 	}
 
-	// Get count result (index 1 is the zcard result)
-	const countResult = results[1];
+	// Get count BEFORE adding current request
+	const countResult = checkResults[1];
 	const currentCount = (countResult && countResult[1] as number) || 0;
 
+	// Check if limit would be exceeded
 	const allowed = currentCount < maxRequests;
-	const remaining = Math.max(0, maxRequests - currentCount - 1);
+	const remaining = Math.max(0, maxRequests - currentCount - (allowed ? 1 : 0));
+
+	if (allowed) {
+		// Only add the request if it's allowed
+		// Use crypto.randomBytes for secure unique ID instead of Math.random
+		const uniqueId = crypto.randomBytes(8).toString('hex');
+		await redis.pipeline()
+			.zadd(key, now.toString(), `${now}-${uniqueId}`)
+			.expire(key, windowSeconds)
+			.exec();
+	}
 
 	return {
 		allowed,

@@ -60,14 +60,13 @@ app.use(
 );
 
 // CSRF protection for state-changing requests
-// Excludes auth routes (no session yet) and logout (doesn't matter)
+// Excludes login/signup (no session yet) - logout requires CSRF protection
 app.use(
 	'*',
 	csrfMiddleware(redis, {
 		excludePaths: [
 			'/api/auth/login',
 			'/api/auth/signup',
-			'/api/auth/logout',
 			'/health',
 			'/api/health',
 		],
