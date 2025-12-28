@@ -285,27 +285,36 @@ Use this template for all work items:
 ---
 
 ### MCP Server
-**Spec/Documentation:** `/docs/specs/mcp-integration.md`
-**Dependencies:** REST API & Database, Authentication System
-**Status:** ready
+**Spec/Documentation:** `/docs/specs/mcp-integration.md`, `/docs/specs/mcp-claude-workflow.md`
+**Dependencies:** REST API & Database
+**Status:** in progress
 
-**Goal:** Build MCP server for Claude Code integration.
+**Goal:** Build MCP server for Claude Code integration with planning system.
 
 **Tasks:**
-- [ ] MCP OAuth
+- [x] MCP server v1 (direct DB access)
+  - [x] Epic tools (get_ready_epics, get_epic, get_current_work)
+  - [x] Task tools (create, update, start/complete/block/unblock)
+  - [x] Progress tools (add_progress_note, signal_ready_for_review)
+  - [x] Shared service layer in @doc-platform/db
+  - [x] Streamable HTTP transport on port 3002
+  - [x] Docker container with DATABASE_URL
+- [x] Project-scoped APIs
+  - [x] All routes use /api/projects/:projectId/...
+  - [x] Project ID required for all MCP tools
+- [x] CI/CD
+  - [x] MCP Docker build in CI
+  - [x] MCP ECR repo and Fargate service in infra
+  - [x] CD workflow for MCP deployment
+- [ ] MCP OAuth (v2)
   - [ ] Authorization endpoint
   - [ ] Token endpoint
   - [ ] PKCE support
-- [ ] MCP tools
-  - [ ] Document tools (get, search, list, create, update)
-  - [ ] Task tools (get, search, create, update)
-- [ ] MCP resources
-  - [ ] docs:// URI scheme
-  - [ ] planning:// URI scheme
-- [ ] CLI tool
+- [ ] Document tools (v2)
+  - [ ] get_spec, search_docs
+- [ ] CLI tool (v2)
   - [ ] Connect command (OAuth flow)
   - [ ] Status command
-  - [ ] .mcp.json generation
 
 ---
 
