@@ -209,7 +209,7 @@ export class DocPlatformStack extends cdk.Stack {
 			}),
 			environment: {
 				PORT: '3001',
-				NODE_ENV: 'staging',
+				NODE_ENV: 'production',
 				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
 				// Database connection built from components
 				DB_HOST: database.instanceEndpoint.hostname,
@@ -245,7 +245,7 @@ export class DocPlatformStack extends cdk.Stack {
 			logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'frontend' }),
 			environment: {
 				PORT: '3000',
-				NODE_ENV: 'staging',
+				NODE_ENV: 'production',
 				// Frontend calls API through the ALB (same origin)
 				API_URL: `http://${alb.loadBalancerDnsName}`,
 				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,

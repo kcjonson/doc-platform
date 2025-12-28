@@ -5,13 +5,13 @@
 
 export interface LoginPageOptions {
 	error?: string;
-	email?: string;
+	identifier?: string;
 	sharedCssPath?: string;
 	loginCssPath?: string;
 }
 
 export function renderLoginPage(options: LoginPageOptions = {}): string {
-	const { error, email = '', sharedCssPath, loginCssPath } = options;
+	const { error, identifier = '', sharedCssPath, loginCssPath } = options;
 
 	// Build CSS links from manifest paths
 	const cssLinks = [sharedCssPath, loginCssPath]
@@ -35,14 +35,14 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 
 		<form id="login-form">
 			<div class="form-group">
-				<label for="email">Email</label>
+				<label for="identifier">Username or Email</label>
 				<input
-					type="email"
-					id="email"
-					name="email"
-					value="${escapeHtml(email)}"
+					type="text"
+					id="identifier"
+					name="identifier"
+					value="${escapeHtml(identifier)}"
 					required
-					autocomplete="email"
+					autocomplete="username"
 				>
 			</div>
 
@@ -59,6 +59,10 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 
 			<button type="submit" id="submit-btn">Sign In</button>
 		</form>
+
+		<div class="signup-link">
+			Don't have an account? <a href="/signup">Create one</a>
+		</div>
 
 	</div>
 
@@ -81,7 +85,7 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 				e.preventDefault();
 				hideError();
 
-				var email = document.getElementById('email').value;
+				var identifier = document.getElementById('identifier').value;
 				var password = document.getElementById('password').value;
 
 				submitBtn.disabled = true;
@@ -90,7 +94,7 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 				fetch('/api/auth/login', {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ email: email, password: password }),
+					body: JSON.stringify({ identifier: identifier, password: password }),
 					credentials: 'same-origin'
 				})
 				.then(function(res) {

@@ -10,6 +10,8 @@ import { Hono } from 'hono';
 import { Redis } from 'ioredis';
 import { authMiddleware, type AuthVariables } from '@doc-platform/auth';
 import { renderLoginPage } from './pages/login.js';
+import { renderSignupPage } from './pages/signup.js';
+import { renderNotFoundPage } from './pages/not-found.js';
 
 // Load Vite manifest for asset paths
 interface ManifestEntry {
@@ -37,6 +39,8 @@ function getAssetPath(entry: string): string | undefined {
 
 const sharedCssPath = getAssetPath('src/shared-styles.ts');
 const loginCssPath = getAssetPath('src/login-styles.ts');
+const signupCssPath = getAssetPath('src/signup-styles.ts');
+const notFoundCssPath = getAssetPath('src/not-found-styles.ts');
 
 const app = new Hono<{ Variables: AuthVariables }>();
 
@@ -63,6 +67,14 @@ app.get('/login', (c) => {
 	}));
 });
 
+// Signup page (no auth required)
+app.get('/signup', (c) => {
+	return c.html(renderSignupPage({
+		sharedCssPath,
+		signupCssPath,
+	}));
+});
+
 // Proxy auth requests to API
 const apiUrl = process.env.API_URL || 'http://localhost:3001';
 
@@ -80,6 +92,28 @@ app.post('/api/auth/login', async (c) => {
 	const result = c.json(data, response.status as 200 | 401 | 400);
 
 	// Copy session cookie from API response
+	const setCookieHeader = response.headers.get('Set-Cookie');
+	if (setCookieHeader) {
+		result.headers.set('Set-Cookie', setCookieHeader);
+	}
+
+	return result;
+});
+
+app.post('/api/auth/signup', async (c) => {
+	const body = await c.req.json();
+	const response = await fetch(`${apiUrl}/api/auth/signup`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body),
+	});
+
+	const data = await response.json();
+
+	// Forward the response including Set-Cookie header
+	const result = c.json(data, response.status as 201 | 400 | 409 | 500);
+
+	// Copy session cookie from API response (user is logged in after signup)
 	const setCookieHeader = response.headers.get('Set-Cookie');
 	if (setCookieHeader) {
 		result.headers.set('Set-Cookie', setCookieHeader);
@@ -121,7 +155,7 @@ app.get('/api/auth/me', async (c) => {
 app.use(
 	'*',
 	authMiddleware(redis, {
-		excludePaths: ['/health', '/login', '/api/auth/login', '/api/auth/logout', '/api/auth/me', sharedCssPath, loginCssPath].filter(Boolean) as string[],
+		excludePaths: ['/health', '/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me', sharedCssPath, loginCssPath, signupCssPath, notFoundCssPath].filter(Boolean) as string[],
 		onUnauthenticated: (requestUrl) => {
 			// Redirect to login using the request's origin
 			return Response.redirect(new URL('/login', requestUrl.origin).toString(), 302);
@@ -161,6 +195,14 @@ app.get('*', async (c) => {
 	} catch {
 		return c.notFound();
 	}
+});
+
+// Custom 404 handler - friendly page for all not found requests
+app.notFound((c) => {
+	return c.html(renderNotFoundPage({
+		sharedCssPath,
+		notFoundCssPath,
+	}), 404);
 });
 
 // Start server

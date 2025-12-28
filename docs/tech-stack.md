@@ -42,7 +42,7 @@ Both share a common infrastructure and are developed in a single monorepo.
 | Aurora Serverless v2 | PostgreSQL database |
 | ElastiCache Redis | Session storage |
 | Amazon Bedrock | AI features (Claude) |
-| Cognito | User identity management |
+| SES | Email sending (verification, password reset) |
 | S3 | File and asset storage |
 | CloudFront | CDN for static assets |
 | ALB | Load balancer with path routing |
@@ -289,12 +289,12 @@ The application runs as two separate containers that share authentication via Re
 ### Frontend Container
 - Hono server serving built SPA static files
 - Auth middleware validates session via Redis before serving
-- No Cognito/database access needed
+- No database access needed
 
 ### API Container
 - Hono server handling API routes and authentication
 - Creates/validates sessions in Redis
-- Communicates with Cognito for user identity
+- Handles user authentication (PostgreSQL + bcrypt)
 - Connects to PostgreSQL for data
 
 ### Local Development
@@ -344,11 +344,11 @@ Amazon Bedrock with Claude:
 - Sidebar chat assistance
 
 ### Authentication
-Session-based auth with Cognito:
-- Cognito manages user identity (email/password)
-- API creates Redis session on login (stores Cognito tokens)
+Session-based auth with PostgreSQL + bcrypt:
+- Users stored in PostgreSQL with bcrypt-hashed passwords
+- API creates Redis session on login
 - Both containers validate via Redis session lookup
-- GitHub OAuth for repository access (separate from identity)
+- GitHub OAuth for repository access (and optional login)
 
 ### Infrastructure as Code
 AWS CDK (TypeScript):
@@ -375,7 +375,7 @@ The following topics require deeper design documents:
 | Spec | File | Description |
 |------|------|-------------|
 | Markdown Editor | `docs/specs/markdown-editor.md` | Editor architecture, dual-mode implementation |
-| Authentication | `docs/specs/authentication.md` | Cognito + GitHub OAuth flow, MCP PKCE |
+| Authentication | `docs/specs/authentication.md` | PostgreSQL + bcrypt, GitHub OAuth, MCP PKCE |
 | MCP Integration | `docs/specs/mcp-integration.md` | MCP server design for Claude Code |
 
 ---
