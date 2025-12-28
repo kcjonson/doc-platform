@@ -56,7 +56,9 @@ Human (Dev Manager)                    Claude (Developer)
 | Create tasks under epic | Break down work into implementable units |
 | Update task status/details | Track progress (ready → in_progress → done) |
 | Open PR | Signal "ready for review" |
-| Request clarification | Ask human for input when blocked |
+| Add progress notes | Log activity for visibility |
+
+> **v1 assumption:** Claude asks clarifying questions directly in the chat session, not via MCP.
 
 ### Shared Actions
 
@@ -133,8 +135,9 @@ Claude can freely manage task status. Completing all tasks does NOT auto-complet
 | Tool | Purpose | Input |
 |------|---------|-------|
 | `add_progress_note` | Log activity | epicId or taskId, note |
-| `request_clarification` | Ask human | epicId or taskId, question |
 | `signal_ready_for_review` | Indicate PR opened | epicId, prUrl |
+
+> **Note:** `request_clarification` is in the data model for future async workflows, but not exposed in v1 MCP API. In v1, Claude asks questions directly in the chat session.
 
 ### Read-Only (Specs & Docs)
 
@@ -393,21 +396,19 @@ interface CurrentWorkResponse {
 
 ## Implementation Priority
 
-### Phase 1: Core Loop
+### Phase 1: Core Loop (v1)
 1. `get_ready_epics` - Find available work
 2. `get_epic` - Read epic + spec
 3. `create_tasks` - Break down work
 4. `start_task`, `complete_task` - Basic lifecycle
 5. `signal_ready_for_review` - Handoff to human
-
-### Phase 2: Progress & Context
 6. `add_progress_note` - Visibility for humans
 7. `update_task` - Update details as work progresses
 8. `get_current_work` - Context loading
+9. `block_task`, `unblock_task` - Handle stuck states
 
-### Phase 3: Communication
-9. `request_clarification` - Ask humans
-10. `block_task`, `unblock_task` - Handle dependencies
+### Future (v2+)
+- `request_clarification` - For async workflows where human isn't in chat
 
 ---
 
@@ -424,18 +425,19 @@ interface CurrentWorkResponse {
 
 ## Security & Permissions
 
-### OAuth Scopes
+### OAuth Scopes (v1)
 
 | Scope | Allows |
 |-------|--------|
 | `epics:read` | Read epics, tasks, specs |
 | `tasks:write` | Create/update tasks (not epics) |
 | `docs:read` | Read documents |
-| `clarifications:write` | Request clarifications |
 
-Claude's token has `epics:read`, `tasks:write`, `docs:read`, `clarifications:write`.
+Claude's token has `epics:read`, `tasks:write`, `docs:read`.
 
 Claude does NOT have `epics:write` (only humans can create/complete epics).
+
+> **Future:** Add `clarifications:write` scope when async workflows are needed.
 
 ---
 
