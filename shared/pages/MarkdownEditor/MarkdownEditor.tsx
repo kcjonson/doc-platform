@@ -4,6 +4,7 @@ import { createEditor, Descendant, Editor, Element as SlateElement, Transforms }
 import { Slate, Editable, withReact, RenderElementProps, RenderLeafProps } from 'slate-react';
 import { withHistory } from 'slate-history';
 import isHotkey from 'is-hotkey';
+import { useModel, DocumentModel } from '@doc-platform/models';
 import type { MarkType, CustomElement, CustomText } from './types';
 import { Toolbar } from './Toolbar';
 import styles from './MarkdownEditor.module.css';
@@ -12,10 +13,8 @@ import styles from './MarkdownEditor.module.css';
 import './types';
 
 export interface MarkdownEditorProps {
-	/** Initial content as Slate nodes */
-	initialValue: Descendant[];
-	/** Called when content changes */
-	onChange?: (value: Descendant[]) => void;
+	/** Document model - source of truth for editor content */
+	model: DocumentModel;
 	/** Placeholder text when empty */
 	placeholder?: string;
 	/** Read-only mode */
@@ -144,11 +143,13 @@ function renderLeaf(props: RenderLeafProps): JSX.Element {
 }
 
 export function MarkdownEditor({
-	initialValue,
-	onChange,
+	model,
 	placeholder = 'Start typing...',
 	readOnly = false,
 }: MarkdownEditorProps): JSX.Element {
+	// Subscribe to model changes - this triggers re-renders when model updates
+	useModel(model);
+
 	// Create editor instance with plugins
 	const editor = useMemo(
 		() => withHistory(withReact(createEditor())),
@@ -169,23 +170,24 @@ export function MarkdownEditor({
 		[editor]
 	);
 
-	// Handle value changes
+	// Handle value changes - update the model
 	const handleChange = useCallback(
 		(value: Descendant[]) => {
 			// Check if content actually changed (not just selection)
 			const isAstChange = editor.operations.some(
 				op => 'set_selection' !== op.type
 			);
-			if (isAstChange && onChange) {
-				onChange(value);
+			if (isAstChange) {
+				// Update model - this will emit a change event
+				model.set({ content: value, dirty: true });
 			}
 		},
-		[editor, onChange]
+		[editor, model]
 	);
 
 	return (
 		<div class={styles.container}>
-			<Slate editor={editor} initialValue={initialValue} onChange={handleChange}>
+			<Slate editor={editor} initialValue={model.content} onChange={handleChange}>
 				{!readOnly && (
 					<Toolbar
 						isMarkActive={(mark) => isMarkActive(editor, mark)}

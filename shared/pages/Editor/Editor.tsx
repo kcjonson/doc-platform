@@ -1,9 +1,9 @@
-import { useMemo, useState, useCallback } from 'preact/hooks';
+import { useMemo } from 'preact/hooks';
 import type { JSX } from 'preact';
-import type { Descendant } from 'slate';
 import type { RouteProps } from '@doc-platform/router';
 import { navigate } from '@doc-platform/router';
 import { AppHeader, type NavTab } from '@doc-platform/ui';
+import { DocumentModel } from '@doc-platform/models';
 import { useAuth } from '@shared/planning';
 import { FileBrowser } from '../FileBrowser/FileBrowser';
 import { CommentsPanel } from '../CommentsPanel/CommentsPanel';
@@ -21,13 +21,13 @@ export function Editor(props: RouteProps): JSX.Element {
 	const projectName = formatProjectName(projectId);
 	const { user, loading: authLoading, logout } = useAuth();
 
-	// In-memory document state (will be replaced with file loading later)
-	const [document, setDocument] = useState<Descendant[]>(mockDocument);
-
-	const handleDocumentChange = useCallback((value: Descendant[]) => {
-		setDocument(value);
-		// In the future, this will trigger auto-save or mark as dirty
-	}, []);
+	// Document model - source of truth for editor content
+	// useMemo ensures the model persists across re-renders
+	const documentModel = useMemo(() => new DocumentModel({
+		title: 'Welcome',
+		content: mockDocument,
+		dirty: false,
+	}), []);
 
 	// Navigation tabs
 	const navTabs: NavTab[] = useMemo(() => [
@@ -69,8 +69,7 @@ export function Editor(props: RouteProps): JSX.Element {
 				<main class={styles.main}>
 					<div class={styles.editorArea}>
 						<MarkdownEditor
-							initialValue={document}
-							onChange={handleDocumentChange}
+							model={documentModel}
 							placeholder="Start writing..."
 						/>
 					</div>
