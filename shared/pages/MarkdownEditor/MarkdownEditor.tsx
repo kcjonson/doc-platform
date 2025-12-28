@@ -73,9 +73,12 @@ function toggleBlock(editor: Editor, format: CustomElement['type']): void {
 		split: true,
 	});
 
-	const newProperties: Partial<CustomElement> = {
-		type: isActive ? 'paragraph' : isList ? 'list-item' : format,
-	};
+	// Handle heading with required level property
+	const newProperties: Partial<CustomElement> =
+		!isActive && format === 'heading'
+			? { type: 'heading', level: 1 }
+			: { type: isActive ? 'paragraph' : isList ? 'list-item' : format };
+
 	Transforms.setNodes<CustomElement>(editor, newProperties);
 
 	if (!isActive && isList) {
@@ -90,31 +93,52 @@ function renderElement(props: RenderElementProps): JSX.Element {
 
 	switch (element.type) {
 		case 'heading': {
-			const HeadingTag = `h${element.level}` as keyof JSX.IntrinsicElements;
+			// Validate level at runtime, default to 1
+			const rawLevel = (element as { level?: unknown }).level;
+			const level = typeof rawLevel === 'number' && rawLevel >= 1 && rawLevel <= 6
+				? rawLevel
+				: 1;
+			const HeadingTag = `h${level}` as keyof JSX.IntrinsicElements;
 			return <HeadingTag {...attributes} class={styles.heading}>{children}</HeadingTag>;
 		}
 		case 'blockquote':
 			return <blockquote {...attributes} class={styles.blockquote}>{children}</blockquote>;
-		case 'code-block':
+		case 'code-block': {
+			const language = element.language;
 			return (
-				<pre {...attributes} class={styles.codeBlock}>
-					<code>{children}</code>
+				<pre {...attributes} class={styles.codeBlock} data-language={language}>
+					<code class={language ? `language-${language}` : undefined}>{children}</code>
 				</pre>
 			);
+		}
 		case 'bulleted-list':
 			return <ul {...attributes} class={styles.list}>{children}</ul>;
 		case 'numbered-list':
 			return <ol {...attributes} class={styles.list}>{children}</ol>;
 		case 'list-item':
 			return <li {...attributes}>{children}</li>;
-		case 'link':
+		case 'link': {
+			// Validate URL and prevent navigation in edit mode
+			const href = typeof element.url === 'string' ? element.url : '#';
 			return (
-				<a {...attributes} href={element.url} class={styles.link}>
+				<a
+					{...attributes}
+					href={href}
+					class={styles.link}
+					onClick={(e) => e.preventDefault()}
+				>
 					{children}
 				</a>
 			);
+		}
 		case 'thematic-break':
-			return <hr {...attributes} class={styles.thematicBreak} />;
+			// Slate requires children to be rendered even for void elements
+			return (
+				<div {...attributes} class={styles.thematicBreakWrapper}>
+					<hr class={styles.thematicBreak} contentEditable={false} />
+					{children}
+				</div>
+			);
 		default:
 			return <p {...attributes} class={styles.paragraph}>{children}</p>;
 	}
@@ -175,7 +199,7 @@ export function MarkdownEditor({
 		(value: Descendant[]) => {
 			// Check if content actually changed (not just selection)
 			const isAstChange = editor.operations.some(
-				op => 'set_selection' !== op.type
+				op => op.type !== 'set_selection'
 			);
 			if (isAstChange) {
 				// Update model - this will emit a change event

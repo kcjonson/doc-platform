@@ -119,8 +119,12 @@ h6.heading {
 	opacity: 0.8;
 }
 
-.thematicBreak {
+.thematicBreakWrapper {
 	margin: var(--space-6) 0;
+}
+
+.thematicBreak {
+	margin: 0;
 	border: none;
 	border-top: 1px solid var(--color-border);
 }
