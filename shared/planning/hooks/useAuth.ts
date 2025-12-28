@@ -1,6 +1,38 @@
 import { useState, useEffect, useCallback } from 'preact/hooks';
 import { fetchClient } from '@doc-platform/fetch';
 
+const CSRF_HEADER_NAME = 'X-CSRF-Token';
+
+/**
+ * State-changing HTTP methods that require CSRF token
+ */
+const CSRF_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
+
+/**
+ * Set up request interceptor to add CSRF token to state-changing requests
+ */
+let csrfInterceptorRegistered = false;
+let currentCsrfToken: string | null = null;
+
+function setupCsrfInterceptor(): void {
+	if (csrfInterceptorRegistered) return;
+
+	fetchClient.addRequestInterceptor((config) => {
+		if (currentCsrfToken && CSRF_METHODS.has(config.method || 'GET')) {
+			return {
+				...config,
+				headers: {
+					...config.headers,
+					[CSRF_HEADER_NAME]: currentCsrfToken,
+				},
+			};
+		}
+		return config;
+	});
+
+	csrfInterceptorRegistered = true;
+}
+
 export interface AuthUser {
 	id: string;
 	email: string;
@@ -29,12 +61,16 @@ export function useAuth(): UseAuthResult {
 		setState((prev) => ({ ...prev, loading: true, error: null }));
 
 		try {
-			const response = await fetchClient.get<{ user: AuthUser }>('/api/auth/me');
+			const response = await fetchClient.get<{ user: AuthUser; csrfToken: string }>('/api/auth/me');
+			// Store CSRF token and set up interceptor
+			currentCsrfToken = response.csrfToken;
+			setupCsrfInterceptor();
 			setState({ user: response.user, loading: false, error: null });
 		} catch (err) {
 			// 401 means not logged in - not an error state
 			const status = (err as { status?: number }).status;
 			if (status === 401) {
+				currentCsrfToken = null;
 				setState({ user: null, loading: false, error: null });
 			} else {
 				setState({
@@ -52,6 +88,7 @@ export function useAuth(): UseAuthResult {
 		} catch {
 			// Even if logout fails, continue to clear local state
 		}
+		currentCsrfToken = null;
 		setState({ user: null, loading: false, error: null });
 	}, []);
 

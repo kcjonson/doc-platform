@@ -3,6 +3,7 @@
  */
 export interface Session {
 	userId: string;
+	csrfToken: string;
 	createdAt: number;
 	lastAccessedAt: number;
 }

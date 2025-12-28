@@ -72,9 +72,9 @@ export async function handleLogin(
 			return context.json({ error: 'Invalid credentials' }, 401);
 		}
 
-		// Create session
+		// Create session (returns CSRF token)
 		const sessionId = generateSessionId();
-		await createSession(redis, sessionId, {
+		const csrfToken = await createSession(redis, sessionId, {
 			userId: user.id,
 		});
 
@@ -95,6 +95,7 @@ export async function handleLogin(
 				last_name: user.last_name,
 				avatar_url: user.avatar_url,
 			},
+			csrfToken,
 		});
 	} catch (error) {
 		console.error('Login failed:', error);
@@ -195,9 +196,9 @@ export async function handleSignup(
 			[user.id, passwordHash]
 		);
 
-		// Create session (log user in immediately)
+		// Create session (log user in immediately, returns CSRF token)
 		const sessionId = generateSessionId();
-		await createSession(redis, sessionId, {
+		const csrfToken = await createSession(redis, sessionId, {
 			userId: user.id,
 		});
 
@@ -220,6 +221,7 @@ export async function handleSignup(
 				last_name: user.last_name,
 				avatar_url: user.avatar_url,
 			},
+			csrfToken,
 			message: 'Account created successfully',
 		}, 201);
 	} catch (error) {
@@ -293,6 +295,7 @@ export async function handleGetMe(
 				phone_number: user.phone_number,
 				avatar_url: user.avatar_url,
 			},
+			csrfToken: session.csrfToken,
 		});
 	} catch (error) {
 		console.error('Failed to get user:', error);

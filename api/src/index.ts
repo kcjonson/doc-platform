@@ -7,6 +7,11 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { Redis } from 'ioredis';
+import {
+	rateLimitMiddleware,
+	csrfMiddleware,
+	RATE_LIMIT_CONFIGS,
+} from '@doc-platform/auth';
 
 import { handleLogin, handleLogout, handleGetMe, handleSignup } from './handlers/auth.js';
 import {
@@ -40,6 +45,34 @@ const app = new Hono();
 
 // Middleware
 app.use('*', cors());
+
+// Rate limiting middleware (per spec requirements)
+app.use(
+	'*',
+	rateLimitMiddleware(redis, {
+		rules: [
+			{ path: '/api/auth/login', config: RATE_LIMIT_CONFIGS.login },
+			{ path: '/api/auth/signup', config: RATE_LIMIT_CONFIGS.signup },
+		],
+		defaultLimit: RATE_LIMIT_CONFIGS.api,
+		excludePaths: ['/health', '/api/health'],
+	})
+);
+
+// CSRF protection for state-changing requests
+// Excludes auth routes (no session yet) and logout (doesn't matter)
+app.use(
+	'*',
+	csrfMiddleware(redis, {
+		excludePaths: [
+			'/api/auth/login',
+			'/api/auth/signup',
+			'/api/auth/logout',
+			'/health',
+			'/api/health',
+		],
+	})
+);
 
 // Health check
 app.get('/health', (context) => context.json({ status: 'ok' }));
