@@ -33,6 +33,33 @@ Human (Dev Manager)                    Claude (Developer)
 2. **PR is a checkpoint, not completion** - Work continues after PR opens
 3. **Claude creates tasks, humans create epics** - Clear ownership boundary
 4. **Spec documents are the source of truth** - Claude reads, humans write
+5. **MCP supplements, doesn't replace, Claude's internal planning** - See below
+
+---
+
+## MCP vs Claude's Internal Planning
+
+Claude has internal planning tools (plan files, TodoWrite) that remain active alongside MCP:
+
+| Layer | Purpose | Visibility |
+|-------|---------|------------|
+| **Epic + Spec** | Human defines the work | Shared |
+| **MCP Tasks** | Claude's breakdown (summary) | Shared |
+| **MCP Progress Notes** | Key milestones | Shared |
+| **Plan files** (`.claude/plans/`) | Claude's detailed reasoning | Private |
+| **TodoWrite** | Claude's immediate session tracking | Private |
+
+**For complex epics, Claude will:**
+1. Read epic + spec via MCP
+2. Create a local plan file for detailed exploration/design
+3. Create MCP tasks as the human-readable summary
+4. Use TodoWrite for immediate session work
+5. Post MCP progress notes at key milestones
+6. Mark plan file COMPLETE when epic work is done
+
+**MCP tasks are the "what" the human sees. Plan files are the "how" Claude thinks through it.**
+
+The MCP system is the coordination layer. Claude's internal tools remain essential for complex work.
 
 ---
 
