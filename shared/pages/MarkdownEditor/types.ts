@@ -63,13 +63,13 @@ export type CustomElement =
 	| LinkElement
 	| ThematicBreakElement;
 
-// Text marks
+// Text marks - using `true` (not `boolean`) per Slate best practices for better type narrowing
 export type FormattedText = {
 	text: string;
-	bold?: boolean;
-	italic?: boolean;
-	code?: boolean;
-	strikethrough?: boolean;
+	bold?: true;
+	italic?: true;
+	code?: true;
+	strikethrough?: true;
 	commentId?: string; // Links text to a comment
 };
 
