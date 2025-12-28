@@ -1,331 +1,472 @@
 # MCP Server Design: Claude Workflow Analysis
 
-This document analyzes how Claude Code uses planning tools and how the MCP server should be designed to support Claude's actual workflow patterns.
+This document analyzes how Claude Code should interact with the planning system via MCP, modeling a realistic dev manager / developer relationship.
 
 ---
 
-## Current State
+## Workflow Model: Dev Manager + Developer
 
-**Existing Spec:** `/docs/specs/mcp-integration.md` defines a comprehensive MCP server with:
-- Document tools (get, search, list, create, update)
-- Task tools (get_task, get_epic, get_backlog, search_tasks, create_task, update_task)
-- OAuth 2.1 authentication with scopes
+The MCP server models a professional development workflow where:
 
-**Gap:** The spec is modeled after a human-facing Kanban UI, not Claude's actual workflow.
+- **Human (Dev Manager)** owns requirements and approval
+- **Claude (Developer)** owns task breakdown and implementation
 
----
+```
+Human (Dev Manager)                    Claude (Developer)
+───────────────────                    ──────────────────
 
-## How Claude Actually Works
+1. Write spec document           →
+2. Create epic, link to spec     →
+                                 →     3. Read epic + spec via MCP
+                                 →     4. Break down epic into tasks
+                                 →     5. Work on tasks, update progress
+                                 →     6. Open PR (signals "ready for review")
+7. Review PR, give feedback      →
+                                 →     8. Address feedback, update tasks
+9. Approve & merge PR            →
+10. Mark epic as done            →
+```
 
-### Starting a Conversation
+**Key Principles:**
 
-1. **Read context** - Check status.md, read relevant specs
-2. **Identify current work** - What's in progress? What's blocked?
-3. **Plan execution** - Create internal todo list with TodoWrite
-
-### During Work
-
-1. **Mark task in_progress** before starting
-2. **Break down into subtasks** as complexity is discovered
-3. **Complete subtasks immediately** when done (not batched)
-4. **Add progress notes** for visibility
-5. **Block with reason** if stuck
-
-### Finishing Work
-
-1. **Mark task complete**
-2. **Update status.md** with completed items
-3. **Mark plan file as COMPLETE** (if using plan mode)
+1. **Claude cannot mark epics done** - Only humans can approve completion
+2. **PR is a checkpoint, not completion** - Work continues after PR opens
+3. **Claude creates tasks, humans create epics** - Clear ownership boundary
+4. **Spec documents are the source of truth** - Claude reads, humans write
 
 ---
 
-## Key Workflow Patterns
+## Role Permissions
 
-### Pattern 1: Context Loading
+### Human-Only Actions (via UI)
 
-Claude needs to quickly understand "what am I working on?" in a single call.
+| Action | Description |
+|--------|-------------|
+| Create epic | Define new work with linked spec |
+| Link spec to epic | Associate requirements document |
+| Approve epic completion | Mark epic as "done" after verification |
+| Merge PR | Final approval of code changes |
+| Answer clarifications | Respond to Claude's questions |
 
-**Current spec:** Requires multiple calls (get_backlog, get_task, get_linked_docs)
+### Claude-Only Actions (via MCP)
 
-**Needed:** `get_current_context()` that returns:
-- Current in-progress task(s)
-- Related epic
-- Linked documents with relevant sections
-- Subtask progress
-- Recent activity/notes
+| Action | Description |
+|--------|-------------|
+| Read epic + spec | Get requirements and context |
+| Create tasks under epic | Break down work into implementable units |
+| Update task status | Track progress (ready → in_progress → done) |
+| Add subtasks | Further decompose as complexity discovered |
+| Open PR | Signal "ready for review" |
+| Request clarification | Ask human for input when blocked |
 
-### Pattern 2: Progressive Task Breakdown
+### Shared Actions
 
-Claude discovers sub-work while implementing. Needs to record it immediately.
-
-**Current spec:** Can only update task description, no subtask support
-
-**Needed:**
-- Subtask CRUD within tasks
-- Subtasks have their own status (pending, in_progress, completed)
-- Subtask completion updates parent task progress
-
-### Pattern 3: Continuous Progress Updates
-
-Claude completes work incrementally, not all at once.
-
-**Current spec:** Only status changes (ready → in_progress → done)
-
-**Needed:**
-- `complete_subtask()` - granular progress
-- `update_progress(note)` - add note without status change
-- Progress percentage derived from subtask completion
-
-### Pattern 4: Blocking with Context
-
-Claude gets stuck and needs to signal "waiting on input."
-
-**Current spec:** No blocked status, no mechanism to record why
-
-**Needed:**
-- `blocked` status
-- `block_reason` field
-- `request_clarification(question)` - creates a blocking note asking for user input
+| Action | Who | Description |
+|--------|-----|-------------|
+| Add comments | Both | Discussion on tasks/PRs |
+| Update task details | Both | Refine acceptance criteria |
 
 ---
 
-## Recommended Tool Design
+## Epic & Task Status Model
 
-### Context Tools
+### Epic Status (Human-Controlled)
+
+```
+┌──────────┐   assign    ┌─────────────┐   PR opened   ┌───────────┐
+│  ready   │ ──────────► │ in_progress │ ────────────► │ in_review │
+└──────────┘             └─────────────┘               └───────────┘
+                                                             │
+                                                             │ human approves
+                                                             ▼
+                                                       ┌──────────┐
+                                                       │   done   │
+                                                       └──────────┘
+```
+
+- `ready` - Epic created, spec linked, waiting for developer
+- `in_progress` - Claude is actively working on tasks
+- `in_review` - PR opened, awaiting human review
+- `done` - Human verified and approved (only human can set this)
+
+### Task Status (Claude-Controlled)
+
+```
+┌──────────┐   start    ┌─────────────┐   complete   ┌──────────┐
+│  ready   │ ─────────► │ in_progress │ ───────────► │   done   │
+└──────────┘            └─────────────┘              └──────────┘
+      ▲                       │
+      │                       │ block
+      │                       ▼
+      │                 ┌───────────┐
+      └──── unblock ─── │  blocked  │
+                        └───────────┘
+```
+
+Claude can freely manage task status. Completing all tasks does NOT auto-complete the epic.
+
+---
+
+## MCP Tools for Claude
+
+### Context Loading
 
 | Tool | Purpose | Returns |
 |------|---------|---------|
-| `get_current_context` | What am I working on? | Current task, epic, docs, progress |
-| `get_next_work` | What should I pick up? | Prioritized ready tasks |
-| `get_blocking_items` | What's stuck? | Blocked tasks with reasons |
+| `get_epic` | Read epic details + linked spec | Epic, spec content, existing tasks |
+| `get_current_work` | What am I working on? | In-progress epics/tasks for this user |
+| `get_ready_epics` | What's available? | Epics in "ready" status |
 
-### Task Lifecycle Tools
+### Task Management (Claude creates, humans don't)
 
 | Tool | Purpose | Input |
 |------|---------|-------|
+| `create_task` | Add task to epic | epicId, title, description |
+| `create_tasks` | Bulk add tasks | epicId, tasks[] |
+| `update_task` | Modify task details | taskId, fields |
 | `start_task` | Begin work | taskId |
-| `complete_task` | Finish work | taskId |
+| `complete_task` | Finish task | taskId |
 | `block_task` | Mark blocked | taskId, reason |
 | `unblock_task` | Resume work | taskId |
 
-### Subtask Tools
+### Subtask Management
 
 | Tool | Purpose | Input |
 |------|---------|-------|
-| `add_subtasks` | Break down work | taskId, subtasks[] |
-| `start_subtask` | Begin subtask | taskId, subtaskId |
-| `complete_subtask` | Finish subtask | taskId, subtaskId |
-| `reorder_subtasks` | Reprioritize | taskId, subtaskIds[] |
+| `add_subtasks` | Break down task | taskId, subtasks[] |
+| `complete_subtask` | Mark subtask done | taskId, subtaskId |
 
-### Progress Tools
+### Progress & Communication
 
 | Tool | Purpose | Input |
 |------|---------|-------|
-| `add_progress_note` | Record activity | taskId, note |
-| `request_clarification` | Ask question | taskId, question |
-| `answer_clarification` | Resolve question | taskId, questionId, answer |
+| `add_progress_note` | Log activity | epicId or taskId, note |
+| `request_clarification` | Ask human | epicId or taskId, question |
+| `signal_ready_for_review` | Indicate PR opened | epicId, prUrl |
 
-### Document Linking
+### Read-Only (Specs & Docs)
 
 | Tool | Purpose | Input |
 |------|---------|-------|
-| `link_document` | Add context | taskId, docId |
-| `link_section` | Add specific context | taskId, docId, sectionId |
-| `get_task_context` | Get all linked docs | taskId |
+| `get_spec` | Read linked spec document | epicId or docId |
+| `search_docs` | Find relevant documentation | query |
 
 ---
 
-## Status State Machine
+## Example Workflow: Claude Picks Up an Epic
+
+### 1. Claude checks for available work
 
 ```
-          ┌─────────────────────────────────────────┐
-          │                                         │
-          ▼                                         │
-       ┌──────┐    start_task    ┌─────────────┐   │
-       │ready │ ───────────────► │ in_progress │   │
-       └──────┘                  └─────────────┘   │
-          ▲                           │   │        │
-          │                           │   │        │
-          │              complete_task│   │block   │
-          │                           │   │        │
-          │                           ▼   ▼        │
-          │                      ┌────────────┐    │
-          │   unblock_task       │  blocked   │────┘
-          └───────────────────── └────────────┘
-                                       │
-                                       │ complete_task
-                                       ▼
-                                  ┌────────┐
-                                  │  done  │
-                                  └────────┘
+→ get_ready_epics()
+
+← {
+    epics: [{
+      id: "epic-123",
+      title: "Add user authentication",
+      specPath: "/docs/specs/authentication.md",
+      createdBy: "human@example.com",
+      createdAt: "2025-01-15T10:00:00Z"
+    }]
+  }
 ```
+
+### 2. Claude reads the epic and spec
+
+```
+→ get_epic(epicId: "epic-123")
+
+← {
+    id: "epic-123",
+    title: "Add user authentication",
+    status: "ready",
+    spec: {
+      path: "/docs/specs/authentication.md",
+      content: "# Authentication Spec\n\n## Requirements\n..."
+    },
+    tasks: [],  // None yet - Claude will create these
+    linkedDocs: [...]
+  }
+```
+
+### 3. Claude breaks down into tasks
+
+```
+→ create_tasks(
+    epicId: "epic-123",
+    tasks: [
+      { title: "Set up session infrastructure", description: "..." },
+      { title: "Create login endpoint", description: "..." },
+      { title: "Create signup endpoint", description: "..." },
+      { title: "Add auth middleware", description: "..." }
+    ]
+  )
+
+← {
+    created: [
+      { id: "task-1", title: "Set up session infrastructure" },
+      { id: "task-2", title: "Create login endpoint" },
+      ...
+    ]
+  }
+```
+
+### 4. Claude works on tasks
+
+```
+→ start_task(taskId: "task-1")
+← { status: "in_progress" }
+
+// ... does work ...
+
+→ add_progress_note(taskId: "task-1", note: "Added Redis session store")
+← { ok: true }
+
+→ complete_task(taskId: "task-1")
+← { status: "done" }
+```
+
+### 5. Claude gets stuck, asks for clarification
+
+```
+→ request_clarification(
+    epicId: "epic-123",
+    question: "Should login support both email and username, or email only?"
+  )
+
+← { clarificationId: "q-456", status: "pending" }
+```
+
+Human answers via UI. Next session:
+
+```
+→ get_epic(epicId: "epic-123")
+
+← {
+    ...
+    pendingClarifications: [],
+    answeredClarifications: [{
+      id: "q-456",
+      question: "Should login support both email and username?",
+      answer: "Email only for now. Username login is Phase 2.",
+      answeredAt: "2025-01-15T14:30:00Z"
+    }]
+  }
+```
+
+### 6. Claude signals ready for review
+
+```
+→ signal_ready_for_review(
+    epicId: "epic-123",
+    prUrl: "https://github.com/org/repo/pull/42"
+  )
+
+← { epicStatus: "in_review" }
+```
+
+### 7. Human reviews, requests changes (via PR comments)
+
+Claude addresses feedback, updates tasks as needed.
+
+### 8. Human approves (via UI)
+
+Human merges PR and marks epic "done" in the planning UI. Claude cannot do this.
 
 ---
 
-## Subtask Model
+## Data Model
 
-Each task can have subtasks:
+### Epic
+
+```typescript
+interface Epic {
+  id: string;
+  title: string;
+  description?: string;
+  status: 'ready' | 'in_progress' | 'in_review' | 'done';
+
+  // Human-provided
+  specDocId?: string;           // Linked spec document
+  createdBy: string;            // Human who created
+
+  // Derived
+  tasks: Task[];
+  progress: number;             // Completed tasks / total tasks
+
+  // Communication
+  clarifications: Clarification[];
+  progressNotes: ProgressNote[];
+
+  // Review
+  prUrl?: string;               // Set when ready for review
+  completedBy?: string;         // Human who approved
+  completedAt?: string;
+}
+```
+
+### Task
+
+```typescript
+interface Task {
+  id: string;
+  epicId: string;
+  title: string;
+  description?: string;
+  status: 'ready' | 'in_progress' | 'blocked' | 'done';
+  blockReason?: string;
+
+  // Created by Claude
+  createdBy: 'claude';
+
+  // Breakdown
+  subtasks: Subtask[];
+
+  // Progress
+  progressNotes: ProgressNote[];
+
+  // Timestamps
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+```
+
+### Subtask
 
 ```typescript
 interface Subtask {
   id: string;
+  taskId: string;
   title: string;
   status: 'pending' | 'in_progress' | 'completed';
   order: number;
   completedAt?: string;
 }
+```
 
-interface Task {
+### Clarification
+
+```typescript
+interface Clarification {
   id: string;
-  title: string;
-  description?: string;
-  status: 'ready' | 'in_progress' | 'blocked' | 'done';
-  blockReason?: string;
-  subtasks: Subtask[];
-  progressNotes: ProgressNote[];
-  linkedDocs: LinkedDoc[];
-  // ... other fields
-}
-```
-
-Progress is derived:
-```typescript
-const progress = task.subtasks.length > 0
-  ? task.subtasks.filter(s => s.status === 'completed').length / task.subtasks.length
-  : null;
-```
-
----
-
-## get_current_context Response
-
-The most important tool for Claude. Returns everything needed to resume work:
-
-```typescript
-interface CurrentContext {
-  // Current work
-  currentTask?: {
-    id: string;
-    title: string;
-    description?: string;
-    status: 'in_progress' | 'blocked';
-    blockReason?: string;
-    epic: { id: string; title: string };
-    subtasks: Subtask[];
-    progress: number; // 0.0 - 1.0
-  };
-
-  // Context documents
-  linkedDocs: {
-    id: string;
-    title: string;
-    path: string;
-    relevantSections: {
-      heading: string;
-      snippet: string;
-    }[];
-  }[];
-
-  // Recent activity
-  recentNotes: {
-    timestamp: string;
-    note: string;
-  }[];
-
-  // What's waiting
-  pendingClarifications: {
-    id: string;
-    question: string;
-    askedAt: string;
-  }[];
+  epicId: string;
+  taskId?: string;              // Optional - can be epic-level
+  question: string;
+  askedBy: 'claude';
+  askedAt: string;
+  answer?: string;
+  answeredBy?: string;          // Human who answered
+  answeredAt?: string;
 }
 ```
 
 ---
 
-## MCP Best Practices Applied
+## What Claude CANNOT Do
 
-Based on official MCP documentation:
+To enforce the dev manager / developer boundary:
 
-### 1. Tool Naming (snake_case, clear purpose)
+1. **Cannot create epics** - Only humans define what work exists
+2. **Cannot mark epics done** - Only humans approve completion
+3. **Cannot modify specs** - Specs are human-owned requirements
+4. **Cannot merge PRs** - Final approval is human-only
+5. **Cannot answer clarifications** - Those are questions TO humans
 
-- `get_current_context` not `getCurrentContext`
-- `complete_subtask` not `markSubtaskDone`
-- Consistent verb prefixes: get_, add_, update_, complete_, start_
+---
 
-### 2. Single Purpose Tools
+## get_current_work Response
 
-Each tool does one thing:
-- `start_task` only starts (doesn't also update description)
-- `add_subtasks` only adds (separate from update_task)
+The primary tool for Claude to understand context:
 
-### 3. Output-to-Input Chaining
+```typescript
+interface CurrentWorkResponse {
+  // Active work
+  inProgressEpics: {
+    id: string;
+    title: string;
+    status: 'in_progress' | 'in_review';
+    specPath: string;
+    tasks: {
+      total: number;
+      completed: number;
+      inProgress: number;
+      blocked: number;
+    };
+    currentTask?: {
+      id: string;
+      title: string;
+      status: string;
+      subtasks: Subtask[];
+    };
+    pendingClarifications: Clarification[];
+    recentNotes: ProgressNote[];
+  }[];
 
-Results from one tool can feed into another:
-- `get_next_work` returns taskId → `start_task(taskId)`
-- `start_task` confirms → `add_subtasks(taskId, [...])`
-
-### 4. Error Handling
-
-Use `isError` flag for tool failures:
-```json
-{
-  "content": [{
-    "type": "text",
-    "text": "Task not found: id=abc123",
-    "isError": true
-  }]
+  // Available to pick up
+  readyEpics: {
+    id: string;
+    title: string;
+    specPath: string;
+    createdAt: string;
+  }[];
 }
 ```
-
-### 5. Resources for Static Data
-
-Use resources for:
-- `planning://templates` - Task/epic templates
-- `planning://schema` - Field definitions
-
-Use tools for:
-- All dynamic operations (CRUD)
-- Anything where Claude decides when to call it
 
 ---
 
 ## Implementation Priority
 
-### Phase 1: Core Claude Workflow
-1. `get_current_context` - Essential for context loading
-2. `start_task`, `complete_task` - Basic lifecycle
-3. `add_subtasks`, `complete_subtask` - Progress tracking
-4. `add_progress_note` - Visibility
+### Phase 1: Core Loop
+1. `get_ready_epics` - Find available work
+2. `get_epic` - Read epic + spec
+3. `create_tasks` - Break down work
+4. `start_task`, `complete_task` - Basic lifecycle
+5. `signal_ready_for_review` - Handoff to human
 
-### Phase 2: Blocking & Clarification
-5. `block_task`, `unblock_task` - Handle stuck states
-6. `request_clarification`, `answer_clarification` - User interaction
+### Phase 2: Progress Tracking
+6. `add_subtasks`, `complete_subtask` - Granular progress
+7. `add_progress_note` - Visibility for humans
+8. `get_current_work` - Context loading
 
-### Phase 3: Enhanced Context
-7. `get_next_work` - Smart prioritization
-8. `link_document`, `get_task_context` - Document integration
+### Phase 3: Communication
+9. `request_clarification` - Ask humans
+10. `block_task`, `unblock_task` - Handle dependencies
 
 ---
 
-## Open Questions
+## MCP Resources (Read-Only Context)
 
-1. **Multi-user assignment**: Should tasks be assignable to Claude specifically vs human users?
+| Resource URI | Description |
+|--------------|-------------|
+| `planning://epics` | List all epics with status |
+| `planning://epic/{id}` | Single epic with tasks |
+| `docs://spec/{id}` | Spec document content |
+| `docs://search?q={query}` | Search results |
 
-2. **Session tracking**: Should the MCP server track Claude "sessions" (like plan files)?
+---
 
-3. **Automatic updates**: Should completing all subtasks auto-complete the parent task?
+## Security & Permissions
 
-4. **History**: How much task history should be retained for context?
+### OAuth Scopes
 
-5. **Notifications**: Should there be a way to notify Claude of changes made by humans?
+| Scope | Allows |
+|-------|--------|
+| `epics:read` | Read epics, tasks, specs |
+| `tasks:write` | Create/update tasks (not epics) |
+| `docs:read` | Read documents |
+| `clarifications:write` | Request clarifications |
+
+Claude's token has `epics:read`, `tasks:write`, `docs:read`, `clarifications:write`.
+
+Claude does NOT have `epics:write` (only humans can create/complete epics).
 
 ---
 
 ## Next Steps
 
-1. Review this analysis with the team
-2. Decide on Phase 1 scope
-3. Update `/docs/specs/mcp-integration.md` with Claude-specific tools
-4. Implement subtask data model in database
-5. Build MCP server with TypeScript SDK
+1. Update database schema for clarifications, subtasks
+2. Implement MCP tools in priority order
+3. Build human UI for answering clarifications
+4. Add "in_review" status to epic model
+5. Connect PR webhooks to auto-detect review state
