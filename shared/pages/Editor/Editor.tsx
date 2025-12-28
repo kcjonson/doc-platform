@@ -1,11 +1,14 @@
-import { useMemo } from 'preact/hooks';
+import { useMemo, useState, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
+import type { Descendant } from 'slate';
 import type { RouteProps } from '@doc-platform/router';
 import { navigate } from '@doc-platform/router';
 import { AppHeader, type NavTab } from '@doc-platform/ui';
 import { useAuth } from '@shared/planning';
 import { FileBrowser } from '../FileBrowser/FileBrowser';
 import { CommentsPanel } from '../CommentsPanel/CommentsPanel';
+import { MarkdownEditor } from '../MarkdownEditor';
+import { mockDocument } from '../MarkdownEditor/mock-document';
 import styles from './Editor.module.css';
 
 // Format project ID as display name (capitalize first letter)
@@ -17,6 +20,14 @@ export function Editor(props: RouteProps): JSX.Element {
 	const projectId = props.params.projectId || 'demo';
 	const projectName = formatProjectName(projectId);
 	const { user, loading: authLoading, logout } = useAuth();
+
+	// In-memory document state (will be replaced with file loading later)
+	const [document, setDocument] = useState<Descendant[]>(mockDocument);
+
+	const handleDocumentChange = useCallback((value: Descendant[]) => {
+		setDocument(value);
+		// In the future, this will trigger auto-save or mark as dirty
+	}, []);
 
 	// Navigation tabs
 	const navTabs: NavTab[] = useMemo(() => [
@@ -57,9 +68,11 @@ export function Editor(props: RouteProps): JSX.Element {
 				<FileBrowser class={styles.sidebar} />
 				<main class={styles.main}>
 					<div class={styles.editorArea}>
-						<div class={styles.placeholder}>
-							Editor coming soon...
-						</div>
+						<MarkdownEditor
+							initialValue={document}
+							onChange={handleDocumentChange}
+							placeholder="Start writing..."
+						/>
 					</div>
 				</main>
 				<CommentsPanel class={styles.commentsPanel} />
