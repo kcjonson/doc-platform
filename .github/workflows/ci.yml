@@ -57,6 +57,9 @@ jobs:
   build-images:
     name: Build Images
     needs: [lint, test]
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/_build-images.yml
     with:
       push: false

@@ -76,6 +76,9 @@ jobs:
   build-push:
     name: Build and Push
     needs: wait-for-ci
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/_build-images.yml
     with:
       push: true
@@ -84,6 +87,9 @@ jobs:
   migrate:
     name: Run Migrations
     needs: build-push
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/_run-ecs-task.yml
     with:
       task_name: migrate
@@ -93,6 +99,9 @@ jobs:
   seed:
     name: Seed Database
     needs: migrate
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/_run-ecs-task.yml
     with:
       task_name: seed
@@ -103,6 +112,9 @@ jobs:
   deploy-infra:
     name: Deploy Infrastructure
     needs: seed
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/_deploy-cdk.yml
     with:
       action: deploy

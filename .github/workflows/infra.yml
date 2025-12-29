@@ -15,6 +15,9 @@ on:
 jobs:
   cdk:
     name: CDK ${{ github.event.inputs.action }}
+    permissions:
+      id-token: write
+      contents: read
     uses: ./.github/workflows/_deploy-cdk.yml
     with:
       action: ${{ github.event.inputs.action }}
