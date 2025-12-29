@@ -14,7 +14,7 @@ import {
 	deleteProject,
 } from '@doc-platform/db';
 import { projectResponseToApi } from '../transform.js';
-import { isValidUUID, isValidTitle, MAX_TITLE_LENGTH } from '../validation.js';
+import { isValidUUID, isValidTitle, isValidDescription, MAX_TITLE_LENGTH, MAX_DESCRIPTION_LENGTH } from '../validation.js';
 
 async function getUserId(context: Context, redis: Redis): Promise<string | null> {
 	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
@@ -92,6 +92,13 @@ export async function handleCreateProject(context: Context, redis: Redis): Promi
 			);
 		}
 
+		if (description !== undefined && typeof description === 'string' && !isValidDescription(description)) {
+			return context.json(
+				{ error: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less` },
+				400
+			);
+		}
+
 		const project = await createProject(userId, {
 			name,
 			description: description || undefined,
@@ -130,6 +137,13 @@ export async function handleUpdateProject(context: Context, redis: Redis): Promi
 		if (description !== undefined && typeof description !== 'string') {
 			return context.json(
 				{ error: 'Description must be a string' },
+				400
+			);
+		}
+
+		if (description !== undefined && typeof description === 'string' && !isValidDescription(description)) {
+			return context.json(
+				{ error: `Description must be ${MAX_DESCRIPTION_LENGTH} characters or less` },
 				400
 			);
 		}

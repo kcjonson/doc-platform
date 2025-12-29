@@ -9,6 +9,7 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const VALID_STATUSES: EpicStatus[] = ['ready', 'in_progress', 'done'];
 
 export const MAX_TITLE_LENGTH = 255;
+export const MAX_DESCRIPTION_LENGTH = 2000;
 
 export function isValidUUID(id: string): boolean {
 	return UUID_REGEX.test(id);
@@ -25,6 +26,10 @@ export function isValidStatus(status: unknown): status is EpicStatus {
 
 export function isValidTitle(title: string): boolean {
 	return title.length > 0 && title.length <= MAX_TITLE_LENGTH;
+}
+
+export function isValidDescription(description: string): boolean {
+	return description.length <= MAX_DESCRIPTION_LENGTH;
 }
 
 export function isValidDateFormat(dateStr: string): boolean {
