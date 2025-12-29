@@ -1,0 +1,151 @@
+name: Run ECS Task
+
+on:
+  workflow_call:
+    inputs:
+      task_name:
+        description: 'Name for logging'
+        required: true
+        type: string
+      command:
+        description: 'Command to run (JSON array)'
+        required: true
+        type: string
+      include_admin_env:
+        description: 'Include admin environment variables from secrets'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  run:
+    name: ${{ inputs.task_name }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get stack outputs
+        id: stack
+        run: |
+          OUTPUTS=$(aws cloudformation describe-stacks \
+            --stack-name DocPlatformStack \
+            --query "Stacks[0].Outputs" \
+            --output json \
+            --region ${{ env.AWS_REGION }})
+
+          echo "task_def=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ApiTaskDefinitionArn") | .OutputValue')" >> $GITHUB_OUTPUT
+          echo "subnets=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="PrivateSubnetIds") | .OutputValue')" >> $GITHUB_OUTPUT
+          echo "security_group=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ApiSecurityGroupId") | .OutputValue')" >> $GITHUB_OUTPUT
+          echo "log_group=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ApiLogGroupName") | .OutputValue')" >> $GITHUB_OUTPUT
+          echo "cluster=$(echo $OUTPUTS | jq -r '.[] | select(.OutputKey=="ClusterName") | .OutputValue')" >> $GITHUB_OUTPUT
+
+      - name: Run ${{ inputs.task_name }} task
+        id: run-task
+        env:
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_FIRST_NAME: ${{ secrets.ADMIN_FIRST_NAME }}
+          ADMIN_LAST_NAME: ${{ secrets.ADMIN_LAST_NAME }}
+        run: |
+          # Parse subnets into JSON array format
+          SUBNETS_JSON=$(echo '${{ steps.stack.outputs.subnets }}' | tr ',' '\n' | jq -R . | jq -s .)
+
+          # Build overrides JSON
+          COMMAND='${{ inputs.command }}'
+
+          if [ "${{ inputs.include_admin_env }}" = "true" ]; then
+            OVERRIDES=$(jq -n \
+              --argjson cmd "$COMMAND" \
+              --arg username "$ADMIN_USERNAME" \
+              --arg password "$ADMIN_PASSWORD" \
+              --arg email "$ADMIN_EMAIL" \
+              --arg firstname "$ADMIN_FIRST_NAME" \
+              --arg lastname "$ADMIN_LAST_NAME" \
+              '{containerOverrides: [{
+                name: "api",
+                command: $cmd,
+                environment: [
+                  {name: "ADMIN_USERNAME", value: $username},
+                  {name: "ADMIN_PASSWORD", value: $password},
+                  {name: "ADMIN_EMAIL", value: $email},
+                  {name: "ADMIN_FIRST_NAME", value: $firstname},
+                  {name: "ADMIN_LAST_NAME", value: $lastname}
+                ]
+              }]}')
+          else
+            OVERRIDES=$(jq -n \
+              --argjson cmd "$COMMAND" \
+              '{containerOverrides: [{name: "api", command: $cmd}]}')
+          fi
+
+          TASK_ARN=$(aws ecs run-task \
+            --cluster ${{ steps.stack.outputs.cluster }} \
+            --task-definition ${{ steps.stack.outputs.task_def }} \
+            --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=${SUBNETS_JSON},securityGroups=[\"${{ steps.stack.outputs.security_group }}\"],assignPublicIp=DISABLED}" \
+            --overrides "$OVERRIDES" \
+            --query 'tasks[0].taskArn' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          echo "task_arn=$TASK_ARN" >> $GITHUB_OUTPUT
+          echo "Started ${{ inputs.task_name }} task: $TASK_ARN"
+
+      - name: Wait for ${{ inputs.task_name }} to complete
+        run: |
+          echo "Waiting for ${{ inputs.task_name }} task to complete..."
+          aws ecs wait tasks-stopped \
+            --cluster ${{ steps.stack.outputs.cluster }} \
+            --tasks ${{ steps.run-task.outputs.task_arn }} \
+            --region ${{ env.AWS_REGION }}
+
+          # Check exit code
+          EXIT_CODE=$(aws ecs describe-tasks \
+            --cluster ${{ steps.stack.outputs.cluster }} \
+            --tasks ${{ steps.run-task.outputs.task_arn }} \
+            --query 'tasks[0].containers[0].exitCode' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+
+          echo "${{ inputs.task_name }} task exit code: $EXIT_CODE"
+
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "${{ inputs.task_name }} failed! Fetching logs..."
+
+            TASK_ID=$(echo "${{ steps.run-task.outputs.task_arn }}" | rev | cut -d'/' -f1 | rev)
+
+            LOG_STREAM=$(aws logs describe-log-streams \
+              --log-group-name "${{ steps.stack.outputs.log_group }}" \
+              --log-stream-name-prefix "api/api/${TASK_ID}" \
+              --query 'logStreams[0].logStreamName' \
+              --output text \
+              --region ${{ env.AWS_REGION }}) || true
+
+            if [ -n "$LOG_STREAM" ] && [ "$LOG_STREAM" != "None" ]; then
+              echo "Log stream: $LOG_STREAM"
+              aws logs get-log-events \
+                --log-group-name "${{ steps.stack.outputs.log_group }}" \
+                --log-stream-name "$LOG_STREAM" \
+                --limit 100 \
+                --region ${{ env.AWS_REGION }} \
+                --query 'events[*].message' \
+                --output text || echo "Could not fetch log events"
+            else
+              echo "Could not find log stream for task ${TASK_ID}"
+            fi
+
+            exit 1
+          fi
+
+          echo "${{ inputs.task_name }} completed successfully!"
