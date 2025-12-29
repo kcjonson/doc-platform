@@ -115,43 +115,16 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Get cluster name
-        id: stack
+      - name: Deploy services
         run: |
-          CLUSTER=$(aws cloudformation describe-stacks \
-            --stack-name DocPlatformStack \
-            --query "Stacks[0].Outputs[?OutputKey=='ClusterName'].OutputValue" \
-            --output text \
-            --region ${{ env.AWS_REGION }})
-          echo "cluster=$CLUSTER" >> $GITHUB_OUTPUT
-
-          ALB_DNS=$(aws cloudformation describe-stacks \
-            --stack-name DocPlatformStack \
-            --query "Stacks[0].Outputs[?OutputKey=='AlbDnsName'].OutputValue" \
-            --output text \
-            --region ${{ env.AWS_REGION }})
-          echo "alb_dns=$ALB_DNS" >> $GITHUB_OUTPUT
-
-      - name: Force new deployment
-        run: |
-          aws ecs update-service --cluster ${{ steps.stack.outputs.cluster }} --service api --force-new-deployment --region ${{ env.AWS_REGION }}
-          aws ecs update-service --cluster ${{ steps.stack.outputs.cluster }} --service frontend --force-new-deployment --region ${{ env.AWS_REGION }}
-          aws ecs update-service --cluster ${{ steps.stack.outputs.cluster }} --service mcp --force-new-deployment --region ${{ env.AWS_REGION }}
-
-      - name: Wait for services
-        run: |
-          echo "Waiting for services to stabilize..."
-          aws ecs wait services-stable \
-            --cluster ${{ steps.stack.outputs.cluster }} \
-            --services api frontend mcp \
-            --region ${{ env.AWS_REGION }}
-
-      - name: Deployment complete
-        run: |
-          echo "Deployed to: http://${{ steps.stack.outputs.alb_dns }}"
+          source .github/scripts/get-stack-outputs.sh
+          .github/scripts/deploy-services.sh
