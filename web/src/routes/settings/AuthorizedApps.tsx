@@ -1,17 +1,8 @@
-import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useState, useMemo } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { fetchClient } from '@doc-platform/fetch';
+import { useModel, AuthorizationsCollection, type AuthorizationModel } from '@doc-platform/models';
 import { Button } from '@doc-platform/ui';
 import styles from './AuthorizedApps.module.css';
-
-interface Authorization {
-	id: string;
-	client_id: string;
-	device_name: string;
-	scopes: string[];
-	created_at: string;
-	last_used_at: string | null;
-}
 
 // Friendly names for clients
 const CLIENT_NAMES: Record<string, string> = {
@@ -55,43 +46,27 @@ function formatDate(dateString: string): string {
 }
 
 export function AuthorizedApps(): JSX.Element {
-	const [authorizations, setAuthorizations] = useState<Authorization[]>([]);
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
-	const [revoking, setRevoking] = useState<string | null>(null);
+	// Create collection once, auto-fetches on construction
+	const authorizations = useMemo(() => new AuthorizationsCollection(), []);
+	useModel(authorizations);
+
+	// Local state for revoke confirmation
 	const [confirmRevoke, setConfirmRevoke] = useState<string | null>(null);
+	const [revoking, setRevoking] = useState<string | null>(null);
 
-	const fetchAuthorizations = useCallback(async (): Promise<void> => {
+	const handleRevoke = async (auth: AuthorizationModel): Promise<void> => {
+		setRevoking(auth.id);
 		try {
-			setLoading(true);
-			setError(null);
-			const response = await fetchClient.get<{ authorizations: Authorization[] }>('/api/oauth/authorizations');
-			setAuthorizations(response.authorizations);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to load authorizations');
-		} finally {
-			setLoading(false);
-		}
-	}, []);
-
-	useEffect(() => {
-		fetchAuthorizations();
-	}, [fetchAuthorizations]);
-
-	const handleRevoke = async (id: string): Promise<void> => {
-		try {
-			setRevoking(id);
-			await fetchClient.delete(`/api/oauth/authorizations/${id}`);
-			setAuthorizations(prev => prev.filter(a => a.id !== id));
+			await authorizations.remove(auth);
 			setConfirmRevoke(null);
-		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Failed to revoke authorization');
+		} catch {
+			// Error is handled by collection's $meta.error
 		} finally {
 			setRevoking(null);
 		}
 	};
 
-	if (loading) {
+	if (authorizations.$meta.working && authorizations.length === 0) {
 		return (
 			<div class={styles.container}>
 				<div class={styles.loading}>Loading authorized apps...</div>
@@ -99,12 +74,12 @@ export function AuthorizedApps(): JSX.Element {
 		);
 	}
 
-	if (error) {
+	if (authorizations.$meta.error) {
 		return (
 			<div class={styles.container}>
 				<div class={styles.error}>
-					{error}
-					<Button onClick={fetchAuthorizations} class={styles.retryButton}>
+					{authorizations.$meta.error.message}
+					<Button onClick={() => authorizations.fetch()} class={styles.retryButton}>
 						Retry
 					</Button>
 				</div>
@@ -157,7 +132,7 @@ export function AuthorizedApps(): JSX.Element {
 									<div class={styles.confirmRevoke}>
 										<span class={styles.confirmText}>Revoke access?</span>
 										<Button
-											onClick={() => handleRevoke(auth.id)}
+											onClick={() => handleRevoke(auth)}
 											class={styles.dangerButton}
 											disabled={revoking === auth.id}
 										>

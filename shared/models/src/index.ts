@@ -34,3 +34,6 @@ export type { Status, TaskStats } from './planning';
 // Document models
 export { DocumentModel, EMPTY_DOCUMENT } from './DocumentModel';
 export type { SlateContent } from './DocumentModel';
+
+// Authorization models
+export { AuthorizationModel, AuthorizationsCollection } from './authorization';

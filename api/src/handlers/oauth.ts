@@ -505,16 +505,15 @@ export async function handleListAuthorizations(
 		[session.userId]
 	);
 
-	return context.json({
-		authorizations: result.rows.map(row => ({
-			id: row.id,
-			client_id: row.client_id,
-			device_name: row.device_name,
-			scopes: row.scopes,
-			created_at: row.created_at,
-			last_used_at: row.last_used_at,
-		})),
-	});
+	// Return array directly (SyncCollection expects array, not wrapped object)
+	return context.json(result.rows.map(row => ({
+		id: row.id,
+		client_id: row.client_id,
+		device_name: row.device_name,
+		scopes: row.scopes,
+		created_at: row.created_at,
+		last_used_at: row.last_used_at,
+	})));
 }
 
 /**
