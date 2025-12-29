@@ -102,6 +102,25 @@ Use this template for all work items:
 
 ## In Progress Epics
 
+### Projects Page
+**Spec/Documentation:** `shared/projects/`
+**Dependencies:** Authentication System
+**Status:** in progress
+
+**Goal:** Multi-project support with projects listing page and smart routing.
+
+**Tasks:**
+- [x] Database schema (projects table, epics.project_id)
+- [x] Project service in @doc-platform/db
+- [x] Project API endpoints (CRUD)
+- [x] ProjectsList UI component
+- [x] ProjectCard component
+- [x] Smart routing (cookie-based last project)
+- [ ] Delete project confirmation dialog
+- [ ] Project settings/rename UI
+
+---
+
 ### Staging Deployment
 **Spec/Documentation:** `infra/lib/`, `docs/tech-stack.md`
 **Dependencies:** Container Infrastructure (done)
