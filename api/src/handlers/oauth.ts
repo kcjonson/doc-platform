@@ -90,6 +90,31 @@ function getBaseUrl(context: Context): string {
 }
 
 /**
+ * Build a safe return URL for login redirect
+ * Uses relative path only, validates length and path prefix
+ */
+function buildSafeReturnUrl(requestUrl: string): string | null {
+	try {
+		const url = new URL(requestUrl);
+		const relativePath = url.pathname + url.search;
+
+		// Validate path starts with /oauth/ (only redirect back to OAuth endpoints)
+		if (!relativePath.startsWith('/oauth/')) {
+			return null;
+		}
+
+		// Validate length (2000 chars is a safe limit for URLs)
+		if (relativePath.length > 2000) {
+			return null;
+		}
+
+		return relativePath;
+	} catch {
+		return null;
+	}
+}
+
+/**
  * Authorization endpoint - GET shows consent, POST processes it
  * GET /oauth/authorize
  */
@@ -100,15 +125,21 @@ export async function handleAuthorizeGet(
 	// Validate session
 	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
 	if (!sessionId) {
-		// Redirect to login with return URL
-		const returnUrl = encodeURIComponent(context.req.url);
-		return context.redirect(`/login?next=${returnUrl}`);
+		// Redirect to login with return URL (relative path only)
+		const returnUrl = buildSafeReturnUrl(context.req.url);
+		if (!returnUrl) {
+			return context.redirect('/login');
+		}
+		return context.redirect(`/login?next=${encodeURIComponent(returnUrl)}`);
 	}
 
 	const session = await getSession(redis, sessionId);
 	if (!session) {
-		const returnUrl = encodeURIComponent(context.req.url);
-		return context.redirect(`/login?next=${returnUrl}`);
+		const returnUrl = buildSafeReturnUrl(context.req.url);
+		if (!returnUrl) {
+			return context.redirect('/login');
+		}
+		return context.redirect(`/login?next=${encodeURIComponent(returnUrl)}`);
 	}
 
 	// Parse query parameters
