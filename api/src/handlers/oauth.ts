@@ -134,11 +134,14 @@ export async function handleAuthorizeGet(
 		return context.json({ error: 'invalid_request', error_description: 'redirect_uri required' }, 400);
 	}
 
-	// Validate redirect_uri (must be localhost for public clients)
+	// Validate redirect_uri (must be http://localhost for public clients)
 	try {
 		const redirectUrl = new URL(redirectUri);
 		if (!['127.0.0.1', 'localhost'].includes(redirectUrl.hostname)) {
 			return context.json({ error: 'invalid_request', error_description: 'redirect_uri must be localhost' }, 400);
+		}
+		if (redirectUrl.protocol !== 'http:') {
+			return context.json({ error: 'invalid_request', error_description: 'redirect_uri must use http protocol' }, 400);
 		}
 	} catch {
 		return context.json({ error: 'invalid_request', error_description: 'Invalid redirect_uri' }, 400);
@@ -235,6 +238,7 @@ export async function handleAuthorizePost(
 	// If denied, redirect with error
 	if (action === 'deny') {
 		redirectUrl.searchParams.set('error', 'access_denied');
+		redirectUrl.searchParams.set('error_description', 'The resource owner denied the request');
 		if (state) redirectUrl.searchParams.set('state', state);
 		return context.redirect(redirectUrl.toString());
 	}
@@ -341,7 +345,7 @@ async function handleAuthorizationCodeGrant(
 	}
 
 	// Check expiration
-	if (new Date(authCode.expires_at) < new Date()) {
+	if (new Date(authCode.expires_at).getTime() < Date.now()) {
 		await query('DELETE FROM oauth_codes WHERE code = $1', [code]);
 		return context.json({ error: 'invalid_grant', error_description: 'Code expired' }, 400);
 	}
@@ -413,7 +417,7 @@ async function handleRefreshTokenGrant(
 	}
 
 	// Check if refresh token expired
-	if (new Date(token.expires_at) < new Date()) {
+	if (new Date(token.expires_at).getTime() < Date.now()) {
 		await query('DELETE FROM mcp_tokens WHERE id = $1', [token.id]);
 		return context.json({ error: 'invalid_grant', error_description: 'Refresh token expired' }, 400);
 	}

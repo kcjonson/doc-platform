@@ -83,10 +83,10 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 
 			// Get return URL from query params
 			function getReturnUrl() {
-				var params = new URLSearchParams(window.location.search);
-				var next = params.get('next');
-				// Validate: must start with / and not contain protocol
-				if (next && next.charAt(0) === '/' && next.indexOf('://') === -1) {
+				const params = new URLSearchParams(window.location.search);
+				const next = params.get('next');
+				// Validate: must start with / and not contain protocol or backslash
+				if (next && next.charAt(0) === '/' && next.indexOf('://') === -1 && next.indexOf('\\') === -1) {
 					return next;
 				}
 				return '/';
