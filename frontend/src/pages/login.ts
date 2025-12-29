@@ -81,6 +81,17 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 				errorEl.classList.add('hidden');
 			}
 
+			// Get return URL from query params
+			function getReturnUrl() {
+				var params = new URLSearchParams(window.location.search);
+				var next = params.get('next');
+				// Validate: must start with / and not contain protocol
+				if (next && next.charAt(0) === '/' && next.indexOf('://') === -1) {
+					return next;
+				}
+				return '/';
+			}
+
 			form.addEventListener('submit', function(e) {
 				e.preventDefault();
 				hideError();
@@ -104,7 +115,7 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 				})
 				.then(function(result) {
 					if (result.ok) {
-						window.location.href = '/';
+						window.location.href = getReturnUrl();
 					} else {
 						showError(result.data.error || 'Login failed');
 						submitBtn.disabled = false;

@@ -1,0 +1,169 @@
+import { useState } from 'preact/hooks';
+import type { JSX } from 'preact';
+import type { RouteProps } from '@doc-platform/router';
+import { Button } from '@doc-platform/ui';
+import styles from './OAuthConsent.module.css';
+
+// Scope descriptions for display
+const SCOPE_DESCRIPTIONS: Record<string, string> = {
+	'docs:read': 'Read your documents',
+	'docs:write': 'Create and modify documents',
+	'tasks:read': 'Read your tasks and epics',
+	'tasks:write': 'Create and update tasks',
+};
+
+// Client display names
+const CLIENT_NAMES: Record<string, string> = {
+	'claude-code': 'Claude Code',
+	'doc-platform-cli': 'Doc Platform CLI',
+};
+
+export function OAuthConsent(_props: RouteProps): JSX.Element {
+	const [deviceName, setDeviceName] = useState('');
+	const [submitting, setSubmitting] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	// Parse OAuth params from URL
+	const params = new URLSearchParams(window.location.search);
+	const clientId = params.get('client_id') || '';
+	const redirectUri = params.get('redirect_uri') || '';
+	const scope = params.get('scope') || '';
+	const state = params.get('state') || '';
+	const codeChallenge = params.get('code_challenge') || '';
+	const codeChallengeMethod = params.get('code_challenge_method') || '';
+
+	const clientName = CLIENT_NAMES[clientId] || clientId;
+	const scopes = scope.split(' ').filter(Boolean);
+
+	// Validate required params
+	if (!clientId || !redirectUri || !codeChallenge) {
+		return (
+			<div class={styles.container}>
+				<div class={styles.card}>
+					<div class={styles.error}>
+						Invalid authorization request. Missing required parameters.
+					</div>
+				</div>
+			</div>
+		);
+	}
+
+	const handleSubmit = async (action: 'approve' | 'deny'): Promise<void> => {
+		if (action === 'approve' && !deviceName.trim()) {
+			setError('Please enter a device name');
+			return;
+		}
+
+		setSubmitting(true);
+		setError(null);
+
+		try {
+			const formData = new URLSearchParams({
+				client_id: clientId,
+				redirect_uri: redirectUri,
+				scope,
+				state,
+				code_challenge: codeChallenge,
+				code_challenge_method: codeChallengeMethod,
+				device_name: deviceName.trim(),
+				action,
+			});
+
+			const response = await fetch('/oauth/authorize', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: formData.toString(),
+				credentials: 'same-origin',
+				redirect: 'manual',
+			});
+
+			// Handle redirect (success or denied)
+			if (response.type === 'opaqueredirect' || response.status === 0) {
+				// Browser followed redirect - reload to follow it
+				window.location.reload();
+				return;
+			}
+
+			// Check for redirect in response
+			const location = response.headers.get('Location');
+			if (location) {
+				window.location.href = location;
+				return;
+			}
+
+			// Handle error response
+			if (!response.ok) {
+				const data = await response.json();
+				setError(data.error_description || data.error || 'Authorization failed');
+			}
+		} catch {
+			setError('Network error. Please try again.');
+		} finally {
+			setSubmitting(false);
+		}
+	};
+
+	return (
+		<div class={styles.container}>
+			<div class={styles.card}>
+				<div class={styles.header}>
+					<h1 class={styles.title}>Authorize Application</h1>
+				</div>
+
+				{error && <div class={styles.error}>{error}</div>}
+
+				<div class={styles.clientInfo}>
+					<span class={styles.clientIcon}>🤖</span>
+					<div>
+						<div class={styles.clientName}>{clientName}</div>
+						<div class={styles.clientDesc}>wants access to your account</div>
+					</div>
+				</div>
+
+				<div class={styles.formGroup}>
+					<label class={styles.label} htmlFor="device_name">Device Name</label>
+					<input
+						type="text"
+						id="device_name"
+						class={styles.input}
+						placeholder="e.g., Work MacBook Pro"
+						value={deviceName}
+						onInput={(e) => setDeviceName((e.target as HTMLInputElement).value)}
+						maxLength={255}
+						autoComplete="off"
+						autoFocus
+					/>
+					<div class={styles.hint}>Give this device a name so you can identify it later</div>
+				</div>
+
+				<div class={styles.permissions}>
+					<h2 class={styles.permissionsTitle}>This will allow {clientName} to:</h2>
+					<ul class={styles.permissionsList}>
+						{scopes.map((s) => (
+							<li key={s} class={styles.permissionItem}>
+								{SCOPE_DESCRIPTIONS[s] || s}
+							</li>
+						))}
+					</ul>
+				</div>
+
+				<div class={styles.buttonGroup}>
+					<Button
+						onClick={() => handleSubmit('deny')}
+						class={styles.denyButton}
+						disabled={submitting}
+					>
+						Deny
+					</Button>
+					<Button
+						onClick={() => handleSubmit('approve')}
+						class={styles.approveButton}
+						disabled={submitting}
+					>
+						{submitting ? 'Authorizing...' : 'Approve'}
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
+}

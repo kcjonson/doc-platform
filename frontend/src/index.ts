@@ -8,13 +8,10 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
 import { Redis } from 'ioredis';
-import { authMiddleware, getSession, type AuthVariables, SESSION_COOKIE_NAME } from '@doc-platform/auth';
-import { getCookie } from 'hono/cookie';
-import { query, type User } from '@doc-platform/db';
+import { authMiddleware, type AuthVariables } from '@doc-platform/auth';
 import { renderLoginPage } from './pages/login.js';
 import { renderSignupPage } from './pages/signup.js';
 import { renderNotFoundPage } from './pages/not-found.js';
-import { renderOAuthConsentPage } from './pages/oauth-consent.js';
 
 // Load Vite manifest for asset paths
 interface ManifestEntry {
@@ -81,56 +78,6 @@ app.get('/signup', (c) => {
 
 // API URL for proxying
 const apiUrl = process.env.API_URL || 'http://localhost:3001';
-
-// OAuth consent page (requires auth - handled inline)
-app.get('/oauth/consent', async (c) => {
-	// Check session
-	const sessionId = getCookie(c, SESSION_COOKIE_NAME);
-	if (!sessionId) {
-		const returnUrl = encodeURIComponent(c.req.url);
-		return c.redirect(`/login?next=${returnUrl}`);
-	}
-
-	const session = await getSession(redis, sessionId);
-	if (!session) {
-		const returnUrl = encodeURIComponent(c.req.url);
-		return c.redirect(`/login?next=${returnUrl}`);
-	}
-
-	// Get user info
-	const userResult = await query<User>(
-		'SELECT * FROM users WHERE id = $1',
-		[session.userId]
-	);
-	const user = userResult.rows[0];
-	if (!user) {
-		return c.redirect('/login');
-	}
-
-	const displayName = user.first_name && user.last_name
-		? `${user.first_name} ${user.last_name}`
-		: user.username || user.email;
-
-	// Get OAuth params from query string
-	const url = new URL(c.req.url);
-	const clientId = url.searchParams.get('client_id') || '';
-	const redirectUri = url.searchParams.get('redirect_uri') || '';
-	const scope = url.searchParams.get('scope') || '';
-	const state = url.searchParams.get('state') || '';
-	const codeChallenge = url.searchParams.get('code_challenge') || '';
-	const codeChallengeMethod = url.searchParams.get('code_challenge_method') || '';
-
-	return c.html(renderOAuthConsentPage({
-		clientId,
-		redirectUri,
-		scope,
-		state,
-		codeChallenge,
-		codeChallengeMethod,
-		userDisplayName: displayName,
-		sharedCssPath,
-	}));
-});
 
 // Proxy OAuth authorize POST to API (form submission)
 app.post('/oauth/authorize', async (c) => {
@@ -318,8 +265,13 @@ app.use(
 	authMiddleware(redis, {
 		excludePaths: ['/health', '/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me', sharedCssPath, loginCssPath, signupCssPath, notFoundCssPath].filter(Boolean) as string[],
 		onUnauthenticated: (requestUrl) => {
-			// Redirect to login using the request's origin
-			return Response.redirect(new URL('/login', requestUrl.origin).toString(), 302);
+			// Redirect to login with return URL preserved
+			const loginUrl = new URL('/login', requestUrl.origin);
+			// Only add next param for non-root paths
+			if (requestUrl.pathname !== '/') {
+				loginUrl.searchParams.set('next', requestUrl.pathname + requestUrl.search);
+			}
+			return Response.redirect(loginUrl.toString(), 302);
 		},
 	})
 );
