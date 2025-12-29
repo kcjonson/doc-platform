@@ -82,6 +82,8 @@ app.use(
 		rules: [
 			{ path: '/api/auth/login', config: RATE_LIMIT_CONFIGS.login },
 			{ path: '/api/auth/signup', config: RATE_LIMIT_CONFIGS.signup },
+			{ path: '/oauth/token', config: RATE_LIMIT_CONFIGS.oauthToken },
+			{ path: '/oauth/authorize', config: RATE_LIMIT_CONFIGS.oauthAuthorize },
 		],
 		defaultLimit: RATE_LIMIT_CONFIGS.api,
 		excludePaths: ['/health', '/api/health'],

@@ -81,15 +81,24 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 				errorEl.classList.add('hidden');
 			}
 
-			// Get return URL from query params
+			// Get return URL from query params (with robust open redirect protection)
 			function getReturnUrl() {
 				const params = new URLSearchParams(window.location.search);
 				const next = params.get('next');
-				// Validate: must start with / and not contain protocol or backslash
-				if (next && next.charAt(0) === '/' && next.indexOf('://') === -1 && next.indexOf('\\') === -1) {
-					return next;
+				if (!next) return '/';
+
+				try {
+					// Parse relative URL with current origin as base
+					const url = new URL(next, window.location.origin);
+					// Only allow same-origin paths
+					if (url.origin !== window.location.origin) {
+						return '/';
+					}
+					// Return path + query + hash (prevents protocol/host manipulation)
+					return url.pathname + url.search + url.hash;
+				} catch {
+					return '/';
 				}
-				return '/';
 			}
 
 			form.addEventListener('submit', function(e) {
