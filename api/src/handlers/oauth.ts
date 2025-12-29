@@ -7,7 +7,7 @@ import { getCookie } from 'hono/cookie';
 import type { Redis } from 'ioredis';
 import { createHash, randomBytes } from 'node:crypto';
 import { getSession, SESSION_COOKIE_NAME } from '@doc-platform/auth';
-import { query, type User } from '@doc-platform/db';
+import { query, transaction, type User } from '@doc-platform/db';
 
 // Constants
 const ACCESS_TOKEN_TTL_SECONDS = 3600; // 1 hour
@@ -392,9 +392,6 @@ async function handleAuthorizationCodeGrant(
 		return context.json({ error: 'invalid_grant', error_description: 'PKCE verification failed' }, 400);
 	}
 
-	// Delete the used code
-	await query('DELETE FROM oauth_codes WHERE code = $1', [code]);
-
 	// Generate tokens
 	const accessToken = generateToken();
 	const refreshToken = generateToken();
@@ -402,12 +399,16 @@ async function handleAuthorizationCodeGrant(
 	const refreshTokenHash = hashToken(refreshToken);
 	const refreshExpiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_SECONDS * 1000);
 
-	// Store tokens
-	await query(
-		`INSERT INTO mcp_tokens (user_id, client_id, device_name, access_token_hash, refresh_token_hash, scopes, expires_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		[authCode.user_id, authCode.client_id, authCode.device_name, accessTokenHash, refreshTokenHash, authCode.scopes, refreshExpiresAt]
-	);
+	// Use transaction to ensure atomicity: code deletion and token creation
+	// either both succeed or both fail (prevents orphaned state on crash)
+	await transaction(async (client) => {
+		await client.query('DELETE FROM oauth_codes WHERE code = $1', [code]);
+		await client.query(
+			`INSERT INTO mcp_tokens (user_id, client_id, device_name, access_token_hash, refresh_token_hash, scopes, expires_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			[authCode.user_id, authCode.client_id, authCode.device_name, accessTokenHash, refreshTokenHash, authCode.scopes, refreshExpiresAt]
+		);
+	});
 
 	return context.json({
 		access_token: accessToken,
