@@ -2,7 +2,7 @@
  * Transform functions: snake_case DB → camelCase API
  */
 
-import type { Epic as DbEpic, Task as DbTask, ProgressNote as DbProgressNote, Project as DbProject, ProjectResponse } from '@doc-platform/db';
+import type { Epic as DbEpic, Task as DbTask, ProgressNote as DbProgressNote, ProjectResponse } from '@doc-platform/db';
 import type { ApiEpic, ApiTask, ApiProgressNote, ApiProject } from './types.js';
 
 export function dbEpicToApi(epic: DbEpic): ApiEpic {
@@ -43,17 +43,6 @@ export function dbProgressNoteToApi(note: DbProgressNote): ApiProgressNote {
 		note: note.note,
 		createdBy: note.created_by ?? undefined,
 		createdAt: note.created_at.toISOString(),
-	};
-}
-
-export function dbProjectToApi(project: DbProject): ApiProject {
-	return {
-		id: project.id,
-		name: project.name,
-		description: project.description ?? undefined,
-		ownerId: project.owner_id,
-		createdAt: project.created_at.toISOString(),
-		updatedAt: project.updated_at.toISOString(),
 	};
 }
 

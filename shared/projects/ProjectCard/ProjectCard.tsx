@@ -47,7 +47,7 @@ export function ProjectCard({ project, onClick }: ProjectCardProps): JSX.Element
 			)}
 			<div class={styles.footer}>
 				<Text variant="secondary" size="small">
-					Updated {formatRelativeTime(project.updatedAt)}
+					Last updated {formatRelativeTime(project.updatedAt)}
 				</Text>
 			</div>
 		</Card>

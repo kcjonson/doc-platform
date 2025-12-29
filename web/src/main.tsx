@@ -32,16 +32,22 @@ function getCookie(name: string): string | null {
 	return null;
 }
 
+// UUID validation for cookie values
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isValidUUID(id: string): boolean {
+	return UUID_REGEX.test(id);
+}
+
 // Smart redirect component for root path
 function RootRedirect(_props: RouteProps): null {
 	// Check for last project cookie
 	const lastProjectId = getCookie('lastProjectId');
 
-	if (lastProjectId) {
-		// User has a recent project - go there
+	if (lastProjectId && isValidUUID(lastProjectId)) {
+		// User has a valid recent project - go there
 		navigate(`/projects/${lastProjectId}/planning`);
 	} else {
-		// No recent project - show projects list
+		// No recent project or invalid cookie - show projects list
 		navigate('/projects');
 	}
 
