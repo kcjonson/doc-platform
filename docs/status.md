@@ -127,7 +127,6 @@ Use this template for all work items:
   - [x] GitHub Secrets for staging credentials (ADMIN_USERNAME/PASSWORD/EMAIL)
   - [x] Local seed config (seed.local.json, gitignored)
   - [x] CD workflow runs seed after migrations
-  - [x] docker-compose db-init service for local dev
 - [ ] Configure GitHub secret (AWS_DEPLOY_ROLE_ARN)
 - [ ] Mock auth middleware (bypass for staging)
 
