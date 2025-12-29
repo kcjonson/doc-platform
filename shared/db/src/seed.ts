@@ -1,0 +1,193 @@
+/**
+ * Admin account seeding script
+ *
+ * Standalone script - no package imports to avoid circular dependencies.
+ * Run with: pnpm --filter @doc-platform/db seed
+ */
+
+import fs from 'node:fs';
+import path from 'node:path';
+import pg from 'pg';
+import bcrypt from 'bcrypt';
+
+const { Pool } = pg;
+
+const BCRYPT_COST = 12;
+const MIN_PASSWORD_LENGTH = 12;
+
+interface AdminConfig {
+	username: string;
+	password: string;
+	email: string;
+	firstName: string;
+	lastName: string;
+}
+
+interface LocalConfig {
+	admin: {
+		username: string;
+		password: string;
+		email: string;
+		firstName?: string;
+		lastName?: string;
+	};
+}
+
+function isValidEmail(email: string): boolean {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function isValidUsername(username: string): boolean {
+	return /^[a-zA-Z0-9_]{3,30}$/.test(username);
+}
+
+function isValidPassword(password: string): boolean {
+	return (
+		password.length >= MIN_PASSWORD_LENGTH &&
+		/[A-Z]/.test(password) &&
+		/[a-z]/.test(password) &&
+		/[0-9]/.test(password) &&
+		/[^A-Za-z0-9]/.test(password)
+	);
+}
+
+function getDatabaseUrl(): string {
+	if (process.env.DATABASE_URL) {
+		return process.env.DATABASE_URL;
+	}
+
+	const host = process.env.DB_HOST;
+	const port = process.env.DB_PORT || '5432';
+	const name = process.env.DB_NAME;
+	const user = process.env.DB_USER;
+	const password = process.env.DB_PASSWORD;
+
+	if (host && name && user && password) {
+		return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${encodeURIComponent(host)}:${port}/${encodeURIComponent(name)}?sslmode=no-verify`;
+	}
+
+	console.error('DATABASE_URL or DB_HOST/DB_NAME/DB_USER/DB_PASSWORD required');
+	process.exit(1);
+}
+
+function getAdminConfig(): AdminConfig | null {
+	if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD && process.env.ADMIN_EMAIL) {
+		console.log('Using admin config from environment variables');
+		return {
+			username: process.env.ADMIN_USERNAME,
+			password: process.env.ADMIN_PASSWORD,
+			email: process.env.ADMIN_EMAIL,
+			firstName: process.env.ADMIN_FIRST_NAME || 'Admin',
+			lastName: process.env.ADMIN_LAST_NAME || 'User',
+		};
+	}
+
+	const configPaths = [
+		path.join(import.meta.dirname, '../../../seed.local.json'),
+		path.join(process.cwd(), 'seed.local.json'),
+	];
+
+	for (const configPath of configPaths) {
+		if (fs.existsSync(configPath)) {
+			try {
+				const config = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as LocalConfig;
+				if (config.admin?.username && config.admin?.password && config.admin?.email) {
+					console.log(`Using admin config from ${configPath}`);
+					return {
+						username: config.admin.username,
+						password: config.admin.password,
+						email: config.admin.email,
+						firstName: config.admin.firstName || 'Admin',
+						lastName: config.admin.lastName || 'User',
+					};
+				}
+			} catch {
+				console.warn(`Failed to parse ${configPath}`);
+			}
+		}
+	}
+
+	return null;
+}
+
+async function seed(): Promise<void> {
+	const adminConfig = getAdminConfig();
+
+	if (!adminConfig) {
+		console.log('No admin configuration found. Skipping seed.');
+		return;
+	}
+
+	if (!isValidUsername(adminConfig.username)) {
+		console.error('Invalid username: must be 3-30 chars, alphanumeric and underscores');
+		process.exit(1);
+	}
+
+	if (!isValidEmail(adminConfig.email)) {
+		console.error('Invalid email address');
+		process.exit(1);
+	}
+
+	if (!isValidPassword(adminConfig.password)) {
+		console.error('Invalid password: min 12 chars, must have uppercase, lowercase, digit, special char');
+		process.exit(1);
+	}
+
+	const pool = new Pool({ connectionString: getDatabaseUrl() });
+
+	try {
+		const tableCheck = await pool.query(`
+			SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users') AS users_exists,
+			       EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'user_passwords') AS passwords_exists
+		`);
+
+		if (!tableCheck.rows[0].users_exists || !tableCheck.rows[0].passwords_exists) {
+			console.log('Required tables do not exist. Run migrations first.');
+			return;
+		}
+
+		const existing = await pool.query(
+			'SELECT id, username FROM users WHERE username = $1 OR email = $2',
+			[adminConfig.username.toLowerCase(), adminConfig.email.toLowerCase()]
+		);
+
+		if (existing.rows[0]) {
+			console.log(`Admin user already exists: ${existing.rows[0].username}`);
+			return;
+		}
+
+		console.log('Creating admin account...');
+		const passwordHash = await bcrypt.hash(adminConfig.password, BCRYPT_COST);
+
+		const client = await pool.connect();
+		try {
+			await client.query('BEGIN');
+
+			const userResult = await client.query<{ id: string }>(
+				`INSERT INTO users (username, first_name, last_name, email, email_verified)
+				 VALUES ($1, $2, $3, $4, true) RETURNING id`,
+				[adminConfig.username.toLowerCase(), adminConfig.firstName, adminConfig.lastName, adminConfig.email.toLowerCase()]
+			);
+
+			await client.query(
+				'INSERT INTO user_passwords (user_id, password_hash) VALUES ($1, $2)',
+				[userResult.rows[0]!.id, passwordHash]
+			);
+
+			await client.query('COMMIT');
+			console.log(`Created admin user: ${adminConfig.username}`);
+		} catch (err) {
+			await client.query('ROLLBACK');
+			throw err;
+		} finally {
+			client.release();
+		}
+	} finally {
+		await pool.end();
+	}
+}
+
+seed().catch((err: unknown) => {
+	console.error('Seed failed:', err instanceof Error ? err.message : 'Unknown error');
+	process.exit(1);
+});

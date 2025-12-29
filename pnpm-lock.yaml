@@ -212,10 +212,16 @@ importers:
 
   shared/db:
     dependencies:
+      bcrypt:
+        specifier: ^6.0.0
+        version: 6.0.0
       pg:
         specifier: ^8.16.3
         version: 8.16.3
     devDependencies:
+      '@types/bcrypt':
+        specifier: ^6.0.0
+        version: 6.0.0
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.3
