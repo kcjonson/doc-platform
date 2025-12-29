@@ -3,6 +3,7 @@ import type { JSX } from 'preact';
 import type { RouteProps } from '@doc-platform/router';
 import { Button, Text } from '@doc-platform/ui';
 import { useAuth } from '@shared/planning';
+import { AuthorizedApps } from './AuthorizedApps';
 import styles from './UserSettings.module.css';
 
 export function UserSettings(_props: RouteProps): JSX.Element {
@@ -129,6 +130,8 @@ export function UserSettings(_props: RouteProps): JSX.Element {
 							</Button>
 						</div>
 					</div>
+
+					<AuthorizedApps />
 				</div>
 			</div>
 		</div>

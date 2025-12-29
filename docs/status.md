@@ -315,11 +315,11 @@ Use this template for all work items:
   - [x] PKCE validation (code_challenge/code_verifier)
   - [x] Token refresh flow
   - [x] MCP auth middleware (validate Bearer token, update last_used_at)
-- [ ] Authorized Apps UI
+- [x] Authorized Apps UI
   - [x] GET /api/oauth/authorizations endpoint
   - [x] DELETE /api/oauth/authorizations/:id endpoint
-  - [ ] Settings page section (frontend component)
-  - [ ] Revoke confirmation dialog
+  - [x] Settings page section (frontend component)
+  - [x] Revoke confirmation dialog
 - [ ] Document tools (v2)
   - [ ] get_spec, search_docs
 - [ ] CLI tool (v2)
