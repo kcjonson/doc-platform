@@ -79,6 +79,14 @@ app.get('/signup', (c) => {
 // API URL for proxying
 const apiUrl = process.env.API_URL || 'http://localhost:3001';
 
+// =============================================================================
+// OAuth Proxy Routes (for local development only)
+// =============================================================================
+// In production/docker-compose: nginx routes /oauth/* directly to API service
+// In local development: these proxy routes forward OAuth requests to the API
+// This allows running `pnpm dev` without needing the full docker-compose stack
+// =============================================================================
+
 // Proxy OAuth authorize POST to API (form submission)
 app.post('/oauth/authorize', async (c) => {
 	const cookie = c.req.header('Cookie') || '';
