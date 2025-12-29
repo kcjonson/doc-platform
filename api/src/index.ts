@@ -40,6 +40,13 @@ import {
 	handleListTaskProgress,
 	handleCreateTaskProgress,
 } from './handlers/progress.js';
+import {
+	handleListProjects,
+	handleGetProject,
+	handleCreateProject,
+	handleUpdateProject,
+	handleDeleteProject,
+} from './handlers/projects.js';
 
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -95,6 +102,13 @@ app.post('/api/auth/login', (context) => handleLogin(context, redis));
 app.post('/api/auth/signup', (context) => handleSignup(context, redis));
 app.post('/api/auth/logout', (context) => handleLogout(context, redis));
 app.get('/api/auth/me', (context) => handleGetMe(context, redis));
+
+// Project routes (user-scoped, not project-scoped)
+app.get('/api/projects', (context) => handleListProjects(context, redis));
+app.get('/api/projects/:id', (context) => handleGetProject(context, redis));
+app.post('/api/projects', (context) => handleCreateProject(context, redis));
+app.put('/api/projects/:id', (context) => handleUpdateProject(context, redis));
+app.delete('/api/projects/:id', (context) => handleDeleteProject(context, redis));
 
 // Project-scoped epic routes
 app.get('/api/projects/:projectId/epics', handleListEpics);
