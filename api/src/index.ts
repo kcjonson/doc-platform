@@ -135,6 +135,13 @@ app.post('/api/projects', (context) => handleCreateProject(context, redis));
 app.put('/api/projects/:id', (context) => handleUpdateProject(context, redis));
 app.delete('/api/projects/:id', (context) => handleDeleteProject(context, redis));
 
+// Project routes (user-scoped, not project-scoped)
+app.get('/api/projects', (context) => handleListProjects(context, redis));
+app.get('/api/projects/:id', (context) => handleGetProject(context, redis));
+app.post('/api/projects', (context) => handleCreateProject(context, redis));
+app.put('/api/projects/:id', (context) => handleUpdateProject(context, redis));
+app.delete('/api/projects/:id', (context) => handleDeleteProject(context, redis));
+
 // Project-scoped epic routes
 app.get('/api/projects/:projectId/epics', handleListEpics);
 app.get('/api/projects/:projectId/epics/current', handleGetCurrentWork);
