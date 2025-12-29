@@ -193,6 +193,11 @@ export class DocPlatformStack extends cdk.Stack {
 			ec2.Port.tcp(5432),
 			'Allow API to PostgreSQL'
 		);
+		dbSecurityGroup.addIngressRule(
+			mcpSecurityGroup,
+			ec2.Port.tcp(5432),
+			'Allow MCP to PostgreSQL'
+		);
 
 		// Allow services to reach Redis
 		redisSecurityGroup.addIngressRule(
@@ -240,6 +245,13 @@ export class DocPlatformStack extends cdk.Stack {
 				DB_PASSWORD: ecs.Secret.fromSecretsManager(dbCredentials, 'password'),
 			},
 			portMappings: [{ containerPort: 3001 }],
+			healthCheck: {
+				command: ['CMD-SHELL', 'node -e "fetch(\'http://localhost:3001/api/health\').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"'],
+				interval: cdk.Duration.seconds(30),
+				timeout: cdk.Duration.seconds(5),
+				retries: 3,
+				startPeriod: cdk.Duration.seconds(60),
+			},
 		});
 
 		const apiService = new ecs.FargateService(this, 'ApiService', {
@@ -249,6 +261,10 @@ export class DocPlatformStack extends cdk.Stack {
 			securityGroups: [apiSecurityGroup],
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'api',
+			circuitBreaker: { enable: true, rollback: true },
+			minHealthyPercent: 0,
+			maxHealthyPercent: 200,
+			healthCheckGracePeriod: cdk.Duration.seconds(60),
 		});
 
 		// ===========================================
@@ -270,6 +286,13 @@ export class DocPlatformStack extends cdk.Stack {
 				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
 			},
 			portMappings: [{ containerPort: 3000 }],
+			healthCheck: {
+				command: ['CMD-SHELL', 'node -e "fetch(\'http://localhost:3000/health\').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"'],
+				interval: cdk.Duration.seconds(30),
+				timeout: cdk.Duration.seconds(5),
+				retries: 3,
+				startPeriod: cdk.Duration.seconds(60),
+			},
 		});
 
 		const frontendService = new ecs.FargateService(this, 'FrontendService', {
@@ -279,6 +302,10 @@ export class DocPlatformStack extends cdk.Stack {
 			securityGroups: [frontendSecurityGroup],
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'frontend',
+			circuitBreaker: { enable: true, rollback: true },
+			minHealthyPercent: 0,
+			maxHealthyPercent: 200,
+			healthCheckGracePeriod: cdk.Duration.seconds(60),
 		});
 
 		// ===========================================
@@ -304,10 +331,25 @@ export class DocPlatformStack extends cdk.Stack {
 			environment: {
 				PORT: '3002',
 				NODE_ENV: 'production',
-				// MCP calls API via internal URL
-				API_URL: 'http://api:3001',
+				// MCP calls API via ALB
+				API_URL: `http://${alb.loadBalancerDnsName}`,
+				// Database connection for direct DB access
+				DB_HOST: database.instanceEndpoint.hostname,
+				DB_PORT: database.instanceEndpoint.port.toString(),
+				DB_NAME: 'doc_platform',
+				DB_USER: 'postgres',
+			},
+			secrets: {
+				DB_PASSWORD: ecs.Secret.fromSecretsManager(dbCredentials, 'password'),
 			},
 			portMappings: [{ containerPort: 3002 }],
+			healthCheck: {
+				command: ['CMD-SHELL', 'node -e "fetch(\'http://localhost:3002/health\').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"'],
+				interval: cdk.Duration.seconds(30),
+				timeout: cdk.Duration.seconds(5),
+				retries: 3,
+				startPeriod: cdk.Duration.seconds(60),
+			},
 		});
 
 		new ecs.FargateService(this, 'McpService', {
@@ -317,6 +359,9 @@ export class DocPlatformStack extends cdk.Stack {
 			securityGroups: [mcpSecurityGroup],
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'mcp',
+			circuitBreaker: { enable: true, rollback: true },
+			minHealthyPercent: 0,
+			maxHealthyPercent: 200,
 		});
 
 		// ===========================================
