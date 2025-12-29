@@ -63,7 +63,6 @@ jobs:
             ${{ steps.prefix.outputs.value }}/api:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: false
 
       - name: Build Frontend image
         uses: docker/build-push-action@v6
@@ -76,7 +75,6 @@ jobs:
             ${{ steps.prefix.outputs.value }}/frontend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: false
 
       - name: Build MCP image
         uses: docker/build-push-action@v6
@@ -89,4 +87,3 @@ jobs:
             ${{ steps.prefix.outputs.value }}/mcp:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          provenance: false
