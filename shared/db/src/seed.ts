@@ -7,9 +7,9 @@
  * 2. Local config file at project root (for local development)
  *
  * Environment variables:
- * - ADMIN_USERNAME (required)
- * - ADMIN_PASSWORD (required)
- * - ADMIN_EMAIL (required)
+ * - ADMIN_USERNAME (required, 3-30 chars, alphanumeric + underscores, will be lowercased)
+ * - ADMIN_PASSWORD (required, min 12 chars, must have uppercase, lowercase, digit, special char)
+ * - ADMIN_EMAIL (required, valid email format, will be lowercased)
  * - ADMIN_FIRST_NAME (optional, defaults to "Admin")
  * - ADMIN_LAST_NAME (optional, defaults to "User")
  *
@@ -28,7 +28,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import pg from 'pg';
-import { hashPassword } from '@doc-platform/auth';
+import { hashPassword, validatePassword } from '@doc-platform/auth';
 
 const { Pool } = pg;
 
@@ -48,6 +48,20 @@ interface LocalConfig {
 		firstName?: string;
 		lastName?: string;
 	};
+}
+
+/**
+ * Validate email format
+ */
+function isValidEmail(email: string): boolean {
+	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+/**
+ * Validate username: 3-30 chars, alphanumeric and underscores only
+ */
+function isValidUsername(username: string): boolean {
+	return /^[a-zA-Z0-9_]{3,30}$/.test(username);
 }
 
 function getDatabaseUrl(): string {
@@ -137,20 +151,46 @@ async function seed(): Promise<void> {
 		return;
 	}
 
+	// Validate input before proceeding
+	const validationErrors: string[] = [];
+
+	if (!isValidUsername(adminConfig.username)) {
+		validationErrors.push('Username must be 3-30 characters, alphanumeric and underscores only');
+	}
+
+	if (!isValidEmail(adminConfig.email)) {
+		validationErrors.push('Email address is not valid');
+	}
+
+	const passwordValidation = validatePassword(adminConfig.password);
+	if (!passwordValidation.valid) {
+		for (const error of passwordValidation.errors) {
+			validationErrors.push(error.message);
+		}
+	}
+
+	if (validationErrors.length > 0) {
+		console.error('Invalid admin configuration:');
+		for (const error of validationErrors) {
+			console.error(`  - ${error}`);
+		}
+		process.exit(1);
+	}
+
 	const databaseUrl = getDatabaseUrl();
 	const pool = new Pool({ connectionString: databaseUrl });
 
 	try {
-		// Check if the users table exists (migrations may not have run yet)
+		// Check if the required tables exist (migrations may not have run yet)
 		const tableCheck = await pool.query(`
-			SELECT EXISTS (
-				SELECT FROM information_schema.tables
-				WHERE table_name = 'users'
-			) AS exists
+			SELECT
+				(SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')) AS users_exists,
+				(SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'user_passwords')) AS passwords_exists
 		`);
 
-		if (!tableCheck.rows[0].exists) {
-			console.log('Users table does not exist. Run migrations first.');
+		const { users_exists, passwords_exists } = tableCheck.rows[0];
+		if (!users_exists || !passwords_exists) {
+			console.log('Required tables do not exist. Run migrations first.');
 			return;
 		}
 
@@ -214,7 +254,9 @@ async function seed(): Promise<void> {
 	}
 }
 
-seed().catch((err) => {
-	console.error('Seed failed:', err);
+seed().catch((err: unknown) => {
+	// Sanitize error output to avoid leaking sensitive data (passwords, connection strings)
+	const message = err instanceof Error ? err.message : 'Unknown error';
+	console.error('Seed failed:', message);
 	process.exit(1);
 });
