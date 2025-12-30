@@ -339,6 +339,11 @@ app.use(
 	})
 );
 
+// Serve public static files without auth (favicon, robots.txt, version.txt)
+app.get('/favicon.svg', serveStatic({ root: './static', path: 'favicon.svg' }));
+app.get('/robots.txt', serveStatic({ root: './static', path: 'robots.txt' }));
+app.get('/version.txt', serveStatic({ root: './static', path: 'version.txt' }));
+
 // Auth middleware for all other routes
 // Unauthenticated users see 404 for any non-public path
 // They can find login from the 404 page or by going to /
