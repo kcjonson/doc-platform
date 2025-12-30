@@ -330,22 +330,16 @@ app.get('/api/auth/me', async (c) => {
 	}
 });
 
-// Serve static files from /static directory BEFORE auth middleware
-// This ensures CSS, JS, and other assets are served without auth
+// Serve SSG assets (CSS for login, signup, home, 404) without auth
+// These must be accessible for unauthenticated pages to render correctly
 app.use(
-	'/*',
+	'/assets/ssg/*',
 	serveStatic({
 		root: './static',
-		onNotFound: (path) => {
-			// For non-file requests (no extension), fall through to SPA handler
-			if (!path.includes('.')) {
-				return;
-			}
-		},
 	})
 );
 
-// Auth middleware for all other routes (after static files)
+// Auth middleware for all other routes
 app.use(
 	'*',
 	authMiddleware(redis, {
@@ -358,6 +352,20 @@ app.use(
 				loginUrl.searchParams.set('next', requestUrl.pathname + requestUrl.search);
 			}
 			return Response.redirect(loginUrl.toString(), 302);
+		},
+	})
+);
+
+// Serve remaining static files (SPA bundle, etc.) - requires auth
+app.use(
+	'/*',
+	serveStatic({
+		root: './static',
+		onNotFound: (path) => {
+			// For non-file requests (no extension), fall through to SPA handler
+			if (!path.includes('.')) {
+				return;
+			}
 		},
 	})
 );
