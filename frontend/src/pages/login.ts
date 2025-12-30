@@ -60,10 +60,6 @@ export function renderLoginPage(options: LoginPageOptions = {}): string {
 			<button type="submit" id="submit-btn">Sign In</button>
 		</form>
 
-		<div class="signup-link">
-			Don't have an account? <a href="/signup">Create one</a>
-		</div>
-
 	</div>
 
 	<script>
