@@ -16,7 +16,7 @@ function setCookie(name: string, value: string, days: number): void {
 }
 
 export function ProjectsList(_props: RouteProps): JSX.Element {
-	const { user, loading: authLoading, logout } = useAuth();
+	const { user, loading: authLoading } = useAuth();
 	const [projects, setProjects] = useState<Project[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -81,12 +81,6 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 		}
 	}
 
-	async function handleLogoutClick(): Promise<void> {
-		await logout();
-		window.location.href = '/login';
-	}
-
-
 	if (authLoading || loading) {
 		return (
 			<div class={styles.container}>
@@ -112,7 +106,6 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 			<AppHeader
 				projectName="Projects"
 				user={user ? { displayName: user.displayName, email: user.email } : undefined}
-				onLogoutClick={handleLogoutClick}
 			/>
 
 			<main class={styles.main}>

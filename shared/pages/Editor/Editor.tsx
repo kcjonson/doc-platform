@@ -17,7 +17,7 @@ function formatProjectName(id: string): string {
 export function Editor(props: RouteProps): JSX.Element {
 	const projectId = props.params.projectId || 'demo';
 	const projectName = formatProjectName(projectId);
-	const { user, loading: authLoading, logout } = useAuth();
+	const { user, loading: authLoading } = useAuth();
 
 	// Document model - source of truth for editor content
 	// useMemo ensures the model persists across re-renders
@@ -32,11 +32,6 @@ export function Editor(props: RouteProps): JSX.Element {
 		{ id: 'planning', label: 'Planning', href: `/projects/${projectId}/planning` },
 		{ id: 'pages', label: 'Pages', href: `/projects/${projectId}/pages` },
 	], [projectId]);
-
-	async function handleLogoutClick(): Promise<void> {
-		await logout();
-		window.location.href = '/login';
-	}
 
 	if (authLoading) {
 		return (
@@ -55,7 +50,6 @@ export function Editor(props: RouteProps): JSX.Element {
 				navTabs={navTabs}
 				activeTab="pages"
 				user={user ? { displayName: user.displayName, email: user.email } : undefined}
-				onLogoutClick={handleLogoutClick}
 			/>
 			<div class={styles.body}>
 				<FileBrowser class={styles.sidebar} />

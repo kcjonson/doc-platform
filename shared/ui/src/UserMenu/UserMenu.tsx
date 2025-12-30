@@ -7,8 +7,6 @@ export interface UserMenuProps {
 	displayName: string;
 	/** User's email (optional, shown in menu header) */
 	email?: string;
-	/** Called when Logout is clicked */
-	onLogoutClick?: () => void;
 	/** Additional CSS class */
 	class?: string;
 }
@@ -33,7 +31,6 @@ type MenuItemId = typeof MENU_ITEMS[number];
 export function UserMenu({
 	displayName,
 	email,
-	onLogoutClick,
 	class: className,
 }: UserMenuProps): JSX.Element {
 	const [isOpen, setIsOpen] = useState(false);
@@ -47,10 +44,14 @@ export function UserMenu({
 		setIsOpen((prev) => !prev);
 	}, []);
 
-	const handleLogoutClick = useCallback((): void => {
+	const handleLogoutClick = useCallback(async (): Promise<void> => {
 		setIsOpen(false);
-		onLogoutClick?.();
-	}, [onLogoutClick]);
+		try {
+			await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+		} finally {
+			window.location.href = '/login';
+		}
+	}, []);
 
 	const activateItem = useCallback((index: number): void => {
 		const item = MENU_ITEMS[index];
