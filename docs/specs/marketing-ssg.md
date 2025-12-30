@@ -91,77 +91,104 @@ ssg/                               # New package
    - Render each page component to HTML string via `preact-render-to-string`
    - Inject CSS links and output `.html` files
 
-### PageShell Component
+### Document Shell (Template Literal)
 
-Wraps all SSG pages with consistent HTML structure:
+The HTML document structure is static boilerplate - use a template literal, not Preact:
 
-```tsx
-interface PageShellProps {
+```ts
+// ssg/src/shell.ts
+interface PageOptions {
   title: string;
   description?: string;
-  cssFiles: string[];      // ['/assets/common.ABC.css', '/assets/login.DEF.css']
-  children: ComponentChildren;
-  scripts?: ComponentChildren;  // Inline scripts for interactivity
+  cssFiles: string[];    // ['/assets/common.ABC.css', '/assets/login.DEF.css']
+  body: string;          // Preact-rendered HTML fragment
+  scripts?: string;      // Plain JS string for interactivity
 }
 
-function PageShell({ title, cssFiles, children, scripts }: PageShellProps) {
-  return (
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>{title}</title>
-        {cssFiles.map(href => <link rel="stylesheet" href={href} />)}
-      </head>
-      <body>
-        {children}
-        {scripts}
-      </body>
-    </html>
-  );
+export function renderDocument(options: PageOptions): string {
+  const { title, description, cssFiles, body, scripts } = options;
+
+  const cssLinks = cssFiles
+    .map(href => `<link rel="stylesheet" href="${href}">`)
+    .join('\n    ');
+
+  const metaDesc = description
+    ? `<meta name="description" content="${escapeHtml(description)}">`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  ${metaDesc}
+  <title>${escapeHtml(title)}</title>
+  ${cssLinks}
+</head>
+<body>
+  ${body}
+  ${scripts ? `<script>${scripts}</script>` : ''}
+</body>
+</html>`;
 }
 ```
 
-### Page Component Example
+### Page Content Components (Preact)
+
+Preact renders only the body content as a fragment:
 
 ```tsx
 // ssg/src/pages/login.tsx
-import { PageShell } from '../components/PageShell';
-
-interface LoginPageProps {
-  commonCss: string;
-  pageCss: string;
-}
-
-export function LoginPage({ commonCss, pageCss }: LoginPageProps) {
+export function LoginContent() {
   return (
-    <PageShell
-      title="Login - Doc Platform"
-      cssFiles={[commonCss, pageCss]}
-      scripts={<LoginScript />}
-    >
-      <div class="login-container">
-        <h1>Sign In</h1>
-        <div id="error" class="error-message hidden" />
-        <form id="login-form">
-          {/* Form fields */}
-        </form>
-        <div class="signup-link">
-          Don't have an account? <a href="/signup">Create one</a>
+    <div class="login-container">
+      <h1>Sign In</h1>
+      <div id="error" class="error-message hidden" />
+      <form id="login-form">
+        <div class="form-group">
+          <label for="identifier">Username or Email</label>
+          <input type="text" id="identifier" name="identifier" required autocomplete="username" />
         </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required autocomplete="current-password" />
+        </div>
+        <button type="submit" id="submit-btn">Sign In</button>
+      </form>
+      <div class="signup-link">
+        Don't have an account? <a href="/signup">Create one</a>
       </div>
-    </PageShell>
+    </div>
   );
 }
 
-function LoginScript() {
-  // Inline script for form handling
-  return (
-    <script dangerouslySetInnerHTML={{ __html: `
-      // Form submission logic
-    `}} />
-  );
-}
+// Plain string for form handling logic
+export const loginScript = `
+(function() {
+  var form = document.getElementById('login-form');
+  var errorEl = document.getElementById('error');
+  // ... form submission logic
+})();
+`;
+```
+
+### Build Script Usage
+
+```ts
+// ssg/src/build.ts
+import { render } from 'preact-render-to-string';
+import { renderDocument } from './shell';
+import { LoginContent, loginScript } from './pages/login';
+
+const body = render(<LoginContent />);
+const html = renderDocument({
+  title: 'Login - Doc Platform',
+  cssFiles: [manifest.common, manifest.login],
+  body,
+  scripts: loginScript,
+});
+
+writeFileSync('dist/login.html', html);
 ```
 
 ## Vite Configuration Changes
