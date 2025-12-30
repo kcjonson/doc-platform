@@ -56,7 +56,7 @@ Minimal error capture and reporting:
 import { init } from '@doc-platform/telemetry';
 
 init({
-  enabled: import.meta.env.VITE_ERROR_REPORTING_ENABLED === 'true',
+  enabled: import.meta.env.WEB_ERROR_REPORTING_ENABLED === 'true',
   environment: import.meta.env.MODE,
 });
 ```
@@ -135,7 +135,7 @@ function logAuthEvent(event: string, data: Record<string, unknown>): void {
 
 **Frontend (web/.env):**
 ```
-VITE_ERROR_REPORTING_ENABLED=true
+WEB_ERROR_REPORTING_ENABLED=true
 ```
 
 **Backend (api/.env):**

@@ -8,7 +8,7 @@ import { NotFound } from '@doc-platform/ui';
 
 // Initialize error reporting
 initTelemetry({
-	enabled: import.meta.env.VITE_ERROR_REPORTING_ENABLED === 'true',
+	enabled: import.meta.env.WEB_ERROR_REPORTING_ENABLED === 'true',
 	environment: import.meta.env.MODE,
 });
 
