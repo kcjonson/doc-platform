@@ -30,13 +30,14 @@ const connectionString = getDatabaseUrl();
 
 // Connection pool - reused across requests
 // SSL is required for AWS RDS PostgreSQL (pg_hba.conf rejects unencrypted connections)
-// AWS RDS certs are signed by Amazon Trust Services CA, trusted by Node.js
+// TODO: Add AWS RDS CA bundle to Docker image for proper cert verification
+// For now, using rejectUnauthorized: false (encrypted but no cert verification)
 const pool = new Pool({
 	connectionString,
 	max: 20,
 	idleTimeoutMillis: 30000,
 	connectionTimeoutMillis: 2000,
-	ssl: process.env.NODE_ENV === 'production' ? true : undefined,
+	ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
 });
 
 // Log connection errors (don't crash the server)
