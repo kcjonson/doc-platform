@@ -35,5 +35,5 @@ export const notFoundHtml = `<style>
 		The page you're looking for doesn't exist or may have been moved.
 		Don't worry, it happens to the best of us.
 	</p>
-	<a href="/projects" class="not-found-link">Take me home</a>
+	<a href="/" class="not-found-link">Take me home</a>
 </div>`;
