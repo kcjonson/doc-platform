@@ -22,11 +22,14 @@ interface User {
 
 export function UserSettings(props: RouteProps): JSX.Element {
 	const userId = props.params?.userId;
-	const isViewingOther = !!userId;
 
 	// Current user model (always needed for permission checks)
 	const currentUser = useMemo(() => new UserModel(), []);
 	useModel(currentUser);
+
+	// Check if admin is viewing their own profile via admin route
+	const isViewingSelf = userId && currentUser.id && userId === currentUser.id;
+	const isViewingOther = !!userId && !isViewingSelf;
 
 	// Target user state (the user being viewed/edited)
 	const [targetUser, setTargetUser] = useState<User | null>(null);
@@ -58,7 +61,7 @@ export function UserSettings(props: RouteProps): JSX.Element {
 			try {
 				const user = await fetchClient.get<User>(`/api/users/${userId}`);
 				setTargetUser(user);
-			} catch (err) {
+			} catch {
 				setTargetError('Failed to load user');
 			} finally {
 				setTargetLoading(false);

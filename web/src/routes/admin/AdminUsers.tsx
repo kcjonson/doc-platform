@@ -54,7 +54,12 @@ export function AdminUsers(_props: RouteProps): JSX.Element {
 			setUsers(response.users);
 			setTotal(response.total);
 		} catch (err) {
-			setError('Failed to load users');
+			const status = (err as { status?: number })?.status;
+			if (status === 403) {
+				setError('You do not have permission to view users');
+			} else {
+				setError('Failed to load users');
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -143,10 +148,17 @@ export function AdminUsers(_props: RouteProps): JSX.Element {
 											</div>
 										</td>
 										<td>
-											{user.roles.includes('admin') && (
-												<span class={`${styles.badge} ${styles.badgeAdmin}`}>Admin</span>
-											)}
-											{user.roles.length === 0 && (
+											{user.roles.length > 0 ? (
+												user.roles.map((role) => (
+													<span
+														key={role}
+														class={`${styles.badge} ${role === 'admin' ? styles.badgeAdmin : ''}`}
+														style={role !== 'admin' ? 'margin-right: 0.25rem' : ''}
+													>
+														{role.charAt(0).toUpperCase() + role.slice(1)}
+													</span>
+												))
+											) : (
 												<span style="color: var(--color-text-muted)">—</span>
 											)}
 										</td>
