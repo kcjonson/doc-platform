@@ -45,7 +45,6 @@ function getValidInviteKeys(): Set<string> {
 
 /**
  * Validate an invite key against the configured list.
- * Uses constant-time comparison to prevent timing attacks.
  */
 function isValidInviteKey(key: string): boolean {
 	const validKeys = getValidInviteKeys();
@@ -55,7 +54,7 @@ function isValidInviteKey(key: string): boolean {
 		return false;
 	}
 
-	return validKeys.has(key);
+	return validKeys.has(key.trim());
 }
 
 /**
