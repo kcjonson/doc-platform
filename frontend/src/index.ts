@@ -39,6 +39,7 @@ function getCssPath(entry: string): string | undefined {
 }
 
 const sharedCssPath = getCssPath('../shared/ui/src/shared.css');
+const ssrLayoutCssPath = getCssPath('../frontend/src/styles/ssr-layout.css');
 const loginCssPath = getCssPath('../frontend/src/styles/login.css');
 const signupCssPath = getCssPath('../frontend/src/styles/signup.css');
 const notFoundCssPath = getCssPath('../frontend/src/styles/not-found.css');
@@ -64,6 +65,7 @@ app.get('/health', (c) => c.json({ status: 'ok' }));
 app.get('/login', (c) => {
 	return c.html(renderLoginPage({
 		sharedCssPath,
+		ssrLayoutCssPath,
 		loginCssPath,
 	}));
 });
@@ -72,6 +74,7 @@ app.get('/login', (c) => {
 app.get('/signup', (c) => {
 	return c.html(renderSignupPage({
 		sharedCssPath,
+		ssrLayoutCssPath,
 		signupCssPath,
 	}));
 });
@@ -332,7 +335,7 @@ app.get('/api/auth/me', async (c) => {
 app.use(
 	'*',
 	authMiddleware(redis, {
-		excludePaths: ['/health', '/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me', sharedCssPath, loginCssPath, signupCssPath, notFoundCssPath].filter(Boolean) as string[],
+		excludePaths: ['/health', '/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me', sharedCssPath, ssrLayoutCssPath, loginCssPath, signupCssPath, notFoundCssPath].filter(Boolean) as string[],
 		onUnauthenticated: (requestUrl) => {
 			// Redirect to login with return URL preserved
 			const loginUrl = new URL('/login', requestUrl.origin);
@@ -383,6 +386,7 @@ app.get('*', async (c) => {
 app.notFound((c) => {
 	return c.html(renderNotFoundPage({
 		sharedCssPath,
+		ssrLayoutCssPath,
 		notFoundCssPath,
 	}), 404);
 });

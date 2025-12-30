@@ -11,6 +11,7 @@ export default defineConfig({
 			input: {
 				main: resolve(__dirname, 'index.html'),
 				'shared-styles': resolve(__dirname, '../shared/ui/src/shared.css'),
+				'ssr-layout-styles': resolve(__dirname, '../frontend/src/styles/ssr-layout.css'),
 				'login-styles': resolve(__dirname, '../frontend/src/styles/login.css'),
 				'signup-styles': resolve(__dirname, '../frontend/src/styles/signup.css'),
 				'not-found-styles': resolve(__dirname, '../frontend/src/styles/not-found.css'),
@@ -28,6 +29,7 @@ export default defineConfig({
 			'@doc-platform/ui/tokens.css': resolve(__dirname, '../shared/ui/src/tokens.css'),
 			'@doc-platform/ui/elements.css': resolve(__dirname, '../shared/ui/src/elements.css'),
 			'@doc-platform/ui/shared.css': resolve(__dirname, '../shared/ui/src/shared.css'),
+			'@frontend/styles/ssr-layout.css': resolve(__dirname, '../frontend/src/styles/ssr-layout.css'),
 			'@frontend/styles/login.css': resolve(__dirname, '../frontend/src/styles/login.css'),
 			'@frontend/styles/signup.css': resolve(__dirname, '../frontend/src/styles/signup.css'),
 			'@frontend/styles/not-found.css': resolve(__dirname, '../frontend/src/styles/not-found.css'),

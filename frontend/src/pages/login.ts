@@ -7,14 +7,15 @@ export interface LoginPageOptions {
 	error?: string;
 	identifier?: string;
 	sharedCssPath?: string;
+	ssrLayoutCssPath?: string;
 	loginCssPath?: string;
 }
 
 export function renderLoginPage(options: LoginPageOptions = {}): string {
-	const { error, identifier = '', sharedCssPath, loginCssPath } = options;
+	const { error, identifier = '', sharedCssPath, ssrLayoutCssPath, loginCssPath } = options;
 
 	// Build CSS links from manifest paths
-	const cssLinks = [sharedCssPath, loginCssPath]
+	const cssLinks = [sharedCssPath, ssrLayoutCssPath, loginCssPath]
 		.filter(Boolean)
 		.map(path => `<link rel="stylesheet" href="${path}">`)
 		.join('\n\t');

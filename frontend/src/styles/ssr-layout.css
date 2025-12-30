@@ -1,0 +1,15 @@
+/**
+ * Shared layout styles for SSR pages (login, signup, 404)
+ * Provides centered, full-viewport layout with base typography
+ */
+
+body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	background: var(--color-background);
+	color: var(--color-text);
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+}

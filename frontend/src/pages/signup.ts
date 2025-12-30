@@ -11,15 +11,16 @@ export interface SignupPageOptions {
 	firstName?: string;
 	lastName?: string;
 	sharedCssPath?: string;
+	ssrLayoutCssPath?: string;
 	signupCssPath?: string;
 }
 
 export function renderSignupPage(options: SignupPageOptions = {}): string {
-	const { error, errors, username = '', email = '', firstName = '', lastName = '', sharedCssPath, signupCssPath } = options;
+	const { error, errors, username = '', email = '', firstName = '', lastName = '', sharedCssPath, ssrLayoutCssPath, signupCssPath } = options;
 	const firstError = errors?.[0];
 	const errorMessage = error || (firstError ? firstError.message : '');
 
-	const cssLinks = [sharedCssPath, signupCssPath]
+	const cssLinks = [sharedCssPath, ssrLayoutCssPath, signupCssPath]
 		.filter(Boolean)
 		.map(path => `<link rel="stylesheet" href="${path}">`)
 		.join('\n\t');

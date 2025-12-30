@@ -5,13 +5,14 @@
 
 export interface NotFoundPageOptions {
 	sharedCssPath?: string;
+	ssrLayoutCssPath?: string;
 	notFoundCssPath?: string;
 }
 
 export function renderNotFoundPage(options: NotFoundPageOptions = {}): string {
-	const { sharedCssPath, notFoundCssPath } = options;
+	const { sharedCssPath, ssrLayoutCssPath, notFoundCssPath } = options;
 
-	const cssLinks = [sharedCssPath, notFoundCssPath]
+	const cssLinks = [sharedCssPath, ssrLayoutCssPath, notFoundCssPath]
 		.filter(Boolean)
 		.map(path => `<link rel="stylesheet" href="${path}">`)
 		.join('\n\t');
