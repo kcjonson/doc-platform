@@ -13,7 +13,10 @@ import {
 	rateLimitMiddleware,
 	csrfMiddleware,
 	RATE_LIMIT_CONFIGS,
+	getSession,
+	SESSION_COOKIE_NAME,
 } from '@doc-platform/auth';
+import { getCookie } from 'hono/cookie';
 
 import { handleLogin, handleLogout, handleGetMe, handleUpdateMe, handleSignup } from './handlers/auth.js';
 import {
@@ -132,6 +135,14 @@ app.post('/api/metrics', async (context) => {
 			context?: Record<string, unknown>;
 		}>();
 
+		// Get user context from session (if logged in)
+		let userId: string | undefined;
+		const sessionId = getCookie(context, SESSION_COOKIE_NAME);
+		if (sessionId) {
+			const session = await getSession(redis, sessionId);
+			userId = session?.userId;
+		}
+
 		// Parse DSN to extract components
 		const dsnUrl = new URL(dsn);
 		const publicKey = dsnUrl.username;
@@ -157,6 +168,10 @@ app.post('/api/metrics', async (context) => {
 			timestamp: report.timestamp / 1000,
 			platform: 'javascript',
 			environment: report.context?.environment || 'production',
+			tags: {
+				source: 'web',
+			},
+			user: userId ? { id: userId } : undefined,
 			request: {
 				url: report.url,
 				headers: {

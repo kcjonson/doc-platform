@@ -26,8 +26,6 @@ let config: TelemetryConfig = {
 	enabled: false,
 };
 
-let userContext: Record<string, unknown> = {};
-
 /**
  * Initialize telemetry with configuration
  */
@@ -58,13 +56,6 @@ export function init(options: TelemetryConfig): void {
 }
 
 /**
- * Set user context for error reports
- */
-export function setUser(user: Record<string, unknown> | null): void {
-	userContext = user ?? {};
-}
-
-/**
  * Capture and report an error
  */
 export function captureError(
@@ -84,7 +75,6 @@ export function captureError(
 		userAgent: navigator.userAgent,
 		context: {
 			environment: config.environment,
-			...userContext,
 			...context,
 		},
 	};
