@@ -553,6 +553,13 @@ export class DocPlatformStack extends cdk.Stack {
 			resources: [this.stackId],
 		}));
 
+		// CDK deployment - assume CDK bootstrap roles (created by `cdk bootstrap`)
+		deployRole.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: ['sts:AssumeRole'],
+			resources: [`arn:aws:iam::${this.account}:role/cdk-hnb659fds-*-${this.account}-${this.region}`],
+		}));
+
 		// CloudWatch Logs - scoped to API log group for viewing migration logs
 		deployRole.addToPolicy(new iam.PolicyStatement({
 			effect: iam.Effect.ALLOW,
