@@ -12,7 +12,7 @@ declare module '*.css' {
 // Vite environment variables
 interface ImportMetaEnv {
 	readonly MODE: string;
-	readonly VITE_SENTRY_DSN?: string;
+	readonly VITE_ERROR_REPORTING_ENABLED?: string;
 }
 
 interface ImportMeta {

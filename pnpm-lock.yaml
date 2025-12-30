@@ -293,6 +293,12 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  shared/telemetry:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   shared/ui:
     dependencies:
       preact:
@@ -339,6 +345,9 @@ importers:
       '@doc-platform/router':
         specifier: workspace:*
         version: link:../shared/router
+      '@doc-platform/telemetry':
+        specifier: workspace:*
+        version: link:../shared/telemetry
       '@doc-platform/ui':
         specifier: workspace:*
         version: link:../shared/ui

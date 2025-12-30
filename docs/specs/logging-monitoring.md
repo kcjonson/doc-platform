@@ -15,10 +15,11 @@ Minimal observability stack focused on catching errors and understanding basic s
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│  Browser        │     │  API Server     │     │  Sentry.io      │
-│  (planning-web) │────►│  /api/metrics   │────►│                 │
-│                 │     │  (tunnel)       │     │                 │
+│  Browser        │     │  API Server     │     │  Error Tracking │
+│  (web)          │────►│  /api/metrics   │────►│  Service        │
+│                 │     │  (envelope)     │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
+  Simple JSON             Wraps in envelope
                                │
                                │ CloudWatch Logs
                                ▼
@@ -28,72 +29,74 @@ Minimal observability stack focused on catching errors and understanding basic s
                         └─────────────────┘
 ```
 
-### Why Tunnel Sentry?
+### Why Tunnel Through Our API?
 
 - No third-party requests from user browsers
-- Bypasses ad blockers that block Sentry
+- Bypasses ad blockers
 - Privacy-conscious design
-- Single external dependency (Sentry) for error tracking
+- Error tracking service details hidden from frontend code
+
+### Minimal Frontend Bundle
+
+The frontend uses `@doc-platform/telemetry`, a minimal (~1KB) package that:
+- Captures unhandled errors and promise rejections
+- Sends simple JSON to `/api/metrics`
+- Uses `navigator.sendBeacon()` for reliable delivery
+- Contains no third-party SDK code
 
 ## Implementation
 
-### 1. Sentry Tunnel Endpoint
+### 1. Frontend Telemetry
+
+**Package:** `shared/telemetry`
+
+Minimal error capture and reporting:
+
+```typescript
+import { init } from '@doc-platform/telemetry';
+
+init({
+  enabled: import.meta.env.VITE_ERROR_REPORTING_ENABLED === 'true',
+  environment: import.meta.env.MODE,
+});
+```
+
+The package sends simple JSON to `/api/metrics`:
+
+```json
+{
+  "name": "TypeError",
+  "message": "Cannot read property 'x' of undefined",
+  "stack": "TypeError: Cannot read property...",
+  "timestamp": 1703945123456,
+  "url": "https://example.com/app",
+  "userAgent": "Mozilla/5.0...",
+  "context": {
+    "environment": "production"
+  }
+}
+```
+
+### 2. API Metrics Endpoint
 
 **Location:** `api/src/index.ts`
 **Route:** `POST /api/metrics`
 
-The endpoint receives Sentry envelope data from the frontend and forwards it to Sentry's ingestion API. This keeps Sentry's DSN server-side and prevents direct browser→Sentry communication.
+The endpoint receives simple JSON from the frontend, wraps it in the error tracking service's envelope format, and forwards it:
 
 ```typescript
 app.post('/api/metrics', async (c) => {
-  const envelope = await c.req.text();
-  const header = envelope.split('\n')[0];
-  const dsn = JSON.parse(header).dsn;
-  const projectId = new URL(dsn).pathname.slice(1);
+  const dsn = process.env.ERROR_REPORTING_DSN;
+  if (!dsn) return c.text('ok');
 
-  await fetch(`https://sentry.io/api/${projectId}/envelope/`, {
-    method: 'POST',
-    body: envelope,
-  });
+  const report = await c.req.json();
 
-  return c.text('ok');
+  // Parse DSN, wrap in envelope format, forward to service
+  // (implementation details hidden from frontend)
 });
 ```
 
-### 2. Frontend Sentry SDK
-
-**Location:** `planning-web/src/main.tsx`
-
-Initialize Sentry with tunnel configuration pointing to our API:
-
-```typescript
-import * as Sentry from '@sentry/browser';
-
-Sentry.init({
-  dsn: import.meta.env.VITE_SENTRY_DSN,
-  tunnel: '/api/metrics',
-  environment: import.meta.env.MODE,
-  enabled: !!import.meta.env.VITE_SENTRY_DSN,
-});
-```
-
-### 3. Backend Sentry SDK
-
-**Location:** `api/src/index.ts`
-
-Initialize Sentry for Node.js to catch backend errors:
-
-```typescript
-import * as Sentry from '@sentry/node';
-
-Sentry.init({
-  dsn: process.env.SENTRY_DSN,
-  environment: process.env.NODE_ENV || 'development',
-  enabled: !!process.env.SENTRY_DSN,
-});
-```
-
-### 4. CloudWatch Alarms
+### 3. CloudWatch Alarms
 
 **Location:** `infra/lib/doc-platform-stack.ts`
 
@@ -102,16 +105,16 @@ Alarms for resource utilization:
 - Memory > 80% for 5 minutes
 - HTTP 5xx errors > 10 in 5 minutes
 
-### 5. Audit Logging
+### 4. Audit Logging
 
 Log auth events to stdout (captured by CloudWatch):
 
 | Event | Data Logged |
 |-------|-------------|
-| Login success | timestamp, userId, email |
-| Login failure | timestamp, email, reason |
+| Login success | timestamp, userId, username |
+| Login failure | timestamp, identifier, reason |
 | Logout | timestamp, userId |
-| Session expired | timestamp, userId |
+| Signup success | timestamp, userId, username |
 
 Format: Structured JSON for CloudWatch Logs Insights queries.
 
@@ -130,22 +133,19 @@ function logAuthEvent(event: string, data: Record<string, unknown>): void {
 
 ### Environment Variables
 
-**Frontend (planning-web/.env):**
+**Frontend (web/.env):**
 ```
-VITE_SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
+VITE_ERROR_REPORTING_ENABLED=true
 ```
 
 **Backend (api/.env):**
 ```
-SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
+ERROR_REPORTING_DSN=https://key@host/project
 ```
 
-### Sentry Project Setup
+### Deployment (AWS Secrets Manager)
 
-1. Create a Sentry project (Browser JavaScript)
-2. Get the DSN from Project Settings → Client Keys
-3. Configure the DSN in environment variables
-4. Sentry will receive errors from both frontend (via tunnel) and backend (direct)
+For production, store `ERROR_REPORTING_DSN` in Secrets Manager and reference it in the ECS task definition.
 
 ## What We're NOT Doing
 
@@ -154,9 +154,10 @@ SENTRY_DSN=https://xxx@xxx.ingest.sentry.io/xxx
 - No custom metrics beyond CloudWatch defaults
 - No real-time alerting beyond CloudWatch Alarms
 - No session replay (can add later if needed)
+- No third-party SDK in frontend code
 
 ## Future Considerations
 
-- Add Sentry Performance monitoring when needed
+- Add performance monitoring when needed
 - Add user behavior analytics when product-market fit is established
 - Consider BetterStack or similar for log aggregation if CloudWatch becomes insufficient

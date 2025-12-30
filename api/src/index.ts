@@ -3,19 +3,11 @@
  * Backend API server using Hono.
  */
 
-import * as Sentry from '@sentry/node';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { Redis } from 'ioredis';
-
-// Initialize Sentry error tracking
-if (process.env.SENTRY_DSN) {
-	Sentry.init({
-		dsn: process.env.SENTRY_DSN,
-		environment: process.env.NODE_ENV || 'development',
-	});
-}
+import { randomUUID } from 'node:crypto';
 
 import {
 	rateLimitMiddleware,
@@ -122,37 +114,88 @@ app.use(
 app.get('/health', (context) => context.json({ status: 'ok' }));
 app.get('/api/health', (context) => context.json({ status: 'ok' }));
 
-// Sentry tunnel endpoint - forwards error reports to Sentry without exposing DSN to clients
+// Error reporting endpoint - accepts simple JSON and forwards to error tracking service
 app.post('/api/metrics', async (context) => {
+	const dsn = process.env.ERROR_REPORTING_DSN;
+	if (!dsn) {
+		return context.text('ok'); // Silently ignore if not configured
+	}
+
 	try {
-		const envelope = await context.req.text();
-		const lines = envelope.split('\n');
-		const firstLine = lines[0];
-		if (!firstLine) {
-			return context.text('invalid envelope', 400);
-		}
+		const report = await context.req.json<{
+			name: string;
+			message: string;
+			stack?: string;
+			timestamp: number;
+			url: string;
+			userAgent: string;
+			context?: Record<string, unknown>;
+		}>();
 
-		// Parse the envelope header to extract DSN
-		const header = JSON.parse(firstLine);
-		if (!header.dsn) {
-			return context.text('missing dsn', 400);
-		}
-
-		// Extract project ID from DSN
-		const dsnUrl = new URL(header.dsn);
+		// Parse DSN to extract components
+		const dsnUrl = new URL(dsn);
+		const publicKey = dsnUrl.username;
 		const projectId = dsnUrl.pathname.slice(1);
+		const host = dsnUrl.host;
 
-		// Forward to Sentry
-		const response = await fetch(`https://sentry.io/api/${projectId}/envelope/`, {
+		// Generate event ID
+		const eventId = randomUUID().replace(/-/g, '');
+
+		// Parse stack trace into frames
+		const frames = parseStackTrace(report.stack);
+
+		// Build envelope header
+		const envelopeHeader = JSON.stringify({
+			event_id: eventId,
+			sent_at: new Date().toISOString(),
+			dsn,
+		});
+
+		// Build event payload
+		const event = {
+			event_id: eventId,
+			timestamp: report.timestamp / 1000,
+			platform: 'javascript',
+			environment: report.context?.environment || 'production',
+			request: {
+				url: report.url,
+				headers: {
+					'User-Agent': report.userAgent,
+				},
+			},
+			exception: {
+				values: [
+					{
+						type: report.name,
+						value: report.message,
+						stacktrace: frames.length > 0 ? { frames } : undefined,
+					},
+				],
+			},
+			extra: report.context,
+		};
+
+		// Build item header
+		const itemHeader = JSON.stringify({
+			type: 'event',
+			length: JSON.stringify(event).length,
+		});
+
+		// Construct envelope (newline-separated)
+		const envelope = `${envelopeHeader}\n${itemHeader}\n${JSON.stringify(event)}`;
+
+		// Forward to error tracking service
+		const response = await fetch(`https://${host}/api/${projectId}/envelope/`, {
 			method: 'POST',
 			body: envelope,
 			headers: {
 				'Content-Type': 'application/x-sentry-envelope',
+				'X-Sentry-Auth': `Sentry sentry_key=${publicKey}, sentry_version=7`,
 			},
 		});
 
 		if (!response.ok) {
-			console.error('Sentry forwarding failed:', response.status);
+			console.error('Error reporting failed:', response.status);
 		}
 
 		return context.text('ok');
@@ -161,6 +204,55 @@ app.post('/api/metrics', async (context) => {
 		return context.text('ok'); // Don't expose errors to client
 	}
 });
+
+/**
+ * Parse a stack trace string into frames for error reporting
+ */
+function parseStackTrace(stack?: string): Array<{
+	filename: string;
+	function: string;
+	lineno?: number;
+	colno?: number;
+}> {
+	if (!stack) return [];
+
+	const frames: Array<{
+		filename: string;
+		function: string;
+		lineno?: number;
+		colno?: number;
+	}> = [];
+
+	const lines = stack.split('\n');
+
+	for (const line of lines) {
+		// Match Chrome/Node format: "    at functionName (filename:line:col)"
+		const chromeMatch = line.match(/^\s*at\s+(?:(.+?)\s+\()?(.+?):(\d+):(\d+)\)?$/);
+		if (chromeMatch) {
+			frames.push({
+				function: chromeMatch[1] || '<anonymous>',
+				filename: chromeMatch[2] || '',
+				lineno: parseInt(chromeMatch[3] || '0', 10),
+				colno: parseInt(chromeMatch[4] || '0', 10),
+			});
+			continue;
+		}
+
+		// Match Firefox format: "functionName@filename:line:col"
+		const firefoxMatch = line.match(/^(.+?)@(.+?):(\d+):(\d+)$/);
+		if (firefoxMatch) {
+			frames.push({
+				function: firefoxMatch[1] || '<anonymous>',
+				filename: firefoxMatch[2] || '',
+				lineno: parseInt(firefoxMatch[3] || '0', 10),
+				colno: parseInt(firefoxMatch[4] || '0', 10),
+			});
+		}
+	}
+
+	// Reverse frames (most error tracking services expect innermost frame first)
+	return frames.reverse();
+}
 
 // Auth routes
 app.post('/api/auth/login', (context) => handleLogin(context, redis));
