@@ -84,7 +84,7 @@ function build(): void {
 	writePage('login.html', renderDocument({
 		title: 'Sign In - Doc Platform',
 		cssFiles: [commonCss, loginCss],
-		body: render(LoginContent({})),
+		body: render(LoginContent()),
 		scripts: loginScript,
 	}));
 
@@ -92,7 +92,7 @@ function build(): void {
 	writePage('signup.html', renderDocument({
 		title: 'Create Account - Doc Platform',
 		cssFiles: [commonCss, signupCss],
-		body: render(SignupContent({})),
+		body: render(SignupContent()),
 		scripts: signupScript,
 	}));
 
@@ -100,7 +100,7 @@ function build(): void {
 	writePage('not-found.html', renderDocument({
 		title: 'Page Not Found - Doc Platform',
 		cssFiles: [commonCss, notFoundCss],
-		body: render(NotFoundContent({})),
+		body: render(NotFoundContent()),
 	}));
 
 	// Render home page
@@ -108,7 +108,7 @@ function build(): void {
 		title: 'Doc Platform - Documentation that works for your team',
 		description: 'A Git-backed markdown editor with real-time collaboration, inline comments, and AI-powered assistance.',
 		cssFiles: [commonCss, homeCss],
-		body: render(HomeContent({})),
+		body: render(HomeContent()),
 	}));
 
 	console.log('\nSSG build complete!');

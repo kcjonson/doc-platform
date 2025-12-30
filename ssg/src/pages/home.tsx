@@ -7,7 +7,7 @@ export function HomeContent(): JSX.Element {
 	return (
 		<div class="home-container">
 			<header class="home-header">
-				<div class="logo">Doc Platform</div>
+				<a href="/" class="logo" aria-label="Doc Platform home">Doc Platform</a>
 				<nav class="home-nav">
 					<a href="/login">Sign In</a>
 					<a href="/signup" class="btn-primary">Get Started</a>

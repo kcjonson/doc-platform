@@ -30,7 +30,7 @@ export function renderDocument(options: PageOptions): string {
 	const { title, description, cssFiles, body, scripts } = options;
 
 	const cssLinks = cssFiles
-		.map(href => `<link rel="stylesheet" href="${href}">`)
+		.map(href => `<link rel="stylesheet" href="${escapeHtml(href)}">`)
 		.join('\n\t');
 
 	const metaDesc = description

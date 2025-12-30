@@ -33,11 +33,21 @@ function buildPreloadHeader(html: string): string {
  * Load a page into memory with precomputed headers
  */
 function loadPage(path: string): CachedPage {
-	const html = readFileSync(path, 'utf-8');
-	return {
-		html,
-		preloadHeader: buildPreloadHeader(html),
-	};
+	try {
+		const html = readFileSync(path, 'utf-8');
+		return {
+			html,
+			preloadHeader: buildPreloadHeader(html),
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(
+			`Failed to load static page "${path}". ` +
+			`Ensure the frontend build has been run. ` +
+			`Error: ${message}`,
+		);
+		throw error;
+	}
 }
 
 /**
