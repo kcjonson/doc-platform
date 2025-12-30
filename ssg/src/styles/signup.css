@@ -2,6 +2,13 @@
  * Signup page styles
  */
 
+body {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+}
+
 .signup-container {
 	background: var(--color-surface);
 	border-radius: var(--radius-lg);
@@ -49,4 +56,20 @@
 
 .signup-container .error-message.hidden {
 	display: none;
+}
+
+.signup-container .login-link {
+	text-align: center;
+	margin-top: 1.5rem;
+	font-size: 0.875rem;
+	color: var(--color-text-muted);
+}
+
+.signup-container .login-link a {
+	color: var(--color-primary);
+	text-decoration: none;
+}
+
+.signup-container .login-link a:hover {
+	text-decoration: underline;
 }
