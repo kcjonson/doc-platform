@@ -19,6 +19,19 @@ import {
 import { query, type User } from '@doc-platform/db';
 import { isValidEmail, isValidUsername } from '../validation.js';
 
+/**
+ * Check if request is over HTTPS (directly or via ALB/proxy)
+ */
+function isSecureRequest(context: Context): boolean {
+	// Check X-Forwarded-Proto header (set by ALB/proxies)
+	const forwardedProto = context.req.header('X-Forwarded-Proto');
+	if (forwardedProto === 'https') {
+		return true;
+	}
+	// Fallback to checking the URL scheme
+	return new URL(context.req.url).protocol === 'https:';
+}
+
 interface LoginRequest {
 	identifier: string; // username or email
 	password: string;
@@ -107,7 +120,7 @@ export async function handleLogin(
 
 		setCookie(context, SESSION_COOKIE_NAME, sessionId, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
+			secure: isSecureRequest(context),
 			sameSite: 'Lax',
 			path: '/',
 			maxAge: SESSION_TTL_SECONDS,
@@ -241,7 +254,7 @@ export async function handleSignup(
 
 		setCookie(context, SESSION_COOKIE_NAME, sessionId, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
+			secure: isSecureRequest(context),
 			sameSite: 'Lax',
 			path: '/',
 			maxAge: SESSION_TTL_SECONDS,
