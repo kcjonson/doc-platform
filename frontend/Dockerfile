@@ -1,6 +1,9 @@
 # Build stage
 FROM node:20-alpine AS builder
 
+# Build arg for git SHA (passed at build time)
+ARG GIT_SHA=unknown
+
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@9.15.1 --activate
 
@@ -56,6 +59,9 @@ RUN pnpm --filter @doc-platform/core build && \
     pnpm --filter @doc-platform/frontend build && \
     pnpm --filter @doc-platform/web build && \
     pnpm --filter @doc-platform/ssg build
+
+# Create version.txt with git SHA
+RUN echo "${GIT_SHA}" > /app/web/dist/version.txt
 
 # Production stage
 FROM node:20-alpine AS runner
