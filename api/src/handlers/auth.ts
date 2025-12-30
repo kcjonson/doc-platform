@@ -307,6 +307,8 @@ export async function handleGetMe(
 				email_verified: user.email_verified,
 				phone_number: user.phone_number,
 				avatar_url: user.avatar_url,
+				roles: user.roles,
+				is_active: user.is_active,
 			},
 			csrfToken: session.csrfToken,
 		});

@@ -1,0 +1,592 @@
+/**
+ * Unified user management handlers
+ *
+ * Access control:
+ * - GET /api/users: Admin only (list all users)
+ * - GET /api/users/:id: Admin can view any user, users can view themselves
+ * - PUT /api/users/:id: Admin can edit any user (all fields), users can edit themselves (limited fields)
+ * - POST /api/users: Admin only (create new user)
+ */
+
+import type { Context } from 'hono';
+import { getCookie } from 'hono/cookie';
+import type { Redis } from 'ioredis';
+import { getSession, SESSION_COOKIE_NAME, hashPassword } from '@doc-platform/auth';
+import { query, type User } from '@doc-platform/db';
+import { isValidUUID, isValidEmail, isValidUsername } from '../validation.js';
+
+/**
+ * Get current user from session, including their roles
+ */
+async function getCurrentUser(context: Context, redis: Redis): Promise<User | null> {
+	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
+	if (!sessionId) return null;
+
+	const session = await getSession(redis, sessionId);
+	if (!session) return null;
+
+	const result = await query<User>(
+		'SELECT * FROM users WHERE id = $1',
+		[session.userId]
+	);
+
+	return result.rows[0] ?? null;
+}
+
+/**
+ * Check if user has admin role
+ */
+function isAdmin(user: User): boolean {
+	return user.roles.includes('admin');
+}
+
+/**
+ * User response type for API
+ */
+interface UserApiResponse {
+	id: string;
+	username: string;
+	email: string;
+	first_name: string;
+	last_name: string;
+	email_verified: boolean;
+	roles: string[];
+	is_active: boolean;
+	created_at: string;
+	updated_at: string;
+	deactivated_at: string | null;
+}
+
+function userToApiResponse(user: User): UserApiResponse {
+	return {
+		id: user.id,
+		username: user.username,
+		email: user.email,
+		first_name: user.first_name,
+		last_name: user.last_name,
+		email_verified: user.email_verified,
+		roles: user.roles,
+		is_active: user.is_active,
+		created_at: user.created_at.toISOString(),
+		updated_at: user.updated_at.toISOString(),
+		deactivated_at: user.deactivated_at?.toISOString() ?? null,
+	};
+}
+
+// Valid roles that can be assigned
+const VALID_ROLES = new Set(['admin']);
+
+function isValidRole(role: string): boolean {
+	return VALID_ROLES.has(role);
+}
+
+/**
+ * List all users (admin only)
+ * GET /api/users
+ */
+export async function handleListUsers(
+	context: Context,
+	redis: Redis
+): Promise<Response> {
+	const currentUser = await getCurrentUser(context, redis);
+	if (!currentUser) {
+		return context.json({ error: 'Unauthorized' }, 401);
+	}
+
+	if (!isAdmin(currentUser)) {
+		return context.json({ error: 'Admin access required' }, 403);
+	}
+
+	const { search, role, is_active, limit, offset } = context.req.query();
+
+	// Parse pagination
+	const limitNum = Math.min(Math.max(parseInt(limit || '50', 10), 1), 100);
+	const offsetNum = Math.max(parseInt(offset || '0', 10), 0);
+
+	// Build query with filters
+	const conditions: string[] = [];
+	const params: unknown[] = [];
+	let paramIndex = 1;
+
+	if (search) {
+		conditions.push(`(
+			LOWER(username) LIKE LOWER($${paramIndex}) OR
+			LOWER(email) LIKE LOWER($${paramIndex}) OR
+			LOWER(first_name) LIKE LOWER($${paramIndex}) OR
+			LOWER(last_name) LIKE LOWER($${paramIndex})
+		)`);
+		params.push(`%${search}%`);
+		paramIndex++;
+	}
+
+	if (role && isValidRole(role)) {
+		conditions.push(`$${paramIndex} = ANY(roles)`);
+		params.push(role);
+		paramIndex++;
+	}
+
+	if (is_active !== undefined && is_active !== '') {
+		conditions.push(`is_active = $${paramIndex}`);
+		params.push(is_active === 'true');
+		paramIndex++;
+	}
+
+	const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+	try {
+		const countResult = await query<{ count: string }>(
+			`SELECT COUNT(*) as count FROM users ${whereClause}`,
+			params
+		);
+		const total = parseInt(countResult.rows[0]?.count || '0', 10);
+
+		const usersResult = await query<User>(
+			`SELECT * FROM users ${whereClause}
+			 ORDER BY created_at DESC
+			 LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+			[...params, limitNum, offsetNum]
+		);
+
+		return context.json({
+			users: usersResult.rows.map(userToApiResponse),
+			total,
+			limit: limitNum,
+			offset: offsetNum,
+		});
+	} catch (error) {
+		console.error('Failed to list users:', error);
+		return context.json({ error: 'Database error' }, 500);
+	}
+}
+
+/**
+ * Get a user by ID
+ * GET /api/users/:id
+ *
+ * Admin: Can view any user
+ * User: Can only view themselves
+ */
+export async function handleGetUser(
+	context: Context,
+	redis: Redis
+): Promise<Response> {
+	const currentUser = await getCurrentUser(context, redis);
+	if (!currentUser) {
+		return context.json({ error: 'Unauthorized' }, 401);
+	}
+
+	const id = context.req.param('id');
+
+	if (!isValidUUID(id)) {
+		return context.json({ error: 'Invalid user ID format' }, 400);
+	}
+
+	// Non-admins can only view themselves
+	if (!isAdmin(currentUser) && currentUser.id !== id) {
+		return context.json({ error: 'Access denied' }, 403);
+	}
+
+	try {
+		const result = await query<User>(
+			'SELECT * FROM users WHERE id = $1',
+			[id]
+		);
+
+		const user = result.rows[0];
+		if (!user) {
+			return context.json({ error: 'User not found' }, 404);
+		}
+
+		return context.json(userToApiResponse(user));
+	} catch (error) {
+		console.error('Failed to get user:', error);
+		return context.json({ error: 'Database error' }, 500);
+	}
+}
+
+interface UpdateUserRequest {
+	username?: string;
+	email?: string;
+	first_name?: string;
+	last_name?: string;
+	roles?: string[];
+	is_active?: boolean;
+}
+
+/**
+ * Update a user
+ * PUT /api/users/:id
+ *
+ * Admin: Can update any user, all fields (username, email, first_name, last_name, roles, is_active)
+ * User: Can only update themselves, limited fields (first_name, last_name)
+ */
+export async function handleUpdateUser(
+	context: Context,
+	redis: Redis
+): Promise<Response> {
+	const currentUser = await getCurrentUser(context, redis);
+	if (!currentUser) {
+		return context.json({ error: 'Unauthorized' }, 401);
+	}
+
+	const id = context.req.param('id');
+
+	if (!isValidUUID(id)) {
+		return context.json({ error: 'Invalid user ID format' }, 400);
+	}
+
+	const isSelf = currentUser.id === id;
+	const userIsAdmin = isAdmin(currentUser);
+
+	// Non-admins can only update themselves
+	if (!userIsAdmin && !isSelf) {
+		return context.json({ error: 'Access denied' }, 403);
+	}
+
+	let body: UpdateUserRequest;
+	try {
+		body = await context.req.json<UpdateUserRequest>();
+	} catch {
+		return context.json({ error: 'Invalid JSON' }, 400);
+	}
+
+	const { username, email, first_name, last_name, roles, is_active } = body;
+
+	// Validate fields
+	if (username !== undefined && !isValidUsername(username)) {
+		return context.json(
+			{ error: 'Username must be 3-30 characters, alphanumeric and underscores only' },
+			400
+		);
+	}
+
+	if (email !== undefined && !isValidEmail(email)) {
+		return context.json({ error: 'Invalid email format' }, 400);
+	}
+
+	if (roles !== undefined) {
+		if (!Array.isArray(roles)) {
+			return context.json({ error: 'Roles must be an array' }, 400);
+		}
+		for (const role of roles) {
+			if (!isValidRole(role)) {
+				return context.json({ error: `Invalid role: ${role}. Valid roles: admin` }, 400);
+			}
+		}
+	}
+
+	// Build update query - admins can update all fields, users only limited fields
+	const updates: string[] = [];
+	const params: unknown[] = [];
+	let paramIndex = 1;
+
+	// Fields any user can update on themselves
+	if (first_name !== undefined) {
+		updates.push(`first_name = $${paramIndex}`);
+		params.push(first_name.trim());
+		paramIndex++;
+	}
+
+	if (last_name !== undefined) {
+		updates.push(`last_name = $${paramIndex}`);
+		params.push(last_name.trim());
+		paramIndex++;
+	}
+
+	// Admin-only fields
+	if (userIsAdmin) {
+		if (username !== undefined) {
+			updates.push(`username = LOWER($${paramIndex})`);
+			params.push(username);
+			paramIndex++;
+		}
+
+		if (email !== undefined) {
+			updates.push(`email = LOWER($${paramIndex})`);
+			params.push(email);
+			paramIndex++;
+		}
+
+		if (roles !== undefined) {
+			updates.push(`roles = $${paramIndex}`);
+			params.push(roles);
+			paramIndex++;
+		}
+
+		if (is_active !== undefined) {
+			updates.push(`is_active = $${paramIndex}`);
+			params.push(is_active);
+			paramIndex++;
+
+			// Track deactivation timestamp
+			if (is_active) {
+				updates.push(`deactivated_at = NULL`);
+			} else {
+				updates.push(`deactivated_at = NOW()`);
+			}
+		}
+	} else {
+		// Non-admin trying to update admin-only fields
+		if (username !== undefined || email !== undefined || roles !== undefined || is_active !== undefined) {
+			return context.json({ error: 'You can only update your first name and last name' }, 403);
+		}
+	}
+
+	if (updates.length === 0) {
+		return context.json({ error: 'No fields to update' }, 400);
+	}
+
+	params.push(id);
+
+	try {
+		// Check for username/email conflicts (admin updates only)
+		if (userIsAdmin && (username || email)) {
+			const conflictConditions: string[] = [];
+			const conflictParams: unknown[] = [];
+			let conflictIndex = 1;
+
+			if (username) {
+				conflictConditions.push(`LOWER(username) = LOWER($${conflictIndex})`);
+				conflictParams.push(username);
+				conflictIndex++;
+			}
+			if (email) {
+				conflictConditions.push(`LOWER(email) = LOWER($${conflictIndex})`);
+				conflictParams.push(email);
+				conflictIndex++;
+			}
+
+			conflictParams.push(id);
+
+			const conflictCheck = await query<{ id: string }>(
+				`SELECT id FROM users WHERE (${conflictConditions.join(' OR ')}) AND id != $${conflictIndex}`,
+				conflictParams
+			);
+
+			if (conflictCheck.rows.length > 0) {
+				return context.json({ error: 'Username or email already exists' }, 409);
+			}
+		}
+
+		const result = await query<User>(
+			`UPDATE users SET ${updates.join(', ')} WHERE id = $${paramIndex} RETURNING *`,
+			params
+		);
+
+		const user = result.rows[0];
+		if (!user) {
+			return context.json({ error: 'User not found' }, 404);
+		}
+
+		return context.json(userToApiResponse(user));
+	} catch (error) {
+		console.error('Failed to update user:', error);
+		return context.json({ error: 'Database error' }, 500);
+	}
+}
+
+interface CreateUserRequest {
+	username: string;
+	email: string;
+	password: string;
+	first_name: string;
+	last_name: string;
+	roles?: string[];
+}
+
+/**
+ * Create a new user (admin only)
+ * POST /api/users
+ */
+export async function handleCreateUser(
+	context: Context,
+	redis: Redis
+): Promise<Response> {
+	const currentUser = await getCurrentUser(context, redis);
+	if (!currentUser) {
+		return context.json({ error: 'Unauthorized' }, 401);
+	}
+
+	if (!isAdmin(currentUser)) {
+		return context.json({ error: 'Admin access required' }, 403);
+	}
+
+	let body: CreateUserRequest;
+	try {
+		body = await context.req.json<CreateUserRequest>();
+	} catch {
+		return context.json({ error: 'Invalid JSON' }, 400);
+	}
+
+	const { username, email, password, first_name, last_name, roles = [] } = body;
+
+	// Validate required fields
+	if (!username || !email || !password || !first_name || !last_name) {
+		return context.json(
+			{ error: 'All fields are required: username, email, password, first_name, last_name' },
+			400
+		);
+	}
+
+	if (!isValidUsername(username)) {
+		return context.json(
+			{ error: 'Username must be 3-30 characters, alphanumeric and underscores only' },
+			400
+		);
+	}
+
+	if (!isValidEmail(email)) {
+		return context.json({ error: 'Invalid email format' }, 400);
+	}
+
+	if (!Array.isArray(roles)) {
+		return context.json({ error: 'Roles must be an array' }, 400);
+	}
+
+	for (const role of roles) {
+		if (!isValidRole(role)) {
+			return context.json({ error: `Invalid role: ${role}. Valid roles: admin` }, 400);
+		}
+	}
+
+	if (password.length < 8) {
+		return context.json({ error: 'Password must be at least 8 characters' }, 400);
+	}
+
+	try {
+		// Check for existing username/email
+		const existingCheck = await query<{ id: string }>(
+			'SELECT id FROM users WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($2)',
+			[username, email]
+		);
+
+		if (existingCheck.rows.length > 0) {
+			return context.json({ error: 'Username or email already exists' }, 409);
+		}
+
+		const passwordHash = await hashPassword(password);
+
+		const userResult = await query<User>(
+			`INSERT INTO users (username, email, first_name, last_name, roles, email_verified)
+			 VALUES (LOWER($1), LOWER($2), $3, $4, $5, false)
+			 RETURNING *`,
+			[username, email, first_name.trim(), last_name.trim(), roles]
+		);
+
+		const user = userResult.rows[0];
+		if (!user) {
+			return context.json({ error: 'Failed to create user' }, 500);
+		}
+
+		await query(
+			'INSERT INTO user_passwords (user_id, password_hash) VALUES ($1, $2)',
+			[user.id, passwordHash]
+		);
+
+		return context.json(userToApiResponse(user), 201);
+	} catch (error) {
+		console.error('Failed to create user:', error);
+		return context.json({ error: 'Database error' }, 500);
+	}
+}
+
+/**
+ * Get a user's OAuth tokens (admin only, or user viewing own tokens)
+ * GET /api/users/:id/tokens
+ */
+export async function handleListUserTokens(
+	context: Context,
+	redis: Redis
+): Promise<Response> {
+	const currentUser = await getCurrentUser(context, redis);
+	if (!currentUser) {
+		return context.json({ error: 'Unauthorized' }, 401);
+	}
+
+	const id = context.req.param('id');
+
+	if (!isValidUUID(id)) {
+		return context.json({ error: 'Invalid user ID format' }, 400);
+	}
+
+	// Non-admins can only view their own tokens
+	if (!isAdmin(currentUser) && currentUser.id !== id) {
+		return context.json({ error: 'Access denied' }, 403);
+	}
+
+	try {
+		const result = await query<{
+			id: string;
+			user_id: string;
+			client_id: string;
+			device_name: string;
+			scopes: string[];
+			created_at: Date;
+			last_used_at: Date | null;
+			expires_at: Date;
+		}>(
+			`SELECT id, user_id, client_id, device_name, scopes, created_at, last_used_at, expires_at
+			 FROM mcp_tokens
+			 WHERE user_id = $1
+			 ORDER BY created_at DESC`,
+			[id]
+		);
+
+		return context.json({
+			tokens: result.rows.map(token => ({
+				id: token.id,
+				client_id: token.client_id,
+				device_name: token.device_name,
+				scopes: token.scopes,
+				created_at: token.created_at.toISOString(),
+				last_used_at: token.last_used_at?.toISOString() ?? null,
+				expires_at: token.expires_at.toISOString(),
+			})),
+		});
+	} catch (error) {
+		console.error('Failed to list user tokens:', error);
+		return context.json({ error: 'Database error' }, 500);
+	}
+}
+
+/**
+ * Revoke a user's OAuth token
+ * DELETE /api/users/:id/tokens/:tokenId
+ */
+export async function handleRevokeUserToken(
+	context: Context,
+	redis: Redis
+): Promise<Response> {
+	const currentUser = await getCurrentUser(context, redis);
+	if (!currentUser) {
+		return context.json({ error: 'Unauthorized' }, 401);
+	}
+
+	const userId = context.req.param('id');
+	const tokenId = context.req.param('tokenId');
+
+	if (!isValidUUID(userId) || !isValidUUID(tokenId)) {
+		return context.json({ error: 'Invalid ID format' }, 400);
+	}
+
+	// Non-admins can only revoke their own tokens
+	if (!isAdmin(currentUser) && currentUser.id !== userId) {
+		return context.json({ error: 'Access denied' }, 403);
+	}
+
+	try {
+		const result = await query(
+			'DELETE FROM mcp_tokens WHERE id = $1 AND user_id = $2',
+			[tokenId, userId]
+		);
+
+		if (result.rowCount === 0) {
+			return context.json({ error: 'Token not found' }, 404);
+		}
+
+		return context.json({ success: true });
+	} catch (error) {
+		console.error('Failed to revoke token:', error);
+		return context.json({ error: 'Database error' }, 500);
+	}
+}

@@ -3,6 +3,13 @@
  * These must match the schema defined in migrations
  */
 
+/**
+ * Known user roles. New roles can be added as needed.
+ * - admin: Full system administration access
+ * Future roles might include: moderator, editor, viewer, etc.
+ */
+export type UserRole = 'admin';
+
 export interface User {
 	id: string;
 	username: string;
@@ -13,6 +20,9 @@ export interface User {
 	email_verified_at: Date | null;
 	phone_number: string | null;
 	avatar_url: string | null;
+	roles: string[];
+	is_active: boolean;
+	deactivated_at: Date | null;
 	created_at: Date;
 	updated_at: Date;
 }

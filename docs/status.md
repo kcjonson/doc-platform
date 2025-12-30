@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2025-12-30 (Marketing SSG)
+Last Updated: 2025-12-30 (Admin User Management)
 
 ## Epic/Story/Task Template
 
@@ -118,6 +118,32 @@ Use this template for all work items:
 ---
 
 ## In Progress Epics
+
+### Admin User Management
+**Spec/Documentation:** `api/src/handlers/admin-users.ts`, `web/src/routes/admin/`
+**Dependencies:** Authentication System
+**Status:** in progress
+
+**Goal:** Admin tools for user management with role-based access control.
+
+**Tasks:**
+- [x] Database schema (roles array, is_active, deactivated_at on users)
+- [x] Admin middleware (requireAdmin, role verification)
+- [x] Admin API endpoints
+  - [x] GET/POST /api/admin/users (list, create)
+  - [x] GET/PUT /api/admin/users/:id (get, update)
+  - [x] POST /api/admin/users/:id/deactivate
+  - [x] POST /api/admin/users/:id/reactivate
+  - [x] POST /api/admin/users/:id/reset-password
+  - [x] GET/DELETE /api/admin/users/:id/tokens (OAuth token management)
+- [x] Admin UI
+  - [x] Users list page with search/filter (/admin/users)
+  - [x] User detail/edit dialog
+  - [x] Create new user dialog
+  - [x] Deactivate/reactivate user actions
+- [ ] Add admin link to user menu (for admin users only)
+
+---
 
 ### Projects Page
 **Spec/Documentation:** `shared/projects/`

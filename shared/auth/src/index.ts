@@ -51,6 +51,16 @@ export {
 	type McpAuthVariables,
 } from './mcp.js';
 
+// Admin middleware
+export {
+	requireAdmin,
+	getAdminUser,
+	isValidRole,
+	hasRole,
+	hasAnyRole,
+	type AdminAuthVariables,
+} from './admin.js';
+
 // Types
 export {
 	type Session,

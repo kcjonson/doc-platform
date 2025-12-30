@@ -15,6 +15,14 @@ import {
 
 import { handleLogin, handleLogout, handleGetMe, handleUpdateMe, handleSignup } from './handlers/auth.js';
 import {
+	handleListUsers,
+	handleGetUser,
+	handleCreateUser,
+	handleUpdateUser,
+	handleListUserTokens,
+	handleRevokeUserToken,
+} from './handlers/users.js';
+import {
 	handleOAuthMetadata,
 	handleAuthorizeGet,
 	handleAuthorizePost,
@@ -130,14 +138,15 @@ app.post('/oauth/revoke', handleRevoke);
 app.get('/api/oauth/authorizations', (context) => handleListAuthorizations(context, redis));
 app.delete('/api/oauth/authorizations/:id', (context) => handleDeleteAuthorization(context, redis));
 
-// Project routes (user-scoped, not project-scoped)
-app.get('/api/projects', (context) => handleListProjects(context, redis));
-app.get('/api/projects/:id', (context) => handleGetProject(context, redis));
-app.post('/api/projects', (context) => handleCreateProject(context, redis));
-app.put('/api/projects/:id', (context) => handleUpdateProject(context, redis));
-app.delete('/api/projects/:id', (context) => handleDeleteProject(context, redis));
+// User routes (role-based access: admin sees all, users see themselves)
+app.get('/api/users', (context) => handleListUsers(context, redis));
+app.get('/api/users/:id', (context) => handleGetUser(context, redis));
+app.post('/api/users', (context) => handleCreateUser(context, redis));
+app.put('/api/users/:id', (context) => handleUpdateUser(context, redis));
+app.get('/api/users/:id/tokens', (context) => handleListUserTokens(context, redis));
+app.delete('/api/users/:id/tokens/:tokenId', (context) => handleRevokeUserToken(context, redis));
 
-// Project routes (user-scoped, not project-scoped)
+// Project routes
 app.get('/api/projects', (context) => handleListProjects(context, redis));
 app.get('/api/projects/:id', (context) => handleGetProject(context, redis));
 app.post('/api/projects', (context) => handleCreateProject(context, redis));

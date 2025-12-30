@@ -41,6 +41,8 @@ export class UserModel extends Model {
 	@prop accessor email_verified!: boolean;
 	@prop accessor phone_number!: string | null;
 	@prop accessor avatar_url!: string | null;
+	@prop accessor roles!: string[];
+	@prop accessor is_active!: boolean;
 
 	constructor() {
 		super();

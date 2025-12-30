@@ -4,6 +4,7 @@ import type { RouteProps } from '@doc-platform/router';
 import { Button, Text } from '@doc-platform/ui';
 import { useModel, UserModel, AuthorizationsCollection } from '@doc-platform/models';
 import { AuthorizedApps } from './AuthorizedApps';
+import { UserManagement } from './UserManagement';
 import styles from './UserSettings.module.css';
 
 export function UserSettings(_props: RouteProps): JSX.Element {
@@ -177,6 +178,10 @@ export function UserSettings(_props: RouteProps): JSX.Element {
 					</div>
 
 					<AuthorizedApps authorizations={authorizations} />
+
+					{user.roles?.includes('admin') && (
+						<UserManagement />
+					)}
 				</div>
 			</div>
 		</div>
