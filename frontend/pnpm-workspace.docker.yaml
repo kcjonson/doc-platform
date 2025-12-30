@@ -9,3 +9,4 @@ packages:
   - 'shared/projects'
   - 'frontend'
   - 'web'
+  - 'ssg'

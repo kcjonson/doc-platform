@@ -2,6 +2,17 @@
  * 404 Not Found page styles
  */
 
+body {
+	font-family: var(--font-sans);
+	background: var(--color-background);
+	color: var(--color-text);
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 1rem;
+}
+
 .not-found-container {
 	text-align: center;
 	padding: 4rem 2rem;
@@ -30,7 +41,7 @@
 	text-decoration: none;
 	border-radius: var(--radius-md);
 	font-weight: 500;
-	transition: background 0.15s;
+	transition: background var(--transition-fast);
 }
 
 .not-found-container a:hover {

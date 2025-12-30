@@ -17,12 +17,13 @@ COPY shared/core/package.json ./shared/core/
 COPY shared/db/package.json ./shared/db/
 COPY shared/auth/package.json ./shared/auth/
 COPY frontend/package.json ./frontend/
-# Planning-web SPA dependencies
+# SPA and SSG dependencies
 COPY shared/ui/package.json ./shared/ui/
 COPY shared/models/package.json ./shared/models/
 COPY shared/router/package.json ./shared/router/
 COPY shared/fetch/package.json ./shared/fetch/
 COPY web/package.json ./web/
+COPY ssg/package.json ./ssg/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
@@ -39,11 +40,13 @@ COPY shared/fetch ./shared/fetch
 COPY shared/projects ./shared/projects
 COPY frontend ./frontend
 COPY web ./web
+COPY ssg ./ssg
 COPY shared/planning ./shared/planning
 COPY shared/pages ./shared/pages
 
-# Build shared packages first, then frontend server, then SPA
+# Build shared packages first, then frontend server, then SPA, then SSG
 # Order matters: core first, then packages that depend on it
+# SSG must run after web build to read CSS manifest
 RUN pnpm --filter @doc-platform/core build && \
     pnpm --filter @doc-platform/db build && \
     pnpm --filter @doc-platform/auth build && \
@@ -51,7 +54,8 @@ RUN pnpm --filter @doc-platform/core build && \
     pnpm --filter @doc-platform/router build && \
     pnpm --filter @doc-platform/models build && \
     pnpm --filter @doc-platform/frontend build && \
-    pnpm --filter @doc-platform/web build
+    pnpm --filter @doc-platform/web build && \
+    pnpm --filter @doc-platform/ssg build
 
 # Production stage
 FROM node:20-alpine AS runner
@@ -79,6 +83,8 @@ COPY --from=builder /app/frontend/dist ./frontend/dist
 
 # Copy built SPA to static directory
 COPY --from=builder /app/web/dist ./frontend/static
+# Copy SSG pages to static/ssg directory
+COPY --from=builder /app/ssg/dist ./frontend/static/ssg
 
 WORKDIR /app/frontend
 

@@ -3,47 +3,25 @@
  * Serves static SPA files with authentication
  */
 
-import { readFileSync } from 'node:fs';
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { Redis } from 'ioredis';
 import { authMiddleware, type AuthVariables } from '@doc-platform/auth';
-import { renderLoginPage } from './pages/login.js';
-import { renderSignupPage } from './pages/signup.js';
-import { renderNotFoundPage } from './pages/not-found.js';
-
-// Load Vite manifest for asset paths
-interface ManifestEntry {
-	file: string;
-	css?: string[];
-}
-type Manifest = Record<string, ManifestEntry>;
-
-let manifest: Manifest = {};
-try {
-	const manifestPath = './static/.vite/manifest.json';
-	manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-} catch {
-	console.warn('Vite manifest not found - CSS paths will be unavailable');
-}
-
-// Get CSS paths from manifest
-// When CSS files are used as entry points, the 'file' property contains the CSS path directly
-function getCssPath(entry: string): string | undefined {
-	const manifestEntry = manifest[entry];
-	if (manifestEntry?.file) {
-		return '/' + manifestEntry.file;
-	}
-	return undefined;
-}
-
-const sharedCssPath = getCssPath('../shared/ui/src/shared.css');
-const loginCssPath = getCssPath('../frontend/src/styles/login.css');
-const signupCssPath = getCssPath('../frontend/src/styles/signup.css');
-const notFoundCssPath = getCssPath('../frontend/src/styles/not-found.css');
+import { pages, type CachedPage } from './static-pages.js';
 
 const app = new Hono<{ Variables: AuthVariables }>();
+
+/**
+ * Serve a cached SSG page with preload headers
+ */
+function servePage(c: Context, page: CachedPage, status: ContentfulStatusCode = 200): Response {
+	return c.html(page.html, status, {
+		'Link': page.preloadHeader,
+		'Cache-Control': 'public, max-age=3600',
+	});
+}
 
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -61,20 +39,10 @@ redis.on('connect', () => {
 app.get('/health', (c) => c.json({ status: 'ok' }));
 
 // Login page (no auth required)
-app.get('/login', (c) => {
-	return c.html(renderLoginPage({
-		sharedCssPath,
-		loginCssPath,
-	}));
-});
+app.get('/login', (c) => servePage(c, pages.login));
 
 // Signup page (no auth required)
-app.get('/signup', (c) => {
-	return c.html(renderSignupPage({
-		sharedCssPath,
-		signupCssPath,
-	}));
-});
+app.get('/signup', (c) => servePage(c, pages.signup));
 
 // API URL for proxying
 const apiUrl = process.env.API_URL || 'http://localhost:3001';
@@ -332,7 +300,7 @@ app.get('/api/auth/me', async (c) => {
 app.use(
 	'*',
 	authMiddleware(redis, {
-		excludePaths: ['/health', '/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me', sharedCssPath, loginCssPath, signupCssPath, notFoundCssPath].filter(Boolean) as string[],
+		excludePaths: ['/health', '/login', '/signup', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me'],
 		onUnauthenticated: (requestUrl) => {
 			// Redirect to login with return URL preserved
 			const loginUrl = new URL('/login', requestUrl.origin);
@@ -380,12 +348,7 @@ app.get('*', async (c) => {
 });
 
 // Custom 404 handler - friendly page for all not found requests
-app.notFound((c) => {
-	return c.html(renderNotFoundPage({
-		sharedCssPath,
-		notFoundCssPath,
-	}), 404);
-});
+app.notFound((c) => servePage(c, pages.notFound, 404));
 
 // Start server
 const PORT = Number(process.env.PORT) || 3000;

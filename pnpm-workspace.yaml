@@ -7,3 +7,4 @@ packages:
   - 'frontend'
   - 'mcp'
   - 'infra'
+  - 'ssg'

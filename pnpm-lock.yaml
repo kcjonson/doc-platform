@@ -306,6 +306,25 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  ssg:
+    dependencies:
+      preact:
+        specifier: ^10.25.4
+        version: 10.28.0
+      preact-render-to-string:
+        specifier: ^6.5.11
+        version: 6.6.4(preact@10.28.0)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.19.3
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   web:
     dependencies:
       '@doc-platform/core':
@@ -2555,6 +2574,11 @@ packages:
   postgres-interval@1.2.0:
     resolution: {integrity: sha512-9ZhXKM/rw350N1ovuWHbGxnGh/SNJ4cnxHiM0rxE4VN41wsg8P8zWn9hv/buK00RP4WvlOyr/RBDiptyxVbkZQ==}
     engines: {node: '>=0.10.0'}
+
+  preact-render-to-string@6.6.4:
+    resolution: {integrity: sha512-Bn6eQZ5SQ5loVEcC/mZmKT7HzO5Z/+vYzxfE/W2N468oSoNMJVdFGApF0GyXq0lDthuyXKTmtZ8k20NpYjr6Rw==}
+    peerDependencies:
+      preact: '>=10 || >= 11.0.0-0'
 
   preact@10.28.0:
     resolution: {integrity: sha512-rytDAoiXr3+t6OIP3WGlDd0ouCUG1iCWzkcY3++Nreuoi17y6T5i/zRhe6uYfoVcxq6YU+sBtJouuRDsq8vvqA==}
@@ -5231,6 +5255,10 @@ snapshots:
   postgres-interval@1.2.0:
     dependencies:
       xtend: 4.0.2
+
+  preact-render-to-string@6.6.4(preact@10.28.0):
+    dependencies:
+      preact: 10.28.0
 
   preact@10.28.0: {}
 

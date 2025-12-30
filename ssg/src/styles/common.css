@@ -1,0 +1,8 @@
+/**
+ * Common CSS bundle for SSG pages
+ *
+ * Imports shared styles (reset, tokens, elements) that are
+ * used across all static pages and the SPA.
+ */
+
+@import '../../../shared/ui/src/shared.css';
