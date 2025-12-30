@@ -120,28 +120,25 @@ Use this template for all work items:
 ## In Progress Epics
 
 ### Admin User Management
-**Spec/Documentation:** `api/src/handlers/admin-users.ts`, `web/src/routes/admin/`
+**Spec/Documentation:** `api/src/handlers/users.ts`, `web/src/routes/settings/UserManagement.tsx`
 **Dependencies:** Authentication System
 **Status:** in progress
 
-**Goal:** Admin tools for user management with role-based access control.
+**Goal:** Admin tools for user management using unified role-based access on existing endpoints.
 
 **Tasks:**
 - [x] Database schema (roles array, is_active, deactivated_at on users)
-- [x] Admin middleware (requireAdmin, role verification)
-- [x] Admin API endpoints
-  - [x] GET/POST /api/admin/users (list, create)
-  - [x] GET/PUT /api/admin/users/:id (get, update)
-  - [x] POST /api/admin/users/:id/deactivate
-  - [x] POST /api/admin/users/:id/reactivate
-  - [x] POST /api/admin/users/:id/reset-password
-  - [x] GET/DELETE /api/admin/users/:id/tokens (OAuth token management)
-- [x] Admin UI
-  - [x] Users list page with search/filter (/admin/users)
-  - [x] User detail/edit dialog
-  - [x] Create new user dialog
-  - [x] Deactivate/reactivate user actions
-- [ ] Add admin link to user menu (for admin users only)
+- [x] Unified /api/users endpoints with role-based permissions
+  - [x] GET /api/users (admin: list all, user: forbidden)
+  - [x] GET /api/users/:id (admin: any user, user: self only)
+  - [x] PUT /api/users/:id (admin: all fields, user: limited fields on self)
+  - [x] POST /api/users (admin only: create new user)
+  - [x] GET/DELETE /api/users/:id/tokens (OAuth token management)
+- [x] UserManagement component in settings page
+  - [x] User list with search/filter (visible to admins only)
+  - [x] User edit dialog (roles, is_active, all fields)
+  - [x] Pagination support
+- [ ] Password reset flow for admins
 
 ---
 
