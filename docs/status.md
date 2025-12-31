@@ -127,10 +127,10 @@ Use this template for all work items:
 **Goal:** Error tracking, resource monitoring, and audit logging with minimal external services.
 
 **Tasks:**
-- [x] Sentry integration (tunneled through our API)
+- [x] Error tracking integration (Sentry-compatible, tunneled through our API)
   - [x] Add `/api/metrics` tunnel endpoint to API
-  - [x] Add Sentry SDK to web (frontend)
-  - [x] Add Sentry SDK to API (backend)
+  - [x] Add custom telemetry package to web (frontend)
+  - [x] Add error reporting utility to API (backend)
 - [x] CloudWatch alarms
   - [x] CPU utilization alarm (>80%)
   - [x] Memory utilization alarm (>80%)

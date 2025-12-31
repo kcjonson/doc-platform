@@ -26,6 +26,8 @@ let config: TelemetryConfig = {
 	enabled: false,
 };
 
+let handlersInstalled = false;
+
 /**
  * Initialize telemetry with configuration
  */
@@ -35,6 +37,12 @@ export function init(options: TelemetryConfig): void {
 	if (!config.enabled) {
 		return;
 	}
+
+	// Prevent duplicate handler installation
+	if (handlersInstalled) {
+		return;
+	}
+	handlersInstalled = true;
 
 	// Global error handler for uncaught errors
 	window.addEventListener('error', (event) => {
@@ -80,8 +88,10 @@ export function captureError(
 	};
 
 	// Use sendBeacon for reliable delivery (works even during page unload)
+	// Wrap in Blob to ensure proper Content-Type header
 	if (navigator.sendBeacon) {
-		navigator.sendBeacon(ENDPOINT, JSON.stringify(report));
+		const payload = new Blob([JSON.stringify(report)], { type: 'application/json' });
+		navigator.sendBeacon(ENDPOINT, payload);
 	} else {
 		// Fallback for older browsers
 		fetch(ENDPOINT, {

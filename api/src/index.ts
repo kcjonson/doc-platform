@@ -137,6 +137,7 @@ app.use(
 // Token validated against Redis session, cookie is just for client convenience
 // Excludes login/signup (no session yet), logout (low-impact if CSRF'd)
 // Excludes OAuth token/revoke endpoints (use PKCE instead)
+// Excludes /api/metrics (uses sendBeacon which can't send custom headers)
 app.use(
 	'*',
 	csrfMiddleware(redis, {
@@ -144,6 +145,7 @@ app.use(
 			'/api/auth/login',
 			'/api/auth/signup',
 			'/api/auth/logout',
+			'/api/metrics',
 			'/oauth/token',
 			'/oauth/revoke',
 			'/.well-known/oauth-authorization-server',
@@ -170,6 +172,17 @@ app.post('/api/metrics', async (context) => {
 			context?: Record<string, unknown>;
 		}>();
 
+		// Validate required fields
+		if (
+			typeof body.name !== 'string' || !body.name ||
+			typeof body.message !== 'string' || !body.message ||
+			typeof body.timestamp !== 'number' ||
+			typeof body.url !== 'string' || !body.url ||
+			typeof body.userAgent !== 'string'
+		) {
+			return context.text('invalid', 400);
+		}
+
 		// Get user context from session (if logged in)
 		let userId: string | undefined;
 		const sessionId = getCookie(context, SESSION_COOKIE_NAME);
@@ -187,14 +200,14 @@ app.post('/api/metrics', async (context) => {
 			userAgent: body.userAgent,
 			userId,
 			source: 'web',
-			environment: body.context?.environment as string,
+			environment: typeof body.context?.environment === 'string' ? body.context.environment : undefined,
 			extra: body.context,
 		});
 
-		return context.text('ok');
+		return context.text('accepted', 202);
 	} catch (error) {
 		console.error('Metrics endpoint error:', error);
-		return context.text('ok');
+		return context.text('error', 503);
 	}
 });
 
