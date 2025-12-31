@@ -15,7 +15,8 @@
 	gap: var(--space-4);
 }
 
-.projectName {
+.projectName,
+.pageTitle {
 	font-size: var(--text-lg);
 	font-weight: var(--font-semibold);
 	color: var(--color-text);

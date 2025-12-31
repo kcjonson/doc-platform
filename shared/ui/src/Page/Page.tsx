@@ -7,6 +7,8 @@ export interface PageProps {
 	projectId?: string;
 	/** Currently active nav tab */
 	activeTab?: NavTabLabel;
+	/** Page title - shown when no projectId (for non-project pages like Settings) */
+	title?: string;
 	/** Page content */
 	children: ComponentChildren;
 	/** Additional CSS class for the content area */
@@ -16,12 +18,13 @@ export interface PageProps {
 export function Page({
 	projectId,
 	activeTab,
+	title,
 	children,
 	class: className,
 }: PageProps): JSX.Element {
 	return (
 		<div class={styles.page}>
-			<WebHeader projectId={projectId} activeTab={activeTab} />
+			<WebHeader projectId={projectId} activeTab={activeTab} title={title} />
 			<main class={`${styles.content} ${className || ''}`}>
 				{children}
 			</main>

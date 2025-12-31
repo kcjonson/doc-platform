@@ -5,7 +5,7 @@ import styles from './Admin.module.css';
 
 export function Admin(_props: RouteProps): JSX.Element {
 	return (
-		<Page>
+		<Page title="Admin">
 			<div class={styles.content}>
 				<div class={styles.cards}>
 					<a href="/admin/users" class={styles.card}>

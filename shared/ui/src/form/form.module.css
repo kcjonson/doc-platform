@@ -1,0 +1,36 @@
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-1);
+}
+
+.label {
+	font-size: var(--text-sm);
+	font-weight: var(--font-medium);
+	color: var(--color-text);
+}
+
+.error {
+	font-size: var(--text-sm);
+	color: var(--color-error);
+	min-height: 1.25em;
+	visibility: hidden;
+}
+
+.errorVisible {
+	visibility: visible;
+}
+
+/* Apply error styling to inputs when error is present */
+.hasError input,
+.hasError select,
+.hasError textarea {
+	border-color: var(--color-error);
+}
+
+.hasError input:focus,
+.hasError select:focus,
+.hasError textarea:focus {
+	border-color: var(--color-error);
+	box-shadow: 0 0 0 2px var(--color-error-bg, rgba(239, 68, 68, 0.2));
+}

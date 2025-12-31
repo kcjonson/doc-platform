@@ -175,7 +175,7 @@ export function UserSettings(props: RouteProps): JSX.Element {
 
 	if (isLoading) {
 		return (
-			<Page>
+			<Page title="Settings">
 				<div class={styles.container}>
 					<div class={styles.content}>
 						<div class={styles.loading}>Loading...</div>
@@ -190,7 +190,7 @@ export function UserSettings(props: RouteProps): JSX.Element {
 	if (error) {
 		const errorMessage = typeof error === 'string' ? error : error.message;
 		return (
-			<Page>
+			<Page title="Settings">
 				<div class={styles.container}>
 					<div class={styles.content}>
 						<div class={styles.card}>
@@ -220,7 +220,7 @@ export function UserSettings(props: RouteProps): JSX.Element {
 	// Permission check for viewing other users
 	if (isViewingOther && !isCurrentUserAdmin) {
 		return (
-			<Page>
+			<Page title="Settings">
 				<div class={styles.container}>
 					<div class={styles.content}>
 						<div class={styles.card}>
@@ -234,7 +234,7 @@ export function UserSettings(props: RouteProps): JSX.Element {
 
 	if (!user) {
 		return (
-			<Page>
+			<Page title="Settings">
 				<div class={styles.container}>
 					<div class={styles.content}>
 						<div class={styles.loading}>Loading...</div>
@@ -246,10 +246,10 @@ export function UserSettings(props: RouteProps): JSX.Element {
 
 	const pageTitle = isViewingOther
 		? `${user.first_name} ${user.last_name}`
-		: 'User Settings';
+		: 'Settings';
 
 	return (
-		<Page>
+		<Page title={pageTitle}>
 			<div class={styles.container}>
 				<div class={styles.content}>
 					<div class={styles.card}>

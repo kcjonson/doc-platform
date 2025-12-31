@@ -60,10 +60,28 @@
 	background: var(--color-error-bg);
 }
 
+.labelText {
+	font-weight: 500;
+}
+
+.error {
+	color: var(--color-error);
+	margin: 0;
+}
+
+.secondaryText {
+	color: var(--color-text-muted);
+	margin: 0;
+}
+
 /* Delete confirmation */
 .deleteConfirm {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-4);
 	min-width: 360px;
+}
+
+.deleteConfirm p {
+	margin: 0;
 }

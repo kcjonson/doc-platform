@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { Dialog, Button, Text } from '@doc-platform/ui';
+import { Dialog, Button } from '@doc-platform/ui';
 import type { Project } from '../ProjectCard/ProjectCard';
 import styles from './ProjectDialog.module.css';
 
@@ -78,12 +78,12 @@ export function ProjectDialog({
 			>
 				<div class={styles.deleteConfirm}>
 					{error && (
-						<Text variant="error">{error}</Text>
+						<p class={styles.error}>{error}</p>
 					)}
-					<Text>
+					<p>
 						Are you sure you want to delete "{project?.name}"? This will also delete all epics and tasks in this project.
-					</Text>
-					<Text variant="secondary">This action cannot be undone.</Text>
+					</p>
+					<p class={styles.secondaryText}>This action cannot be undone.</p>
 					<div class={styles.actions}>
 						<Button
 							class="text"
@@ -112,11 +112,11 @@ export function ProjectDialog({
 		>
 			<form class={styles.form} onSubmit={handleSubmit}>
 				{error && (
-					<Text variant="error">{error}</Text>
+					<p class={styles.error}>{error}</p>
 				)}
 				<div class={styles.field}>
 					<label class={styles.label}>
-						<Text>Name</Text>
+						<span class={styles.labelText}>Name</span>
 						<input
 							type="text"
 							class={styles.input}
@@ -129,7 +129,7 @@ export function ProjectDialog({
 				</div>
 				<div class={styles.field}>
 					<label class={styles.label}>
-						<Text>Description (optional)</Text>
+						<span class={styles.labelText}>Description (optional)</span>
 						<textarea
 							class={styles.textarea}
 							value={description}

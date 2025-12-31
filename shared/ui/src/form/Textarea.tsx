@@ -1,8 +1,13 @@
 import type { JSX } from 'preact';
+import styles from './form.module.css';
 
 export interface TextareaProps {
 	/** Textarea value (controlled) */
 	value: string;
+	/** Label text displayed above the textarea */
+	label?: string;
+	/** Error message displayed below the textarea */
+	error?: string;
 	/** Placeholder text */
 	placeholder?: string;
 	/** Number of visible rows */
@@ -21,7 +26,7 @@ export interface TextareaProps {
 	readOnly?: boolean;
 	/** Resize behavior */
 	resize?: 'none' | 'vertical' | 'horizontal' | 'both';
-	/** CSS classes (e.g., "size-sm error") */
+	/** CSS classes for the textarea (e.g., "size-sm") */
 	class?: string;
 	/** Textarea name */
 	name?: string;
@@ -33,6 +38,8 @@ export interface TextareaProps {
 
 export function Textarea({
 	value,
+	label,
+	error,
 	placeholder,
 	rows = 3,
 	onInput,
@@ -47,22 +54,29 @@ export function Textarea({
 	id,
 	autoFocus,
 }: TextareaProps): JSX.Element {
+	const fieldClasses = `${styles.field} ${error ? styles.hasError : ''}`;
+	const errorClasses = `${styles.error} ${error ? styles.errorVisible : ''}`;
+
 	return (
-		<textarea
-			class={className || undefined}
-			value={value}
-			placeholder={placeholder}
-			rows={rows}
-			onInput={onInput}
-			onKeyDown={onKeyDown}
-			onBlur={onBlur}
-			onFocus={onFocus}
-			disabled={disabled}
-			readOnly={readOnly}
-			name={name}
-			id={id}
-			autoFocus={autoFocus}
-			style={{ resize }}
-		/>
+		<div class={fieldClasses}>
+			{label && <label class={styles.label} htmlFor={id}>{label}</label>}
+			<textarea
+				class={className || undefined}
+				value={value}
+				placeholder={placeholder}
+				rows={rows}
+				onInput={onInput}
+				onKeyDown={onKeyDown}
+				onBlur={onBlur}
+				onFocus={onFocus}
+				disabled={disabled}
+				readOnly={readOnly}
+				name={name}
+				id={id}
+				autoFocus={autoFocus}
+				style={{ resize }}
+			/>
+			<span class={errorClasses}>{error || '\u00A0'}</span>
+		</div>
 	);
 }

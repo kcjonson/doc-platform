@@ -53,3 +53,7 @@
 	padding: var(--space-6);
 	text-align: center;
 }
+
+.secondaryText {
+	color: var(--color-text-muted);
+}

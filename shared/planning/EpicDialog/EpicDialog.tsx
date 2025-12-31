@@ -26,18 +26,18 @@ export type EpicDialogProps = EpicDialogExistingProps | EpicDialogCreateProps;
 export function EpicDialog(props: EpicDialogProps): JSX.Element {
 	const { onClose } = props;
 
+	const title = props.isNew ? 'New Epic' : 'Edit Epic';
+
 	return (
-		<Dialog onClose={onClose}>
+		<Dialog onClose={onClose} title={title}>
 			{props.isNew ? (
 				<EpicView
 					isNew
-					onClose={onClose}
 					onCreate={props.onCreate}
 				/>
 			) : (
 				<EpicView
 					epic={props.epic}
-					onClose={onClose}
 					onDelete={props.onDelete}
 				/>
 			)}

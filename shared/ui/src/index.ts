@@ -23,17 +23,15 @@ export type { ButtonProps } from './Button/Button';
 export { Dialog } from './Dialog/Dialog';
 export type { DialogProps } from './Dialog/Dialog';
 
-// Text (text input)
-export { Text } from './Text/Text';
-export type { TextProps } from './Text/Text';
+// Form components (Text, Select, Textarea with label/error support)
+export { Text } from './form/Text';
+export type { TextProps } from './form/Text';
 
-// Textarea
-export { Textarea } from './Textarea/Textarea';
-export type { TextareaProps } from './Textarea/Textarea';
+export { Textarea } from './form/Textarea';
+export type { TextareaProps } from './form/Textarea';
 
-// Select
-export { Select } from './Select/Select';
-export type { SelectProps, SelectOption } from './Select/Select';
+export { Select } from './form/Select';
+export type { SelectProps, SelectOption } from './form/Select';
 
 // Card
 export { Card } from './Card/Card';
