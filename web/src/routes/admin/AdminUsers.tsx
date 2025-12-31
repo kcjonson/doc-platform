@@ -94,7 +94,7 @@ export function AdminUsers(_props: RouteProps): JSX.Element {
 	const currentPage = Math.floor(offset / USERS_PER_PAGE) + 1;
 
 	return (
-		<Page>
+		<Page title="Users">
 			<div class={styles.content}>
 				<div class={styles.controls}>
 					<input

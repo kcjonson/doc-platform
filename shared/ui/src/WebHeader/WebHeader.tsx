@@ -26,6 +26,8 @@ export interface WebHeaderProps {
 	projectId?: string;
 	/** Currently active tab (matches NavTabLabel) */
 	activeTab?: NavTabLabel;
+	/** Page title - shown when no projectId (for non-project pages like Settings) */
+	title?: string;
 	/** Optional right-side action buttons (placed before user menu) */
 	actions?: ComponentChildren;
 	/** Additional CSS class */
@@ -35,6 +37,7 @@ export interface WebHeaderProps {
 export function WebHeader({
 	projectId,
 	activeTab,
+	title,
 	actions,
 	class: className,
 }: WebHeaderProps): JSX.Element {
@@ -47,7 +50,7 @@ export function WebHeader({
 	return (
 		<header class={`${styles.header} ${className || ''}`}>
 			<div class={styles.left}>
-				{projectId && (
+				{projectId ? (
 					<>
 						<span class={styles.projectName}>{formatProjectName(projectId)}</span>
 						<nav class={styles.nav}>
@@ -61,6 +64,15 @@ export function WebHeader({
 								</a>
 							))}
 						</nav>
+					</>
+				) : (
+					<>
+						{title && <span class={styles.pageTitle}>{title}</span>}
+						{title !== 'Projects' && (
+							<nav class={styles.nav}>
+								<a href="/projects" class={styles.navTab}>Projects</a>
+							</nav>
+						)}
 					</>
 				)}
 			</div>

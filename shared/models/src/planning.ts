@@ -84,7 +84,9 @@ export class EpicsCollection extends SyncCollection<EpicModel> {
 	static url = '/api/projects/:projectId/epics';
 	static Model = EpicModel;
 
-	projectId!: string;
+	// Note: projectId is set dynamically via constructor initialProps
+	// Do NOT declare it as a class field or it will overwrite the value
+	declare projectId: string;
 
 	/**
 	 * Get epics filtered by status, sorted by rank.

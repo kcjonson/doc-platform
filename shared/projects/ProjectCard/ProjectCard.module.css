@@ -73,6 +73,8 @@
 	-webkit-box-orient: vertical;
 	overflow: hidden;
 	flex: 1;
+	margin: 0;
+	color: var(--color-text-muted);
 }
 
 .stats {
@@ -95,4 +97,18 @@
 .footer {
 	padding-top: var(--space-2);
 	border-top: 1px solid var(--color-border);
+}
+
+.statCount {
+	font-size: var(--text-sm);
+}
+
+.noEpics {
+	font-size: var(--text-sm);
+	color: var(--color-text-muted);
+}
+
+.updatedAt {
+	font-size: var(--text-sm);
+	color: var(--color-text-muted);
 }

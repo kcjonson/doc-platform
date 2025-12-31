@@ -3,7 +3,7 @@ import type { JSX } from 'preact';
 import type { RouteProps } from '@doc-platform/router';
 import { navigate } from '@doc-platform/router';
 import { fetchClient } from '@doc-platform/fetch';
-import { Button, Text, Page } from '@doc-platform/ui';
+import { Button, Page } from '@doc-platform/ui';
 import { ProjectCard, type Project } from '../ProjectCard/ProjectCard';
 import { ProjectDialog } from '../ProjectDialog/ProjectDialog';
 import styles from './ProjectsList.module.css';
@@ -94,7 +94,7 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 
 	if (loading) {
 		return (
-			<Page>
+			<Page title="Projects">
 				<div class={styles.loading}>Loading...</div>
 			</Page>
 		);
@@ -102,10 +102,10 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 
 	if (error) {
 		return (
-			<Page>
+			<Page title="Projects">
 				<div class={styles.error}>
-					<Text variant="heading">Error</Text>
-					<Text>{error}</Text>
+					<h2>Error</h2>
+					<p>{error}</p>
 					<Button onClick={fetchProjects}>Retry</Button>
 				</div>
 			</Page>
@@ -113,7 +113,7 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 	}
 
 	return (
-		<Page>
+		<Page title="Projects">
 			<main class={styles.main}>
 				<div class={styles.toolbar}>
 					<Button onClick={handleOpenCreateDialog}>+ New Project</Button>
@@ -121,10 +121,10 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 
 				{projects.length === 0 ? (
 					<div class={styles.empty}>
-						<Text variant="heading">No projects yet</Text>
-						<Text variant="secondary">
+						<h2>No projects yet</h2>
+						<p class={styles.secondaryText}>
 							Create your first project to get started
-						</Text>
+						</p>
 						<Button onClick={handleOpenCreateDialog}>Create Project</Button>
 					</div>
 				) : (

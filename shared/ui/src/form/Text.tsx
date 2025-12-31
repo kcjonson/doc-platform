@@ -1,8 +1,13 @@
 import type { JSX } from 'preact';
+import styles from './form.module.css';
 
 export interface TextProps {
 	/** Input value (controlled) */
 	value: string;
+	/** Label text displayed above the input */
+	label?: string;
+	/** Error message displayed below the input */
+	error?: string;
 	/** Input type */
 	type?: 'text' | 'email' | 'password' | 'number' | 'search' | 'tel' | 'url';
 	/** Placeholder text */
@@ -19,7 +24,7 @@ export interface TextProps {
 	disabled?: boolean;
 	/** Read-only state */
 	readOnly?: boolean;
-	/** CSS classes (e.g., "size-sm error") */
+	/** CSS classes for the input (e.g., "size-sm") */
 	class?: string;
 	/** Input name */
 	name?: string;
@@ -33,6 +38,8 @@ export interface TextProps {
 
 export function Text({
 	value,
+	label,
+	error,
 	type = 'text',
 	placeholder,
 	onInput,
@@ -47,22 +54,29 @@ export function Text({
 	autoFocus,
 	autoComplete,
 }: TextProps): JSX.Element {
+	const fieldClasses = `${styles.field} ${error ? styles.hasError : ''}`;
+	const errorClasses = `${styles.error} ${error ? styles.errorVisible : ''}`;
+
 	return (
-		<input
-			type={type}
-			class={className || undefined}
-			value={value}
-			placeholder={placeholder}
-			onInput={onInput}
-			onKeyDown={onKeyDown}
-			onBlur={onBlur}
-			onFocus={onFocus}
-			disabled={disabled}
-			readOnly={readOnly}
-			name={name}
-			id={id}
-			autoFocus={autoFocus}
-			autoComplete={autoComplete}
-		/>
+		<div class={fieldClasses}>
+			{label && <label class={styles.label} htmlFor={id}>{label}</label>}
+			<input
+				type={type}
+				class={className || undefined}
+				value={value}
+				placeholder={placeholder}
+				onInput={onInput}
+				onKeyDown={onKeyDown}
+				onBlur={onBlur}
+				onFocus={onFocus}
+				disabled={disabled}
+				readOnly={readOnly}
+				name={name}
+				id={id}
+				autoFocus={autoFocus}
+				autoComplete={autoComplete}
+			/>
+			<span class={errorClasses}>{error || '\u00A0'}</span>
+		</div>
 	);
 }

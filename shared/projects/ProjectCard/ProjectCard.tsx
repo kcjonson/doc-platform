@@ -1,5 +1,5 @@
 import type { JSX } from 'preact';
-import { Card, Text, StatusDot } from '@doc-platform/ui';
+import { Card, StatusDot } from '@doc-platform/ui';
 import styles from './ProjectCard.module.css';
 
 export interface EpicCounts {
@@ -60,7 +60,7 @@ export function ProjectCard({ project, onClick, onEdit }: ProjectCardProps): JSX
 			role="button"
 		>
 			<div class={styles.header}>
-				<Text variant="heading" class={styles.name}>{project.name}</Text>
+				<h3 class={styles.name}>{project.name}</h3>
 				{onEdit && (
 					<button
 						type="button"
@@ -74,9 +74,9 @@ export function ProjectCard({ project, onClick, onEdit }: ProjectCardProps): JSX
 				)}
 			</div>
 			{project.description && (
-				<Text variant="secondary" class={styles.description}>
+				<p class={styles.description}>
 					{project.description}
-				</Text>
+				</p>
 			)}
 			<div class={styles.stats}>
 				{hasEpics && epicCounts ? (
@@ -84,36 +84,36 @@ export function ProjectCard({ project, onClick, onEdit }: ProjectCardProps): JSX
 						{epicCounts.ready > 0 && (
 							<span class={styles.statItem}>
 								<StatusDot status="ready" />
-								<Text size="small">{epicCounts.ready}</Text>
+								<span class={styles.statCount}>{epicCounts.ready}</span>
 							</span>
 						)}
 						{epicCounts.in_progress > 0 && (
 							<span class={styles.statItem}>
 								<StatusDot status="in_progress" />
-								<Text size="small">{epicCounts.in_progress}</Text>
+								<span class={styles.statCount}>{epicCounts.in_progress}</span>
 							</span>
 						)}
 						{epicCounts.in_review > 0 && (
 							<span class={styles.statItem}>
 								<StatusDot status="in_review" />
-								<Text size="small">{epicCounts.in_review}</Text>
+								<span class={styles.statCount}>{epicCounts.in_review}</span>
 							</span>
 						)}
 						{epicCounts.done > 0 && (
 							<span class={styles.statItem}>
 								<StatusDot status="done" />
-								<Text size="small">{epicCounts.done}</Text>
+								<span class={styles.statCount}>{epicCounts.done}</span>
 							</span>
 						)}
 					</div>
 				) : (
-					<Text variant="secondary" size="small">No epics yet</Text>
+					<span class={styles.noEpics}>No epics yet</span>
 				)}
 			</div>
 			<div class={styles.footer}>
-				<Text variant="secondary" size="small">
+				<span class={styles.updatedAt}>
 					Updated {formatRelativeTime(project.updatedAt)}
-				</Text>
+				</span>
 			</div>
 		</Card>
 	);
