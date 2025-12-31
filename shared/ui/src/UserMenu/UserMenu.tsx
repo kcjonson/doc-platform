@@ -49,13 +49,9 @@ export function UserMenu({
 		setIsOpen((prev) => !prev);
 	}, []);
 
-	const handleLogoutClick = useCallback(async (): Promise<void> => {
+	const handleLogoutClick = useCallback((): void => {
 		setIsOpen(false);
-		try {
-			await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
-		} finally {
-			window.location.href = '/login';
-		}
+		window.location.href = '/logout';
 	}, []);
 
 	const activateItem = useCallback((index: number): void => {

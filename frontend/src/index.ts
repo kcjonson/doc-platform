@@ -50,6 +50,9 @@ app.get('/login', (c) => servePage(c, pages.login));
 // Signup page (no auth required)
 app.get('/signup', (c) => servePage(c, pages.signup));
 
+// Logout page (no auth required - handles the logout flow)
+app.get('/logout', (c) => servePage(c, pages.logout));
+
 // Marketing home page - always accessible (even when authenticated)
 app.get('/home', (c) => servePage(c, pages.home));
 
@@ -350,7 +353,7 @@ app.get('/version.txt', serveStatic({ root: './static', path: 'version.txt' }));
 app.use(
 	'*',
 	authMiddleware(redis, {
-		excludePaths: ['/health', '/login', '/signup', '/home', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me'],
+		excludePaths: ['/health', '/login', '/signup', '/logout', '/home', '/api/auth/login', '/api/auth/signup', '/api/auth/logout', '/api/auth/me'],
 		onUnauthenticated: () => {
 			// Show 404 for unauthenticated requests
 			// This avoids revealing which routes exist and eliminates route duplication

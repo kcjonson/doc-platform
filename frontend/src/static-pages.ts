@@ -56,6 +56,7 @@ function loadPage(path: string): CachedPage {
 export const pages = {
 	login: loadPage('./static/ssg/login.html'),
 	signup: loadPage('./static/ssg/signup.html'),
+	logout: loadPage('./static/ssg/logout.html'),
 	home: loadPage('./static/ssg/home.html'),
 	notFound: loadPage('./static/ssg/not-found.html'),
 };

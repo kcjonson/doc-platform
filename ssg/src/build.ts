@@ -13,6 +13,7 @@ import { render } from 'preact-render-to-string';
 import { renderDocument } from './shell.js';
 import { LoginContent, loginScript } from './pages/login.js';
 import { SignupContent, signupScript } from './pages/signup.js';
+import { LogoutContent, logoutScript } from './pages/logout.js';
 import { NotFoundContent } from './pages/not-found.js';
 import { HomeContent, homeScript } from './pages/home.js';
 
@@ -79,6 +80,7 @@ function build(): void {
 	const commonCss = getCssPath(manifest, '../ssg/src/styles/common.css');
 	const loginCss = getCssPath(manifest, '../ssg/src/styles/login.css');
 	const signupCss = getCssPath(manifest, '../ssg/src/styles/signup.css');
+	const logoutCss = getCssPath(manifest, '../ssg/src/styles/logout.css');
 	const notFoundCss = getCssPath(manifest, '../ssg/src/styles/not-found.css');
 	const homeCss = getCssPath(manifest, '../ssg/src/styles/home.css');
 
@@ -96,6 +98,14 @@ function build(): void {
 		cssFiles: [commonCss, signupCss],
 		body: render(SignupContent()),
 		scripts: signupScript,
+	}));
+
+	// Render logout page
+	writePage('logout.html', renderDocument({
+		title: 'Sign Out - Doc Platform',
+		cssFiles: [commonCss, logoutCss],
+		body: render(LogoutContent()),
+		scripts: logoutScript,
 	}));
 
 	// Render not found page

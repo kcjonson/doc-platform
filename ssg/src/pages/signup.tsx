@@ -103,6 +103,18 @@ export const signupScript = `(function() {
 	var errorEl = document.getElementById('error');
 	var submitBtn = document.getElementById('submit-btn');
 
+	// Check if already logged in and redirect
+	fetch('/api/auth/me', { credentials: 'same-origin' })
+		.then(function(res) {
+			if (res.ok) {
+				// User is already logged in, redirect to home
+				window.location.href = '/';
+			}
+		})
+		.catch(function() {
+			// Ignore errors - user is not logged in
+		});
+
 	function showError(message) {
 		errorEl.textContent = message;
 		errorEl.classList.remove('hidden');
