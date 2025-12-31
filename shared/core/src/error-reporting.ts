@@ -24,6 +24,24 @@ export interface ErrorReport {
  * Report an error to the error tracking service
  */
 export async function reportError(report: ErrorReport): Promise<void> {
+	// Log to stdout for CloudWatch (structured JSON)
+	console.log(JSON.stringify({
+		type: 'error_report',
+		level: 'error',
+		timestamp: new Date(report.timestamp).toISOString(),
+		source: report.source,
+		error: {
+			name: report.name,
+			message: report.message,
+			stack: report.stack,
+		},
+		userId: report.userId,
+		url: report.url,
+		userAgent: report.userAgent,
+		environment: report.environment,
+		extra: report.extra,
+	}));
+
 	const dsn = process.env.ERROR_REPORTING_DSN;
 	if (!dsn) {
 		return;

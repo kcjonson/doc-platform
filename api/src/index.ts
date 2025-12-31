@@ -15,7 +15,7 @@ import {
 	getSession,
 	SESSION_COOKIE_NAME,
 } from '@doc-platform/auth';
-import { reportError, installErrorHandlers } from '@doc-platform/core';
+import { reportError, installErrorHandlers, logRequest } from '@doc-platform/core';
 import { getCookie } from 'hono/cookie';
 
 import { handleLogin, handleLogout, handleGetMe, handleUpdateMe, handleSignup } from './handlers/auth.js';
@@ -82,6 +82,33 @@ const app = new Hono();
 
 // Middleware
 app.use('*', cors());
+
+// Request logging middleware
+app.use('*', async (context, next) => {
+	const start = Date.now();
+	await next();
+	const duration = Date.now() - start;
+
+	// Get user ID from session if available
+	let userId: string | undefined;
+	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
+	if (sessionId) {
+		const session = await getSession(redis, sessionId);
+		userId = session?.userId;
+	}
+
+	logRequest({
+		method: context.req.method,
+		path: context.req.path,
+		status: context.res.status,
+		duration,
+		ip: context.req.header('x-forwarded-for') || context.req.header('x-real-ip'),
+		userAgent: context.req.header('user-agent'),
+		referer: context.req.header('referer'),
+		userId,
+		contentLength: parseInt(context.res.headers.get('content-length') || '0', 10),
+	});
+});
 
 // Rate limiting middleware (per spec requirements)
 app.use(

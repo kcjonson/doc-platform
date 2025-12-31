@@ -21,7 +21,7 @@ import {
 	ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { installErrorHandlers } from '@doc-platform/core';
+import { installErrorHandlers, logRequest } from '@doc-platform/core';
 
 import { epicTools, handleEpicTool } from './tools/epics.js';
 import { taskTools, handleTaskTool } from './tools/tasks.js';
@@ -118,7 +118,20 @@ const transports = new Map<string, StreamableHTTPServerTransport>();
 // Start the HTTP server
 async function main(): Promise<void> {
 	const httpServer = createServer(async (req, res) => {
+		const start = Date.now();
 		const url = new URL(req.url || '/', `http://localhost:${port}`);
+
+		// Log request on response finish
+		res.on('finish', () => {
+			logRequest({
+				method: req.method || 'GET',
+				path: url.pathname,
+				status: res.statusCode,
+				duration: Date.now() - start,
+				ip: (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress,
+				userAgent: req.headers['user-agent'] as string,
+			});
+		});
 
 		// Health check endpoint
 		if (url.pathname === '/health' && req.method === 'GET') {
