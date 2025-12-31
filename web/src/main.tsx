@@ -1,9 +1,16 @@
+import { init as initTelemetry } from '@doc-platform/telemetry';
 import { startRouter, navigate } from '@doc-platform/router';
 import type { RouteProps } from '@doc-platform/router';
 import { useEffect, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { fetchClient } from '@doc-platform/fetch';
 import { NotFound } from '@doc-platform/ui';
+
+// Initialize error reporting
+initTelemetry({
+	enabled: import.meta.env.WEB_ERROR_REPORTING_ENABLED === 'true',
+	environment: import.meta.env.MODE,
+});
 
 // Shared feature components
 import { Board, EpicDetail } from '@shared/planning';

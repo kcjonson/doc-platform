@@ -21,6 +21,23 @@ import { query, type User } from '@doc-platform/db';
 import { isValidEmail, isValidUsername } from '../validation.js';
 
 /**
+ * Structured auth event logging for CloudWatch Logs Insights
+ */
+function logAuthEvent(
+	event: 'login_success' | 'login_failure' | 'logout' | 'signup_success',
+	data: Record<string, unknown>
+): void {
+	console.log(
+		JSON.stringify({
+			type: 'auth',
+			event,
+			timestamp: new Date().toISOString(),
+			...data,
+		})
+	);
+}
+
+/**
  * Check if request is over HTTPS (directly or via ALB/proxy)
  */
 function isSecureRequest(context: Context): boolean {
@@ -110,6 +127,7 @@ export async function handleLogin(
 		const isValid = await verifyPassword(password, hashToVerify);
 
 		if (!user || !isValid) {
+			logAuthEvent('login_failure', { identifier, reason: 'invalid_credentials' });
 			return context.json({ error: 'Invalid credentials' }, 401);
 		}
 
@@ -141,6 +159,8 @@ export async function handleLogin(
 			path: '/',
 			maxAge: SESSION_TTL_SECONDS,
 		});
+
+		logAuthEvent('login_success', { userId: user.id, username: user.username });
 
 		return context.json({
 			user: {
@@ -285,6 +305,8 @@ export async function handleSignup(
 			maxAge: SESSION_TTL_SECONDS,
 		});
 
+		logAuthEvent('signup_success', { userId: user.id, username: user.username });
+
 		// TODO: Send verification email
 
 		return context.json({
@@ -312,13 +334,20 @@ export async function handleLogout(
 	redis: Redis
 ): Promise<Response> {
 	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
+	let userId: string | undefined;
 
 	if (sessionId) {
 		try {
+			const session = await getSession(redis, sessionId);
+			userId = session?.userId;
 			await deleteSession(redis, sessionId);
 		} catch (error) {
 			console.error('Failed to delete session:', error);
 		}
+	}
+
+	if (userId) {
+		logAuthEvent('logout', { userId });
 	}
 
 	deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });

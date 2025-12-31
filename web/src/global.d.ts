@@ -8,3 +8,13 @@ declare module '*.css' {
 	const css: string;
 	export default css;
 }
+
+// Vite environment variables
+interface ImportMetaEnv {
+	readonly MODE: string;
+	readonly WEB_ERROR_REPORTING_ENABLED?: string;
+}
+
+interface ImportMeta {
+	readonly env: ImportMetaEnv;
+}

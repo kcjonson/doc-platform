@@ -119,6 +119,32 @@ Use this template for all work items:
 
 ## In Progress Epics
 
+### Logging & Monitoring
+**Spec/Documentation:** `/docs/specs/logging-monitoring.md`
+**Dependencies:** Staging Deployment
+**Status:** in progress
+
+**Goal:** Error tracking, resource monitoring, and audit logging with minimal external services.
+
+**Tasks:**
+- [x] Error tracking integration (Sentry-compatible, tunneled through our API)
+  - [x] Add `/api/metrics` tunnel endpoint to API
+  - [x] Add custom telemetry package to web (frontend)
+  - [x] Add error reporting utility to API (backend)
+- [x] CloudWatch alarms
+  - [x] CPU utilization alarm (>80%)
+  - [x] Memory utilization alarm (>80%)
+  - [x] 5xx error rate alarm
+- [x] Audit logging
+  - [x] Log successful logins
+  - [x] Log failed login attempts
+  - [x] Log logout events
+  - [x] Log signup events
+- [ ] Configure Sentry DSN in environment variables
+- [ ] Add uptime monitoring (external service)
+
+---
+
 ### Admin User Management
 **Spec/Documentation:** `api/src/handlers/users.ts`, `web/src/routes/settings/UserManagement.tsx`
 **Dependencies:** Authentication System

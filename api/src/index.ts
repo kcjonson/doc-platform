@@ -7,11 +7,16 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
 import { Redis } from 'ioredis';
+
 import {
 	rateLimitMiddleware,
 	csrfMiddleware,
 	RATE_LIMIT_CONFIGS,
+	getSession,
+	SESSION_COOKIE_NAME,
 } from '@doc-platform/auth';
+import { reportError, installErrorHandlers, logRequest } from '@doc-platform/core';
+import { getCookie } from 'hono/cookie';
 
 import { handleLogin, handleLogout, handleGetMe, handleUpdateMe, handleSignup } from './handlers/auth.js';
 import {
@@ -65,6 +70,9 @@ import {
 	handleDeleteProject,
 } from './handlers/projects.js';
 
+// Install global error handlers for uncaught exceptions
+installErrorHandlers('api');
+
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 const redis = new Redis(redisUrl);
@@ -83,7 +91,60 @@ const app = new Hono();
 // Middleware
 app.use('*', cors());
 
+// Request logging middleware with error capture
+app.use('*', async (context, next) => {
+	const start = Date.now();
+
+	// Get user ID from session if available
+	let userId: string | undefined;
+	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
+	if (sessionId) {
+		const session = await getSession(redis, sessionId);
+		userId = session?.userId;
+	}
+
+	try {
+		await next();
+	} catch (error) {
+		// Report errors that occur during request handling
+		const err = error instanceof Error ? error : new Error(String(error));
+		reportError({
+			name: err.name,
+			message: err.message,
+			stack: err.stack,
+			timestamp: Date.now(),
+			url: context.req.url,
+			userAgent: context.req.header('user-agent'),
+			userId,
+			source: 'api',
+			environment: process.env.NODE_ENV,
+			extra: {
+				method: context.req.method,
+				path: context.req.path,
+			},
+		}).catch(() => {
+			// Don't let error reporting failure affect the response
+		});
+		throw error; // Re-throw to let Hono's error handler respond
+	}
+
+	const duration = Date.now() - start;
+
+	logRequest({
+		method: context.req.method,
+		path: context.req.path,
+		status: context.res.status,
+		duration,
+		ip: context.req.header('x-forwarded-for') || context.req.header('x-real-ip'),
+		userAgent: context.req.header('user-agent'),
+		referer: context.req.header('referer'),
+		userId,
+		contentLength: parseInt(context.res.headers.get('content-length') || '0', 10),
+	});
+});
+
 // Rate limiting middleware (per spec requirements)
+// Excludes /api/metrics to ensure error reports are captured even during high error rates
 app.use(
 	'*',
 	rateLimitMiddleware(redis, {
@@ -94,7 +155,7 @@ app.use(
 			{ path: '/oauth/authorize', config: RATE_LIMIT_CONFIGS.oauthAuthorize },
 		],
 		defaultLimit: RATE_LIMIT_CONFIGS.api,
-		excludePaths: ['/health', '/api/health'],
+		excludePaths: ['/health', '/api/health', '/api/metrics'],
 	})
 );
 
@@ -102,6 +163,7 @@ app.use(
 // Token validated against Redis session, cookie is just for client convenience
 // Excludes login/signup (no session yet), logout (low-impact if CSRF'd)
 // Excludes OAuth token/revoke endpoints (use PKCE instead)
+// Excludes /api/metrics (uses sendBeacon which can't send custom headers)
 app.use(
 	'*',
 	csrfMiddleware(redis, {
@@ -109,6 +171,7 @@ app.use(
 			'/api/auth/login',
 			'/api/auth/signup',
 			'/api/auth/logout',
+			'/api/metrics',
 			'/oauth/token',
 			'/oauth/revoke',
 			'/.well-known/oauth-authorization-server',
@@ -121,6 +184,70 @@ app.use(
 // Health check
 app.get('/health', (context) => context.json({ status: 'ok' }));
 app.get('/api/health', (context) => context.json({ status: 'ok' }));
+
+// Error reporting endpoint - receives frontend errors and forwards to error tracking service
+// Excluded from CSRF (sendBeacon can't send headers) but protected by Origin check
+app.post('/api/metrics', async (context) => {
+	try {
+		// Security: Validate Origin header to prevent cross-site abuse
+		// Since CSRF is disabled for sendBeacon compatibility, we check Origin instead
+		const origin = context.req.header('origin');
+		const host = context.req.header('host');
+		if (origin) {
+			const originHost = new URL(origin).host;
+			if (originHost !== host) {
+				return context.text('forbidden', 403);
+			}
+		}
+
+		const body = await context.req.json<{
+			name: string;
+			message: string;
+			stack?: string;
+			timestamp: number;
+			url: string;
+			userAgent: string;
+			context?: Record<string, unknown>;
+		}>();
+
+		// Validate required fields
+		if (
+			typeof body.name !== 'string' || !body.name ||
+			typeof body.message !== 'string' || !body.message ||
+			typeof body.timestamp !== 'number' ||
+			typeof body.url !== 'string' || !body.url ||
+			typeof body.userAgent !== 'string' || !body.userAgent
+		) {
+			return context.text('invalid', 400);
+		}
+
+		// Get user context from session (if logged in)
+		let userId: string | undefined;
+		const sessionId = getCookie(context, SESSION_COOKIE_NAME);
+		if (sessionId) {
+			const session = await getSession(redis, sessionId);
+			userId = session?.userId;
+		}
+
+		await reportError({
+			name: body.name,
+			message: body.message,
+			stack: body.stack,
+			timestamp: body.timestamp,
+			url: body.url,
+			userAgent: body.userAgent,
+			userId,
+			source: 'web',
+			environment: typeof body.context?.environment === 'string' ? body.context.environment : undefined,
+			extra: body.context,
+		});
+
+		return context.text('accepted', 202);
+	} catch (error) {
+		console.error('Metrics endpoint error:', error);
+		return context.text('error', 503);
+	}
+});
 
 // Auth routes
 app.post('/api/auth/login', (context) => handleLogin(context, redis));

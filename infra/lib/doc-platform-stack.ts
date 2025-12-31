@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as cloudfrontOrigins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -333,11 +334,22 @@ export class DocPlatformStack extends cdk.Stack {
 		);
 
 		// ===========================================
+		// Log Groups
+		// ===========================================
+		// Error logs - 1 year retention for debugging and compliance
+		const errorLogGroup = new logs.LogGroup(this, 'ErrorLogGroup', {
+			logGroupName: '/doc-platform/errors',
+			retention: logs.RetentionDays.ONE_YEAR,
+			removalPolicy: cdk.RemovalPolicy.RETAIN,
+		});
+
+		// ===========================================
 		// API Service (Fargate)
 		// ===========================================
+		// Access logs - 30 days retention
 		const apiLogGroup = new logs.LogGroup(this, 'ApiLogGroup', {
 			logGroupName: '/ecs/api',
-			retention: logs.RetentionDays.TWO_WEEKS,
+			retention: logs.RetentionDays.ONE_MONTH,
 			removalPolicy: cdk.RemovalPolicy.DESTROY,
 		});
 
@@ -361,6 +373,8 @@ export class DocPlatformStack extends cdk.Stack {
 				DB_PORT: database.instanceEndpoint.port.toString(),
 				DB_NAME: 'doc_platform',
 				DB_USER: 'postgres',
+				// Error logging
+				ERROR_LOG_GROUP: errorLogGroup.logGroupName,
 			},
 			secrets: {
 				DB_PASSWORD: ecs.Secret.fromSecretsManager(dbCredentials, 'password'),
@@ -388,6 +402,9 @@ export class DocPlatformStack extends cdk.Stack {
 			maxHealthyPercent: 200,
 			healthCheckGracePeriod: cdk.Duration.seconds(60),
 		});
+
+		// Grant API task permission to write to error log group
+		errorLogGroup.grantWrite(apiTaskDefinition.taskRole);
 
 		// ===========================================
 		// Frontend Service (Fargate)
@@ -441,9 +458,10 @@ export class DocPlatformStack extends cdk.Stack {
 		// ===========================================
 		// MCP Service (Fargate)
 		// ===========================================
+		// Access logs - 30 days retention
 		const mcpLogGroup = new logs.LogGroup(this, 'McpLogGroup', {
 			logGroupName: '/ecs/mcp',
-			retention: logs.RetentionDays.TWO_WEEKS,
+			retention: logs.RetentionDays.ONE_MONTH,
 			removalPolicy: cdk.RemovalPolicy.DESTROY,
 		});
 
@@ -468,6 +486,8 @@ export class DocPlatformStack extends cdk.Stack {
 				DB_PORT: database.instanceEndpoint.port.toString(),
 				DB_NAME: 'doc_platform',
 				DB_USER: 'postgres',
+				// Error logging
+				ERROR_LOG_GROUP: errorLogGroup.logGroupName,
 			},
 			secrets: {
 				DB_PASSWORD: ecs.Secret.fromSecretsManager(dbCredentials, 'password'),
@@ -494,6 +514,9 @@ export class DocPlatformStack extends cdk.Stack {
 			maxHealthyPercent: 200,
 			healthCheckGracePeriod: cdk.Duration.seconds(60),
 		});
+
+		// Grant MCP task permission to write to error log group
+		errorLogGroup.grantWrite(mcpTaskDefinition.taskRole);
 
 		// ===========================================
 		// ALB Target Groups & Routing
@@ -555,6 +578,88 @@ export class DocPlatformStack extends cdk.Stack {
 
 		httpsListener.addTargetGroups('DefaultRoute', {
 			targetGroups: [frontendTargetGroup],
+		});
+
+		// ===========================================
+		// CloudWatch Alarms
+		// ===========================================
+
+		// API Service CPU Alarm
+		new cloudwatch.Alarm(this, 'ApiCpuAlarm', {
+			alarmName: 'doc-platform-api-cpu-high',
+			alarmDescription: 'API service CPU utilization exceeds 80%',
+			metric: apiService.metricCpuUtilization({
+				period: cdk.Duration.minutes(5),
+				statistic: 'Average',
+			}),
+			threshold: 80,
+			evaluationPeriods: 2,
+			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+		});
+
+		// API Service Memory Alarm
+		new cloudwatch.Alarm(this, 'ApiMemoryAlarm', {
+			alarmName: 'doc-platform-api-memory-high',
+			alarmDescription: 'API service memory utilization exceeds 80%',
+			metric: apiService.metricMemoryUtilization({
+				period: cdk.Duration.minutes(5),
+				statistic: 'Average',
+			}),
+			threshold: 80,
+			evaluationPeriods: 2,
+			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+		});
+
+		// Frontend Service CPU Alarm
+		new cloudwatch.Alarm(this, 'FrontendCpuAlarm', {
+			alarmName: 'doc-platform-frontend-cpu-high',
+			alarmDescription: 'Frontend service CPU utilization exceeds 80%',
+			metric: frontendService.metricCpuUtilization({
+				period: cdk.Duration.minutes(5),
+				statistic: 'Average',
+			}),
+			threshold: 80,
+			evaluationPeriods: 2,
+			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+		});
+
+		// Frontend Service Memory Alarm
+		new cloudwatch.Alarm(this, 'FrontendMemoryAlarm', {
+			alarmName: 'doc-platform-frontend-memory-high',
+			alarmDescription: 'Frontend service memory utilization exceeds 80%',
+			metric: frontendService.metricMemoryUtilization({
+				period: cdk.Duration.minutes(5),
+				statistic: 'Average',
+			}),
+			threshold: 80,
+			evaluationPeriods: 2,
+			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+		});
+
+		// ALB 5xx Error Alarm
+		new cloudwatch.Alarm(this, 'Alb5xxAlarm', {
+			alarmName: 'doc-platform-alb-5xx-errors',
+			alarmDescription: 'ALB 5xx errors exceed 10 in 5 minutes',
+			metric: alb.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, {
+				period: cdk.Duration.minutes(5),
+				statistic: 'Sum',
+			}),
+			threshold: 10,
+			evaluationPeriods: 1,
+			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+		});
+
+		// Target 5xx Error Alarm (errors from API/Frontend services)
+		new cloudwatch.Alarm(this, 'Target5xxAlarm', {
+			alarmName: 'doc-platform-target-5xx-errors',
+			alarmDescription: 'Target 5xx errors exceed 10 in 5 minutes',
+			metric: alb.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
+				period: cdk.Duration.minutes(5),
+				statistic: 'Sum',
+			}),
+			threshold: 10,
+			evaluationPeriods: 1,
+			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 
 		// ===========================================

@@ -1,5 +1,5 @@
 {
-	"name": "@doc-platform/core",
+	"name": "@doc-platform/telemetry",
 	"version": "0.0.1",
 	"private": true,
 	"type": "module",
@@ -14,14 +14,9 @@
 	"scripts": {
 		"build": "tsc",
 		"dev": "tsc --watch",
-		"test": "vitest run",
-		"test:watch": "vitest",
 		"lint": "eslint src",
 		"lint:fix": "eslint src --fix",
 		"clean": "rm -rf dist"
-	},
-	"dependencies": {
-		"@aws-sdk/client-cloudwatch-logs": "^3.600.0"
 	},
 	"devDependencies": {
 		"typescript": "^5.7.2"
