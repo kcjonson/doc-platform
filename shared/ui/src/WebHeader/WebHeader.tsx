@@ -42,7 +42,7 @@ export function WebHeader({
 	const user = useMemo(() => new UserModel({ id: 'me' }), []);
 	useModel(user);
 
-	const isAdmin = user.roles?.includes('admin');
+	const isAdmin = user.roles?.includes('admin') ?? false;
 
 	return (
 		<header class={`${styles.header} ${className || ''}`}>

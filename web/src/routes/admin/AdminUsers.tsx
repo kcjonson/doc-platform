@@ -101,11 +101,13 @@ export function AdminUsers(_props: RouteProps): JSX.Element {
 						type="text"
 						class={styles.searchInput}
 						placeholder="Search users..."
+						aria-label="Search users"
 						value={searchInput}
 						onInput={(e) => setSearchInput((e.target as HTMLInputElement).value)}
 					/>
 					<select
 						class={styles.filterSelect}
+						aria-label="Filter by status"
 						value={statusFilter}
 						onChange={(e) => { setStatusFilter((e.target as HTMLSelectElement).value); setOffset(0); }}
 					>
@@ -136,7 +138,14 @@ export function AdminUsers(_props: RouteProps): JSX.Element {
 							</thead>
 							<tbody>
 								{users.map((user) => (
-									<tr key={user.id} onClick={() => handleUserClick(user)}>
+									<tr
+										key={user.id}
+										onClick={() => handleUserClick(user)}
+										onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleUserClick(user); } }}
+										tabIndex={0}
+										role="button"
+										aria-label={`View ${user.first_name} ${user.last_name}`}
+									>
 										<td>
 											<div class={styles.userInfo}>
 												<span class={styles.userName}>

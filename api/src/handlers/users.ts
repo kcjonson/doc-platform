@@ -526,6 +526,11 @@ export async function handleCreateUser(
 
 		return context.json(userToApiResponse(user), 201);
 	} catch (error) {
+		// Handle unique constraint violations (race condition on concurrent creates)
+		const pgError = error as { code?: string };
+		if (pgError.code === '23505') {
+			return context.json({ error: 'Username or email already exists' }, 409);
+		}
 		console.error('Failed to create user:', error);
 		return context.json({ error: 'Database error' }, 500);
 	}
