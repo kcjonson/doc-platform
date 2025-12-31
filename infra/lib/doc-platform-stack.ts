@@ -76,37 +76,22 @@ export class DocPlatformStack extends cdk.Stack {
 		// ===========================================
 		// S3 bucket for placeholder static content
 		const placeholderBucket = new s3.Bucket(this, 'PlaceholderBucket', {
-			bucketName: `${domainName}-placeholder`,
+			bucketName: `${domainName.replace(/\./g, '-')}-placeholder`,
 			blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 			removalPolicy: cdk.RemovalPolicy.DESTROY,
 			autoDeleteObjects: true,
 		});
 
-		// CloudFront Origin Access Identity for S3
-		const originAccessIdentity = new cloudfront.OriginAccessIdentity(this, 'PlaceholderOAI', {
-			comment: 'OAI for specboard.io placeholder page',
-		});
-		placeholderBucket.grantRead(originAccessIdentity);
-
-		// CloudFront distribution for apex domain
+		// CloudFront distribution for apex domain using S3BucketOrigin with OAC (recommended over deprecated OAI)
 		const placeholderDistribution = new cloudfront.Distribution(this, 'PlaceholderDistribution', {
 			defaultBehavior: {
-				origin: new cloudfrontOrigins.S3Origin(placeholderBucket, {
-					originAccessIdentity,
-				}),
+				origin: cloudfrontOrigins.S3BucketOrigin.withOriginAccessControl(placeholderBucket),
 				viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
 				cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
 			},
 			domainNames: [domainName],
 			certificate,
 			defaultRootObject: 'index.html',
-			errorResponses: [
-				{
-					httpStatus: 404,
-					responseHttpStatus: 200,
-					responsePagePath: '/index.html',
-				},
-			],
 		});
 
 		// Deploy placeholder HTML to S3
@@ -115,6 +100,10 @@ export class DocPlatformStack extends cdk.Stack {
 			destinationBucket: placeholderBucket,
 			distribution: placeholderDistribution,
 			distributionPaths: ['/*'],
+			cacheControl: [
+				s3deploy.CacheControl.maxAge(cdk.Duration.days(365)),
+				s3deploy.CacheControl.setPublic(),
+			],
 		});
 
 		// Route53 A record for apex domain -> CloudFront
