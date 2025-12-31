@@ -14,6 +14,7 @@ import {
 	hashPassword,
 	verifyPassword,
 	SESSION_COOKIE_NAME,
+	CSRF_COOKIE_NAME,
 	SESSION_TTL_SECONDS,
 } from '@doc-platform/auth';
 import { query, type User } from '@doc-platform/db';
@@ -112,14 +113,29 @@ export async function handleLogin(
 			return context.json({ error: 'Invalid credentials' }, 401);
 		}
 
+		// Check if user account is active
+		if (!user.is_active) {
+			return context.json({ error: 'Account is deactivated' }, 403);
+		}
+
 		// Create session (returns CSRF token)
 		const sessionId = generateSessionId();
 		const csrfToken = await createSession(redis, sessionId, {
 			userId: user.id,
 		});
 
+		// Set session cookie (HttpOnly - not accessible to JS)
 		setCookie(context, SESSION_COOKIE_NAME, sessionId, {
 			httpOnly: true,
+			secure: isSecureRequest(context),
+			sameSite: 'Lax',
+			path: '/',
+			maxAge: SESSION_TTL_SECONDS,
+		});
+
+		// Set CSRF cookie (NOT HttpOnly - JS reads it for double-submit pattern)
+		setCookie(context, CSRF_COOKIE_NAME, csrfToken, {
+			httpOnly: false,
 			secure: isSecureRequest(context),
 			sameSite: 'Lax',
 			path: '/',
@@ -135,7 +151,6 @@ export async function handleLogin(
 				last_name: user.last_name,
 				avatar_url: user.avatar_url,
 			},
-			csrfToken,
 		});
 	} catch (error) {
 		console.error('Login failed:', error instanceof Error ? error.message : 'Unknown error');
@@ -252,8 +267,18 @@ export async function handleSignup(
 			userId: user.id,
 		});
 
+		// Set session cookie (HttpOnly - not accessible to JS)
 		setCookie(context, SESSION_COOKIE_NAME, sessionId, {
 			httpOnly: true,
+			secure: isSecureRequest(context),
+			sameSite: 'Lax',
+			path: '/',
+			maxAge: SESSION_TTL_SECONDS,
+		});
+
+		// Set CSRF cookie (NOT HttpOnly - JS reads it for double-submit pattern)
+		setCookie(context, CSRF_COOKIE_NAME, csrfToken, {
+			httpOnly: false,
 			secure: isSecureRequest(context),
 			sameSite: 'Lax',
 			path: '/',
@@ -271,7 +296,6 @@ export async function handleSignup(
 				last_name: user.last_name,
 				avatar_url: user.avatar_url,
 			},
-			csrfToken,
 			message: 'Account created successfully',
 		}, 201);
 	} catch (error) {
@@ -298,6 +322,7 @@ export async function handleLogout(
 	}
 
 	deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });
+	deleteCookie(context, CSRF_COOKIE_NAME, { path: '/' });
 	return context.json({ success: true });
 }
 
@@ -334,24 +359,26 @@ export async function handleGetMe(
 			return context.json({ error: 'User not found' }, 401);
 		}
 
-		// Build display name from available fields
-		const displayName = user.first_name && user.last_name
-			? `${user.first_name} ${user.last_name}`
-			: user.first_name || user.last_name || user.username || user.email;
+		// Check if user account is active - invalidate session if deactivated
+		if (!user.is_active) {
+			await deleteSession(redis, sessionId);
+			deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });
+			return context.json({ error: 'Account is deactivated' }, 403);
+		}
 
 		return context.json({
 			user: {
 				id: user.id,
 				username: user.username,
 				email: user.email,
-				displayName,
 				first_name: user.first_name,
 				last_name: user.last_name,
 				email_verified: user.email_verified,
 				phone_number: user.phone_number,
 				avatar_url: user.avatar_url,
+				roles: user.roles,
+				is_active: user.is_active,
 			},
-			csrfToken: session.csrfToken,
 		});
 	} catch (error) {
 		console.error('Failed to get user:', error instanceof Error ? error.message : 'Unknown error');
@@ -420,6 +447,18 @@ export async function handleUpdateMe(
 			return context.json({ error: 'Session expired' }, 401);
 		}
 
+		// Check if user is still active before allowing updates
+		const checkResult = await query<{ is_active: boolean }>(
+			'SELECT is_active FROM users WHERE id = $1',
+			[session.userId]
+		);
+		const currentUser = checkResult.rows[0];
+		if (!currentUser || !currentUser.is_active) {
+			await deleteSession(redis, sessionId);
+			deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });
+			return context.json({ error: 'Account is deactivated' }, 403);
+		}
+
 		// Build update query from allowlisted fields only
 		// SECURITY: Field names are validated against ALLOWED_PROFILE_FIELDS
 		// before being interpolated into SQL. Values are always parameterized.
@@ -451,17 +490,11 @@ export async function handleUpdateMe(
 			return context.json({ error: 'User not found' }, 404);
 		}
 
-		// Build display name from updated fields
-		const displayName = user.first_name && user.last_name
-			? `${user.first_name} ${user.last_name}`
-			: user.first_name || user.last_name || user.username || user.email;
-
 		return context.json({
 			user: {
 				id: user.id,
 				username: user.username,
 				email: user.email,
-				displayName,
 				first_name: user.first_name,
 				last_name: user.last_name,
 				email_verified: user.email_verified,

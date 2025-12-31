@@ -3,8 +3,7 @@ import type { JSX } from 'preact';
 import type { RouteProps } from '@doc-platform/router';
 import { navigate } from '@doc-platform/router';
 import { fetchClient } from '@doc-platform/fetch';
-import { Button, Text, AppHeader } from '@doc-platform/ui';
-import { useAuth } from '@shared/planning';
+import { Button, Text, Page } from '@doc-platform/ui';
 import { ProjectCard, type Project } from '../ProjectCard/ProjectCard';
 import { ProjectDialog } from '../ProjectDialog/ProjectDialog';
 import styles from './ProjectsList.module.css';
@@ -17,7 +16,6 @@ function setCookie(name: string, value: string, days: number): void {
 }
 
 export function ProjectsList(_props: RouteProps): JSX.Element {
-	const { user, loading: authLoading } = useAuth();
 	const [projects, setProjects] = useState<Project[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -38,10 +36,8 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 	}, []);
 
 	useEffect(() => {
-		if (!authLoading) {
-			fetchProjects();
-		}
-	}, [authLoading, fetchProjects]);
+		fetchProjects();
+	}, [fetchProjects]);
 
 	function handleProjectClick(project: Project): void {
 		// Store last project in cookie
@@ -96,33 +92,28 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 		}
 	}
 
-	if (authLoading || loading) {
+	if (loading) {
 		return (
-			<div class={styles.container}>
+			<Page>
 				<div class={styles.loading}>Loading...</div>
-			</div>
+			</Page>
 		);
 	}
 
 	if (error) {
 		return (
-			<div class={styles.container}>
+			<Page>
 				<div class={styles.error}>
 					<Text variant="heading">Error</Text>
 					<Text>{error}</Text>
 					<Button onClick={fetchProjects}>Retry</Button>
 				</div>
-			</div>
+			</Page>
 		);
 	}
 
 	return (
-		<div class={styles.container}>
-			<AppHeader
-				projectName="Projects"
-				user={user ? { displayName: user.displayName, email: user.email } : undefined}
-			/>
-
+		<Page>
 			<main class={styles.main}>
 				<div class={styles.toolbar}>
 					<Button onClick={handleOpenCreateDialog}>+ New Project</Button>
@@ -159,6 +150,6 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 					onDelete={dialogProject ? handleDeleteProject : undefined}
 				/>
 			)}
-		</div>
+		</Page>
 	);
 }

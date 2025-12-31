@@ -5,6 +5,7 @@
  * - Auth middleware (request interceptors)
  * - Global error handling (error interceptors)
  * - Reduced boilerplate (base URL, JSON serialization)
+ * - Automatic CSRF token handling (reads from cookie, adds to header)
  */
 
 import type {
@@ -16,12 +17,39 @@ import type {
 } from './types';
 import { FetchError } from './types';
 
+/** CSRF cookie name (must match server) */
+const CSRF_COOKIE_NAME = 'csrf_token';
+const CSRF_HEADER_NAME = 'X-CSRF-Token';
+const CSRF_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
+
+/**
+ * Read a cookie value by name
+ */
+function getCookie(name: string): string | null {
+	if (typeof document === 'undefined') return null;
+	const cookies = document.cookie ? document.cookie.split('; ') : [];
+	for (const cookie of cookies) {
+		const [cookieName, ...valueParts] = cookie.split('=');
+		if (cookieName === name) {
+			const value = valueParts.join('=');
+			try {
+				return decodeURIComponent(value);
+			} catch {
+				return value;
+			}
+		}
+	}
+	return null;
+}
+
 export class FetchClient {
 	private baseURL: string = '';
 	private headers: Record<string, string> = {};
 	private requestInterceptors: RequestInterceptor[] = [];
 	private responseInterceptors: ResponseInterceptor[] = [];
 	private errorInterceptors: ErrorInterceptor[] = [];
+	/** In-flight GET requests for deduplication */
+	private inFlightRequests: Map<string, Promise<unknown>> = new Map();
 
 	constructor(config?: FetchConfig) {
 		if (config?.baseURL) {
@@ -75,7 +103,34 @@ export class FetchClient {
 	}
 
 	async get<T>(url: string, config?: Partial<RequestConfig>): Promise<T> {
-		return this.request<T>({ ...config, url, method: 'GET' });
+		// Build cache key from URL and params for deduplication
+		const cacheKey = this.buildCacheKey(url, config?.params);
+
+		// Check for in-flight request
+		const inFlight = this.inFlightRequests.get(cacheKey);
+		if (inFlight) {
+			return inFlight as Promise<T>;
+		}
+
+		// Create and track the request
+		const request = this.request<T>({ ...config, url, method: 'GET' }).finally(() => {
+			this.inFlightRequests.delete(cacheKey);
+		});
+
+		this.inFlightRequests.set(cacheKey, request);
+		return request;
+	}
+
+	private buildCacheKey(url: string, params?: Record<string, string | number | boolean>): string {
+		let key = url;
+		if (params) {
+			const sortedParams = Object.entries(params)
+				.sort(([a], [b]) => a.localeCompare(b))
+				.map(([k, v]) => `${k}=${v}`)
+				.join('&');
+			key += '?' + sortedParams;
+		}
+		return key;
 	}
 
 	async post<T>(url: string, body?: unknown, config?: Partial<RequestConfig>): Promise<T> {
@@ -124,6 +179,15 @@ export class FetchClient {
 			...this.headers,
 			...configHeaders,
 		};
+
+		// Add CSRF token for state-changing requests (read from cookie)
+		const method = processedConfig.method || 'GET';
+		if (CSRF_METHODS.has(method)) {
+			const csrfToken = getCookie(CSRF_COOKIE_NAME);
+			if (csrfToken) {
+				headers[CSRF_HEADER_NAME] = csrfToken;
+			}
+		}
 
 		// Build fetch options
 		const fetchOptions: RequestInit = {
