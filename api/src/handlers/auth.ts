@@ -14,6 +14,7 @@ import {
 	hashPassword,
 	verifyPassword,
 	SESSION_COOKIE_NAME,
+	CSRF_COOKIE_NAME,
 	SESSION_TTL_SECONDS,
 } from '@doc-platform/auth';
 import { query, type User } from '@doc-platform/db';
@@ -36,6 +37,19 @@ function logAuthEvent(
 	);
 }
 
+/**
+ * Check if request is over HTTPS (directly or via ALB/proxy)
+ */
+function isSecureRequest(context: Context): boolean {
+	// Check X-Forwarded-Proto header (set by ALB/proxies)
+	const forwardedProto = context.req.header('X-Forwarded-Proto');
+	if (forwardedProto === 'https') {
+		return true;
+	}
+	// Fallback to checking the URL scheme
+	return new URL(context.req.url).protocol === 'https:';
+}
+
 interface LoginRequest {
 	identifier: string; // username or email
 	password: string;
@@ -47,6 +61,31 @@ interface SignupRequest {
 	password: string;
 	first_name: string;
 	last_name: string;
+	invite_key: string;
+}
+
+/**
+ * Get valid invite keys from environment variable.
+ * Keys are stored as a comma-separated list.
+ */
+function getValidInviteKeys(): Set<string> {
+	const keysEnv = process.env.INVITE_KEYS || '';
+	const keys = keysEnv.split(',').map(k => k.trim()).filter(k => k.length > 0);
+	return new Set(keys);
+}
+
+/**
+ * Validate an invite key against the configured list.
+ */
+function isValidInviteKey(key: string): boolean {
+	const validKeys = getValidInviteKeys();
+
+	// If no keys are configured, reject all signups
+	if (validKeys.size === 0) {
+		return false;
+	}
+
+	return validKeys.has(key.trim());
 }
 
 /**
@@ -92,15 +131,30 @@ export async function handleLogin(
 			return context.json({ error: 'Invalid credentials' }, 401);
 		}
 
+		// Check if user account is active
+		if (!user.is_active) {
+			return context.json({ error: 'Account is deactivated' }, 403);
+		}
+
 		// Create session (returns CSRF token)
 		const sessionId = generateSessionId();
 		const csrfToken = await createSession(redis, sessionId, {
 			userId: user.id,
 		});
 
+		// Set session cookie (HttpOnly - not accessible to JS)
 		setCookie(context, SESSION_COOKIE_NAME, sessionId, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
+			secure: isSecureRequest(context),
+			sameSite: 'Lax',
+			path: '/',
+			maxAge: SESSION_TTL_SECONDS,
+		});
+
+		// Set CSRF cookie (NOT HttpOnly - JS reads it for double-submit pattern)
+		setCookie(context, CSRF_COOKIE_NAME, csrfToken, {
+			httpOnly: false,
+			secure: isSecureRequest(context),
 			sameSite: 'Lax',
 			path: '/',
 			maxAge: SESSION_TTL_SECONDS,
@@ -117,7 +171,6 @@ export async function handleLogin(
 				last_name: user.last_name,
 				avatar_url: user.avatar_url,
 			},
-			csrfToken,
 		});
 	} catch (error) {
 		console.error('Login failed:', error instanceof Error ? error.message : 'Unknown error');
@@ -139,14 +192,19 @@ export async function handleSignup(
 		return context.json({ error: 'Invalid JSON' }, 400);
 	}
 
-	const { username, email, password, first_name, last_name } = body;
+	const { username, email, password, first_name, last_name, invite_key } = body;
 
 	// Validate required fields
-	if (!username || !email || !password || !first_name || !last_name) {
+	if (!username || !email || !password || !first_name || !last_name || !invite_key) {
 		return context.json(
-			{ error: 'All fields are required: username, email, password, first_name, last_name' },
+			{ error: 'All fields are required: username, email, password, first_name, last_name, invite_key' },
 			400
 		);
+	}
+
+	// Validate invite key
+	if (!isValidInviteKey(invite_key)) {
+		return context.json({ error: 'Invalid invite key' }, 403);
 	}
 
 	// Validate username
@@ -229,9 +287,19 @@ export async function handleSignup(
 			userId: user.id,
 		});
 
+		// Set session cookie (HttpOnly - not accessible to JS)
 		setCookie(context, SESSION_COOKIE_NAME, sessionId, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
+			secure: isSecureRequest(context),
+			sameSite: 'Lax',
+			path: '/',
+			maxAge: SESSION_TTL_SECONDS,
+		});
+
+		// Set CSRF cookie (NOT HttpOnly - JS reads it for double-submit pattern)
+		setCookie(context, CSRF_COOKIE_NAME, csrfToken, {
+			httpOnly: false,
+			secure: isSecureRequest(context),
 			sameSite: 'Lax',
 			path: '/',
 			maxAge: SESSION_TTL_SECONDS,
@@ -250,7 +318,6 @@ export async function handleSignup(
 				last_name: user.last_name,
 				avatar_url: user.avatar_url,
 			},
-			csrfToken,
 			message: 'Account created successfully',
 		}, 201);
 	} catch (error) {
@@ -284,6 +351,7 @@ export async function handleLogout(
 	}
 
 	deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });
+	deleteCookie(context, CSRF_COOKIE_NAME, { path: '/' });
 	return context.json({ success: true });
 }
 
@@ -320,24 +388,26 @@ export async function handleGetMe(
 			return context.json({ error: 'User not found' }, 401);
 		}
 
-		// Build display name from available fields
-		const displayName = user.first_name && user.last_name
-			? `${user.first_name} ${user.last_name}`
-			: user.first_name || user.last_name || user.username || user.email;
+		// Check if user account is active - invalidate session if deactivated
+		if (!user.is_active) {
+			await deleteSession(redis, sessionId);
+			deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });
+			return context.json({ error: 'Account is deactivated' }, 403);
+		}
 
 		return context.json({
 			user: {
 				id: user.id,
 				username: user.username,
 				email: user.email,
-				displayName,
 				first_name: user.first_name,
 				last_name: user.last_name,
 				email_verified: user.email_verified,
 				phone_number: user.phone_number,
 				avatar_url: user.avatar_url,
+				roles: user.roles,
+				is_active: user.is_active,
 			},
-			csrfToken: session.csrfToken,
 		});
 	} catch (error) {
 		console.error('Failed to get user:', error instanceof Error ? error.message : 'Unknown error');
@@ -406,6 +476,18 @@ export async function handleUpdateMe(
 			return context.json({ error: 'Session expired' }, 401);
 		}
 
+		// Check if user is still active before allowing updates
+		const checkResult = await query<{ is_active: boolean }>(
+			'SELECT is_active FROM users WHERE id = $1',
+			[session.userId]
+		);
+		const currentUser = checkResult.rows[0];
+		if (!currentUser || !currentUser.is_active) {
+			await deleteSession(redis, sessionId);
+			deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });
+			return context.json({ error: 'Account is deactivated' }, 403);
+		}
+
 		// Build update query from allowlisted fields only
 		// SECURITY: Field names are validated against ALLOWED_PROFILE_FIELDS
 		// before being interpolated into SQL. Values are always parameterized.
@@ -437,17 +519,11 @@ export async function handleUpdateMe(
 			return context.json({ error: 'User not found' }, 404);
 		}
 
-		// Build display name from updated fields
-		const displayName = user.first_name && user.last_name
-			? `${user.first_name} ${user.last_name}`
-			: user.first_name || user.last_name || user.username || user.email;
-
 		return context.json({
 			user: {
 				id: user.id,
 				username: user.username,
 				email: user.email,
-				displayName,
 				first_name: user.first_name,
 				last_name: user.last_name,
 				email_verified: user.email_verified,

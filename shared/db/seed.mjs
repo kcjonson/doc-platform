@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 /**
- * Admin account seeding script (plain JS - no compilation needed)
+ * Superadmin account seeding script (plain JS - no compilation needed)
+ *
+ * Creates or updates the single superadmin account.
+ * Only the password comes from environment - all other details are fixed.
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
 import pg from 'pg';
 import bcrypt from 'bcrypt';
 
@@ -13,13 +14,13 @@ const { Pool } = pg;
 const BCRYPT_COST = 12;
 const MIN_PASSWORD_LENGTH = 12;
 
-function isValidEmail(email) {
-	return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-}
-
-function isValidUsername(username) {
-	return /^[a-zA-Z0-9_]{3,30}$/.test(username);
-}
+// Fixed superadmin details - same across all environments
+const SUPERADMIN = {
+	username: 'superadmin',
+	email: 'superadmin@specboard.io',
+	firstName: 'Super',
+	lastName: 'Admin',
+};
 
 function isValidPassword(password) {
 	return (
@@ -29,11 +30,6 @@ function isValidPassword(password) {
 		/[0-9]/.test(password) &&
 		/[^A-Za-z0-9]/.test(password)
 	);
-}
-
-function isValidName(name) {
-	const trimmed = name.trim();
-	return trimmed.length > 0 && trimmed.length <= 255;
 }
 
 function getDatabaseUrl() {
@@ -55,71 +51,41 @@ function getDatabaseUrl() {
 	process.exit(1);
 }
 
-function getAdminConfig() {
-	if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD && process.env.ADMIN_EMAIL) {
-		console.log('Using admin config from environment variables');
-		return {
-			username: process.env.ADMIN_USERNAME,
-			password: process.env.ADMIN_PASSWORD,
-			email: process.env.ADMIN_EMAIL,
-			firstName: process.env.ADMIN_FIRST_NAME || 'Admin',
-			lastName: process.env.ADMIN_LAST_NAME || 'User',
-		};
-	}
+/**
+ * Check if running in local development environment
+ * LOCAL DEV ONLY: Uses hardcoded password when SUPERADMIN_PASSWORD not set
+ */
+function isLocalDev() {
+	// Only consider local dev if explicitly set or connecting to localhost
+	const dbHost = process.env.DB_HOST || '';
+	const dbUrl = process.env.DATABASE_URL || '';
+	const isLocalHost = dbHost === 'localhost' || dbHost === 'db' || dbUrl.includes('localhost') || dbUrl.includes('@db:');
+	const isNotProduction = process.env.NODE_ENV !== 'production';
+	const isNotStaging = !process.env.AWS_REGION && !process.env.ECS_CLUSTER;
 
-	const configPaths = [
-		path.join(import.meta.dirname, '../../seed.local.json'),
-		path.join(process.cwd(), 'seed.local.json'),
-	];
-
-	for (const configPath of configPaths) {
-		if (fs.existsSync(configPath)) {
-			try {
-				const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-				if (config.admin?.username && config.admin?.password && config.admin?.email) {
-					console.log(`Using admin config from ${configPath}`);
-					return {
-						username: config.admin.username,
-						password: config.admin.password,
-						email: config.admin.email,
-						firstName: config.admin.firstName || 'Admin',
-						lastName: config.admin.lastName || 'User',
-					};
-				}
-			} catch {
-				console.warn(`Failed to parse ${configPath}`);
-			}
-		}
-	}
-
-	return null;
+	return isLocalHost && isNotProduction && isNotStaging;
 }
 
-async function seed() {
-	const adminConfig = getAdminConfig();
+// LOCAL DEV ONLY - hardcoded password for development convenience
+// This password is intentionally weak and MUST NEVER be used outside local dev
+const LOCAL_DEV_PASSWORD = 'Password123!';
 
-	if (!adminConfig) {
-		console.log('No admin configuration found. Skipping seed.');
+async function seed() {
+	let password = process.env.SUPERADMIN_PASSWORD;
+
+	// LOCAL DEV ONLY: Use hardcoded password if not set
+	if (!password && isLocalDev()) {
+		console.log('LOCAL DEV: Using default superadmin password');
+		password = LOCAL_DEV_PASSWORD;
+	}
+
+	if (!password) {
+		console.log('SUPERADMIN_PASSWORD not set. Skipping seed.');
 		return;
 	}
 
-	if (!isValidUsername(adminConfig.username)) {
-		console.error('Invalid username: must be 3-30 chars, alphanumeric and underscores');
-		process.exit(1);
-	}
-
-	if (!isValidEmail(adminConfig.email)) {
-		console.error('Invalid email address');
-		process.exit(1);
-	}
-
-	if (!isValidPassword(adminConfig.password)) {
+	if (!isValidPassword(password)) {
 		console.error('Invalid password: min 12 chars, must have uppercase, lowercase, digit, special char');
-		process.exit(1);
-	}
-
-	if (!isValidName(adminConfig.firstName) || !isValidName(adminConfig.lastName)) {
-		console.error('Invalid name: first and last name must be non-empty and max 255 chars');
 		process.exit(1);
 	}
 
@@ -137,45 +103,41 @@ async function seed() {
 			return;
 		}
 
+		const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
+
+		// Check if superadmin exists
 		const existing = await pool.query(
-			'SELECT id, username, email FROM users WHERE username = $1 OR email = $2',
-			[adminConfig.username.toLowerCase(), adminConfig.email.toLowerCase()]
+			'SELECT id FROM users WHERE username = $1',
+			[SUPERADMIN.username]
 		);
 
 		if (existing.rows[0]) {
-			const match = existing.rows[0];
-			if (match.username === adminConfig.username.toLowerCase() && match.email === adminConfig.email.toLowerCase()) {
-				console.log(`Admin user already exists: ${match.username}`);
-			} else if (match.username === adminConfig.username.toLowerCase()) {
-				console.log(`Username '${adminConfig.username}' already taken by another user`);
-			} else {
-				console.log(`Email '${adminConfig.email}' already registered to user '${match.username}'`);
-			}
+			// Update password and ensure admin role
+			const userId = existing.rows[0].id;
+			await pool.query(
+				'UPDATE user_passwords SET password_hash = $1 WHERE user_id = $2',
+				[passwordHash, userId]
+			);
+			// Ensure admin role is set
+			await pool.query(
+				`UPDATE users SET roles = ARRAY['admin'] WHERE id = $1 AND NOT ('admin' = ANY(roles))`,
+				[userId]
+			);
+			console.log('Superadmin password updated');
 			return;
 		}
 
-		console.log('Creating admin account...');
-		const passwordHash = await bcrypt.hash(adminConfig.password, BCRYPT_COST);
+		// Create superadmin
+		console.log('Creating superadmin account...');
 
 		const client = await pool.connect();
 		try {
-			await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
-
-			const txnCheck = await client.query(
-				'SELECT id FROM users WHERE username = $1 OR email = $2',
-				[adminConfig.username.toLowerCase(), adminConfig.email.toLowerCase()]
-			);
-
-			if (txnCheck.rows[0]) {
-				await client.query('ROLLBACK');
-				console.log('Admin user was created by another process');
-				return;
-			}
+			await client.query('BEGIN');
 
 			const userResult = await client.query(
-				`INSERT INTO users (username, first_name, last_name, email, email_verified)
-				 VALUES ($1, $2, $3, $4, true) RETURNING id`,
-				[adminConfig.username.toLowerCase(), adminConfig.firstName.trim(), adminConfig.lastName.trim(), adminConfig.email.toLowerCase()]
+				`INSERT INTO users (username, first_name, last_name, email, email_verified, roles)
+				 VALUES ($1, $2, $3, $4, true, $5) RETURNING id`,
+				[SUPERADMIN.username, SUPERADMIN.firstName, SUPERADMIN.lastName, SUPERADMIN.email, ['admin']]
 			);
 
 			const userId = userResult.rows[0]?.id;
@@ -189,7 +151,7 @@ async function seed() {
 			);
 
 			await client.query('COMMIT');
-			console.log(`Created admin user: ${adminConfig.username}`);
+			console.log('Superadmin account created');
 		} catch (err) {
 			await client.query('ROLLBACK');
 			throw err;

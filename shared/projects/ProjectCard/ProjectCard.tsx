@@ -1,12 +1,20 @@
 import type { JSX } from 'preact';
-import { Card, Text, Badge } from '@doc-platform/ui';
+import { Card, StatusDot } from '@doc-platform/ui';
 import styles from './ProjectCard.module.css';
+
+export interface EpicCounts {
+	ready: number;
+	in_progress: number;
+	in_review: number;
+	done: number;
+}
 
 export interface Project {
 	id: string;
 	name: string;
 	description?: string;
 	epicCount: number;
+	epicCounts?: EpicCounts;
 	createdAt: string;
 	updatedAt: string;
 }
@@ -14,9 +22,10 @@ export interface Project {
 export interface ProjectCardProps {
 	project: Project;
 	onClick: (project: Project) => void;
+	onEdit?: (project: Project) => void;
 }
 
-export function ProjectCard({ project, onClick }: ProjectCardProps): JSX.Element {
+export function ProjectCard({ project, onClick, onEdit }: ProjectCardProps): JSX.Element {
 	function handleClick(): void {
 		onClick(project);
 	}
@@ -28,6 +37,20 @@ export function ProjectCard({ project, onClick }: ProjectCardProps): JSX.Element
 		}
 	}
 
+	function handleEditClick(event: MouseEvent): void {
+		event.stopPropagation();
+		onEdit?.(project);
+	}
+
+	function handleEditKeyDown(event: KeyboardEvent): void {
+		if (event.key === 'Enter' || event.key === ' ') {
+			event.stopPropagation();
+		}
+	}
+
+	const { epicCounts } = project;
+	const hasEpics = project.epicCount > 0;
+
 	return (
 		<Card
 			class={styles.card}
@@ -37,18 +60,60 @@ export function ProjectCard({ project, onClick }: ProjectCardProps): JSX.Element
 			role="button"
 		>
 			<div class={styles.header}>
-				<Text variant="heading" class={styles.name}>{project.name}</Text>
-				<Badge variant="neutral">{project.epicCount} {project.epicCount === 1 ? 'epic' : 'epics'}</Badge>
+				<h3 class={styles.name}>{project.name}</h3>
+				{onEdit && (
+					<button
+						type="button"
+						class={styles.editButton}
+						onClick={handleEditClick}
+						onKeyDown={handleEditKeyDown}
+						aria-label="Edit project"
+					>
+						✎
+					</button>
+				)}
 			</div>
 			{project.description && (
-				<Text variant="secondary" class={styles.description}>
+				<p class={styles.description}>
 					{project.description}
-				</Text>
+				</p>
 			)}
+			<div class={styles.stats}>
+				{hasEpics && epicCounts ? (
+					<div class={styles.epicStats}>
+						{epicCounts.ready > 0 && (
+							<span class={styles.statItem}>
+								<StatusDot status="ready" />
+								<span class={styles.statCount}>{epicCounts.ready}</span>
+							</span>
+						)}
+						{epicCounts.in_progress > 0 && (
+							<span class={styles.statItem}>
+								<StatusDot status="in_progress" />
+								<span class={styles.statCount}>{epicCounts.in_progress}</span>
+							</span>
+						)}
+						{epicCounts.in_review > 0 && (
+							<span class={styles.statItem}>
+								<StatusDot status="in_review" />
+								<span class={styles.statCount}>{epicCounts.in_review}</span>
+							</span>
+						)}
+						{epicCounts.done > 0 && (
+							<span class={styles.statItem}>
+								<StatusDot status="done" />
+								<span class={styles.statCount}>{epicCounts.done}</span>
+							</span>
+						)}
+					</div>
+				) : (
+					<span class={styles.noEpics}>No epics yet</span>
+				)}
+			</div>
 			<div class={styles.footer}>
-				<Text variant="secondary" size="small">
-					Last updated {formatRelativeTime(project.updatedAt)}
-				</Text>
+				<span class={styles.updatedAt}>
+					Updated {formatRelativeTime(project.updatedAt)}
+				</span>
 			</div>
 		</Card>
 	);

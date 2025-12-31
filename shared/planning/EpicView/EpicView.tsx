@@ -9,7 +9,6 @@ import styles from './EpicView.module.css';
 interface EpicViewExistingProps {
 	epic: EpicModel;
 	isNew?: false;
-	onClose?: () => void;
 	onDelete?: (epic: EpicModel) => void;
 	onCreate?: never;
 }
@@ -18,7 +17,6 @@ interface EpicViewExistingProps {
 interface EpicViewCreateProps {
 	epic?: never;
 	isNew: true;
-	onClose?: () => void;
 	onDelete?: never;
 	onCreate: (data: { title: string; description?: string; status: Status }) => void;
 }
@@ -32,7 +30,7 @@ const STATUS_OPTIONS: { value: Status; label: string }[] = [
 ];
 
 export function EpicView(props: EpicViewProps): JSX.Element {
-	const { onClose, isNew = false } = props;
+	const { isNew = false } = props;
 	const epic = isNew ? undefined : props.epic;
 	const onDelete = isNew ? undefined : props.onDelete;
 	const onCreate = isNew ? props.onCreate : undefined;
@@ -123,43 +121,17 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 
 	return (
 		<div class={styles.container}>
-			{/* Header */}
-			<div class={styles.header}>
-				{isNew ? (
-					<div class={styles.titleEdit}>
-						<span class={styles.titleIcon}>◆</span>
-						<Text
-							value={titleDraft}
-							onInput={(e) => setTitleDraft((e.target as HTMLInputElement).value)}
-							placeholder="Epic title..."
-							class="size-lg"
-						/>
-					</div>
-				) : (
-					<h2 class={styles.title}>
-						<span class={styles.titleIcon}>◆</span>
-						{epic?.title}
-					</h2>
-				)}
-				<div class={styles.headerActions}>
-					{!isNew && epic && onClose && (
-						<a
-							href={`/projects/${epic.projectId}/planning/epics/${epic.id}`}
-							target="_blank"
-							rel="noopener noreferrer"
-							class={styles.openInNewTab}
-							aria-label="Open in new tab"
-						>
-							↗
-						</a>
-					)}
-					{onClose && (
-						<Button class="text" onClick={onClose} aria-label="Close">
-							×
-						</Button>
-					)}
+			{/* Title input for new epic */}
+			{isNew && (
+				<div class={styles.titleEdit}>
+					<Text
+						value={titleDraft}
+						onInput={(e) => setTitleDraft((e.target as HTMLInputElement).value)}
+						placeholder="Epic title..."
+						label="Title"
+					/>
 				</div>
-			</div>
+			)}
 
 			{/* Description */}
 			<section class={styles.section}>

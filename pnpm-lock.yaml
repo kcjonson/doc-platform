@@ -305,6 +305,12 @@ importers:
 
   shared/ui:
     dependencies:
+      '@doc-platform/fetch':
+        specifier: workspace:*
+        version: link:../fetch
+      '@doc-platform/models':
+        specifier: workspace:*
+        version: link:../models
       preact:
         specifier: ^10.25.4
         version: 10.28.0
