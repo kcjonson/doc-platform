@@ -292,14 +292,12 @@ export async function handleUpdateUser(
 		return context.json({ error: 'Access denied' }, 403);
 	}
 
-	// Superadmin account is immutable - no updates allowed
+	// Check if target is superadmin
 	const targetCheck = await query<{ username: string }>(
 		'SELECT username FROM users WHERE id = $1',
 		[id]
 	);
-	if (targetCheck.rows[0]?.username === SUPERADMIN_USERNAME) {
-		return context.json({ error: 'Superadmin account cannot be modified' }, 403);
-	}
+	const targetIsSuperadmin = targetCheck.rows[0]?.username === SUPERADMIN_USERNAME;
 
 	let body: UpdateUserRequest;
 	try {
@@ -314,6 +312,17 @@ export async function handleUpdateUser(
 	// Reject if non-admin tried to update admin-only fields
 	if (!userIsAdmin && hasAdminOnlyFields(body)) {
 		return context.json({ error: 'You can only update your first name and last name' }, 403);
+	}
+
+	// Superadmin account: only allow first_name and last_name updates
+	if (targetIsSuperadmin) {
+		const hasCriticalFields = permitted.username !== undefined ||
+			permitted.email !== undefined ||
+			permitted.roles !== undefined ||
+			permitted.is_active !== undefined;
+		if (hasCriticalFields) {
+			return context.json({ error: 'Superadmin username, email, roles, and active status cannot be modified' }, 403);
+		}
 	}
 
 	const { username, email, first_name, last_name, roles, is_active } = permitted;

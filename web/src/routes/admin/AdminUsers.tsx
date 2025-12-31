@@ -162,13 +162,13 @@ export function AdminUsers(_props: RouteProps): JSX.Element {
 													<span
 														key={role}
 														class={`${styles.badge} ${role === 'admin' ? styles.badgeAdmin : ''}`}
-														style={role !== 'admin' ? 'margin-right: 0.25rem' : ''}
+														style={role !== 'admin' ? { marginRight: '0.25rem' } : undefined}
 													>
 														{role.charAt(0).toUpperCase() + role.slice(1)}
 													</span>
 												))
 											) : (
-												<span style="color: var(--color-text-muted)">—</span>
+												<span style={{ color: 'var(--color-text-muted)' }}>—</span>
 											)}
 										</td>
 										<td>
