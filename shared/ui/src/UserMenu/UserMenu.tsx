@@ -156,7 +156,7 @@ export function UserMenu({
 						href="/projects"
 						class={styles.menuItem}
 						role="menuitem"
-						tabIndex={isOpen ? 0 : -1}
+						tabIndex={0}
 						ref={(el) => {
 							if (el) menuItemRefs.current.set('projects', el);
 						}}
@@ -168,7 +168,7 @@ export function UserMenu({
 							href="/admin"
 							class={styles.menuItem}
 							role="menuitem"
-							tabIndex={isOpen ? 0 : -1}
+							tabIndex={0}
 							ref={(el) => {
 								if (el) menuItemRefs.current.set('admin', el);
 							}}
@@ -180,7 +180,7 @@ export function UserMenu({
 						href="/settings"
 						class={styles.menuItem}
 						role="menuitem"
-						tabIndex={isOpen ? 0 : -1}
+						tabIndex={0}
 						ref={(el) => {
 							if (el) menuItemRefs.current.set('settings', el);
 						}}
@@ -192,7 +192,7 @@ export function UserMenu({
 						class={styles.menuItem}
 						onClick={handleLogoutClick}
 						role="menuitem"
-						tabIndex={isOpen ? 0 : -1}
+						tabIndex={0}
 						ref={(el) => {
 							if (el) menuItemRefs.current.set('logout', el);
 						}}
