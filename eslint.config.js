@@ -49,6 +49,9 @@ export default [
 				prompt: 'readonly',
 				confirm: 'readonly',
 				alert: 'readonly',
+				navigator: 'readonly',
+				location: 'readonly',
+				Blob: 'readonly',
 			},
 		},
 		plugins: {
@@ -81,6 +84,7 @@ export default [
 			'frontend/**/*.ts',
 			'shared/db/**/*.ts',
 			'shared/auth/**/*.ts',
+			'shared/core/**/*.ts',
 		],
 		languageOptions: {
 			globals: {
