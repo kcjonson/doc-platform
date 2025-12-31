@@ -134,6 +134,23 @@ export function captureException(
 }
 
 /**
+ * Install global error handlers for uncaught exceptions and unhandled rejections.
+ * Call this once at application startup.
+ */
+export function installErrorHandlers(source: 'api' | 'mcp'): void {
+	process.on('uncaughtException', (error: Error) => {
+		console.error('Uncaught exception:', error);
+		captureException(error, source, { type: 'uncaught_exception' });
+	});
+
+	process.on('unhandledRejection', (reason: unknown) => {
+		const error = reason instanceof Error ? reason : new Error(String(reason));
+		console.error('Unhandled rejection:', error);
+		captureException(error, source, { type: 'unhandled_rejection' });
+	});
+}
+
+/**
  * Parse a stack trace string into frames
  */
 function parseStackTrace(stack?: string): Array<{

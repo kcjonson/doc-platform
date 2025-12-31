@@ -15,7 +15,7 @@ import {
 	getSession,
 	SESSION_COOKIE_NAME,
 } from '@doc-platform/auth';
-import { reportError } from '@doc-platform/core';
+import { reportError, installErrorHandlers } from '@doc-platform/core';
 import { getCookie } from 'hono/cookie';
 
 import { handleLogin, handleLogout, handleGetMe, handleUpdateMe, handleSignup } from './handlers/auth.js';
@@ -61,6 +61,9 @@ import {
 	handleUpdateProject,
 	handleDeleteProject,
 } from './handlers/projects.js';
+
+// Install global error handlers for uncaught exceptions
+installErrorHandlers('api');
 
 // Redis connection
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
