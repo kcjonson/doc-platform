@@ -51,8 +51,33 @@ function getDatabaseUrl() {
 	process.exit(1);
 }
 
+/**
+ * Check if running in local development environment
+ * LOCAL DEV ONLY: Uses hardcoded password when SUPERADMIN_PASSWORD not set
+ */
+function isLocalDev() {
+	// Only consider local dev if explicitly set or connecting to localhost
+	const dbHost = process.env.DB_HOST || '';
+	const dbUrl = process.env.DATABASE_URL || '';
+	const isLocalHost = dbHost === 'localhost' || dbHost === 'db' || dbUrl.includes('localhost') || dbUrl.includes('@db:');
+	const isNotProduction = process.env.NODE_ENV !== 'production';
+	const isNotStaging = !process.env.AWS_REGION && !process.env.ECS_CLUSTER;
+
+	return isLocalHost && isNotProduction && isNotStaging;
+}
+
+// LOCAL DEV ONLY - hardcoded password for development convenience
+// This password is intentionally weak and MUST NEVER be used outside local dev
+const LOCAL_DEV_PASSWORD = 'Password123!';
+
 async function seed() {
-	const password = process.env.SUPERADMIN_PASSWORD;
+	let password = process.env.SUPERADMIN_PASSWORD;
+
+	// LOCAL DEV ONLY: Use hardcoded password if not set
+	if (!password && isLocalDev()) {
+		console.log('LOCAL DEV: Using default superadmin password');
+		password = LOCAL_DEV_PASSWORD;
+	}
 
 	if (!password) {
 		console.log('SUPERADMIN_PASSWORD not set. Skipping seed.');
@@ -87,11 +112,16 @@ async function seed() {
 		);
 
 		if (existing.rows[0]) {
-			// Update password
+			// Update password and ensure admin role
 			const userId = existing.rows[0].id;
 			await pool.query(
 				'UPDATE user_passwords SET password_hash = $1 WHERE user_id = $2',
 				[passwordHash, userId]
+			);
+			// Ensure admin role is set
+			await pool.query(
+				`UPDATE users SET roles = ARRAY['admin'] WHERE id = $1 AND NOT ('admin' = ANY(roles))`,
+				[userId]
 			);
 			console.log('Superadmin password updated');
 			return;
@@ -105,9 +135,9 @@ async function seed() {
 			await client.query('BEGIN');
 
 			const userResult = await client.query(
-				`INSERT INTO users (username, first_name, last_name, email, email_verified)
-				 VALUES ($1, $2, $3, $4, true) RETURNING id`,
-				[SUPERADMIN.username, SUPERADMIN.firstName, SUPERADMIN.lastName, SUPERADMIN.email]
+				`INSERT INTO users (username, first_name, last_name, email, email_verified, roles)
+				 VALUES ($1, $2, $3, $4, true, $5) RETURNING id`,
+				[SUPERADMIN.username, SUPERADMIN.firstName, SUPERADMIN.lastName, SUPERADMIN.email, ['admin']]
 			);
 
 			const userId = userResult.rows[0]?.id;
