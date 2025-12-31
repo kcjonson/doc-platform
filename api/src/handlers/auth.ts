@@ -112,6 +112,11 @@ export async function handleLogin(
 			return context.json({ error: 'Invalid credentials' }, 401);
 		}
 
+		// Check if user account is active
+		if (!user.is_active) {
+			return context.json({ error: 'Account is deactivated' }, 403);
+		}
+
 		// Create session (returns CSRF token)
 		const sessionId = generateSessionId();
 		const csrfToken = await createSession(redis, sessionId, {
@@ -334,6 +339,13 @@ export async function handleGetMe(
 			return context.json({ error: 'User not found' }, 401);
 		}
 
+		// Check if user account is active - invalidate session if deactivated
+		if (!user.is_active) {
+			await deleteSession(redis, sessionId);
+			deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });
+			return context.json({ error: 'Account is deactivated' }, 403);
+		}
+
 		// Build display name from available fields
 		const displayName = user.first_name && user.last_name
 			? `${user.first_name} ${user.last_name}`
@@ -420,6 +432,18 @@ export async function handleUpdateMe(
 		const session = await getSession(redis, sessionId);
 		if (!session) {
 			return context.json({ error: 'Session expired' }, 401);
+		}
+
+		// Check if user is still active before allowing updates
+		const checkResult = await query<{ is_active: boolean }>(
+			'SELECT is_active FROM users WHERE id = $1',
+			[session.userId]
+		);
+		const currentUser = checkResult.rows[0];
+		if (!currentUser || !currentUser.is_active) {
+			await deleteSession(redis, sessionId);
+			deleteCookie(context, SESSION_COOKIE_NAME, { path: '/' });
+			return context.json({ error: 'Account is deactivated' }, 403);
 		}
 
 		// Build update query from allowlisted fields only

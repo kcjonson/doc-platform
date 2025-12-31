@@ -17,6 +17,7 @@ import { isValidUUID, isValidEmail, isValidUsername } from '../validation.js';
 
 /**
  * Get current user from session, including their roles
+ * Returns null if user is not found or is inactive
  */
 async function getCurrentUser(context: Context, redis: Redis): Promise<User | null> {
 	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
@@ -30,7 +31,15 @@ async function getCurrentUser(context: Context, redis: Redis): Promise<User | nu
 		[session.userId]
 	);
 
-	return result.rows[0] ?? null;
+	const user = result.rows[0];
+
+	// Return null if user doesn't exist or is inactive
+	// This prevents deactivated users from accessing any user management APIs
+	if (!user || !user.is_active) {
+		return null;
+	}
+
+	return user;
 }
 
 /**
