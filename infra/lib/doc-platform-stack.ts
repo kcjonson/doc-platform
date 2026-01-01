@@ -290,9 +290,15 @@ export class DocPlatformStack extends cdk.Stack {
 		// ===========================================
 		// Error logs - 1 year retention for debugging and compliance
 		// Uses custom resource to handle "already exists" case (e.g., after failed deployments)
+		// Note: No onDelete handler = log group is retained on stack deletion (equivalent to RETAIN policy)
 		const errorLogGroupName = '/doc-platform/errors';
+		const errorLogGroupArn = cdk.Stack.of(this).formatArn({
+			service: 'logs',
+			resource: 'log-group',
+			resourceName: `${errorLogGroupName}:*`,
+		});
 
-		new cr.AwsCustomResource(this, 'EnsureErrorLogGroup', {
+		const ensureErrorLogGroup = new cr.AwsCustomResource(this, 'EnsureErrorLogGroup', {
 			onCreate: {
 				service: 'CloudWatchLogs',
 				action: 'createLogGroup',
@@ -310,12 +316,12 @@ export class DocPlatformStack extends cdk.Stack {
 			policy: cr.AwsCustomResourcePolicy.fromStatements([
 				new iam.PolicyStatement({
 					actions: ['logs:CreateLogGroup'],
-					resources: ['*'],
+					resources: [errorLogGroupArn],
 				}),
 			]),
 		});
 
-		new cr.AwsCustomResource(this, 'SetErrorLogRetention', {
+		const setErrorLogRetention = new cr.AwsCustomResource(this, 'SetErrorLogRetention', {
 			onCreate: {
 				service: 'CloudWatchLogs',
 				action: 'putRetentionPolicy',
@@ -331,10 +337,13 @@ export class DocPlatformStack extends cdk.Stack {
 			policy: cr.AwsCustomResourcePolicy.fromStatements([
 				new iam.PolicyStatement({
 					actions: ['logs:PutRetentionPolicy'],
-					resources: ['*'],
+					resources: [errorLogGroupArn],
 				}),
 			]),
 		});
+
+		// Ensure log group exists before setting retention policy
+		setErrorLogRetention.node.addDependency(ensureErrorLogGroup);
 
 		const errorLogGroup = logs.LogGroup.fromLogGroupName(this, 'ErrorLogGroup', errorLogGroupName);
 
