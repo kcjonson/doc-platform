@@ -123,6 +123,11 @@ export async function handleResendVerification(context: Context): Promise<Respon
 			return context.json(successResponse);
 		}
 
+		// Don't send to inactive accounts
+		if (!user.is_active) {
+			return context.json(successResponse);
+		}
+
 		// If already verified, don't send email
 		if (user.email_verified) {
 			return context.json(successResponse);

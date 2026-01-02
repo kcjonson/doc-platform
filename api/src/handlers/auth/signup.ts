@@ -97,10 +97,10 @@ export async function handleSignup(context: Context): Promise<Response> {
 			return context.json({ error: 'Username already taken' }, 409);
 		}
 
-		// Check if email exists
+		// Check if email exists (case-insensitive)
 		const emailCheck = await query<{ id: string }>(
-			'SELECT id FROM users WHERE email = $1',
-			[email.toLowerCase()]
+			'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+			[email]
 		);
 		if (emailCheck.rows.length > 0) {
 			return context.json({ error: 'Email already registered' }, 409);
@@ -143,13 +143,19 @@ export async function handleSignup(context: Context): Promise<Response> {
 		const verifyUrl = `${APP_URL}/verify-email/confirm?token=${token}`;
 
 		// Send verification email
-		const emailContent = getVerificationEmailContent(verifyUrl);
-		await sendEmail({
-			to: user.email,
-			subject: emailContent.subject,
-			textBody: emailContent.textBody,
-			htmlBody: emailContent.htmlBody,
-		});
+		// If this fails, the user can use the resend verification flow
+		try {
+			const emailContent = getVerificationEmailContent(verifyUrl);
+			await sendEmail({
+				to: user.email,
+				subject: emailContent.subject,
+				textBody: emailContent.textBody,
+				htmlBody: emailContent.htmlBody,
+			});
+		} catch (emailError) {
+			console.error('Failed to send verification email:', emailError instanceof Error ? emailError.message : 'Unknown error');
+			// Still return success - user can resend verification email
+		}
 
 		logAuthEvent('signup_success', { userId: user.id, username: user.username });
 

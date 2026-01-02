@@ -112,7 +112,7 @@ export function ChangePasswordDialog({ open, onClose }: ChangePasswordDialogProp
 						required
 					/>
 					<span class={styles.hint}>
-						At least 12 characters with uppercase, lowercase, number, and special character
+						At least 12 characters
 					</span>
 				</div>
 

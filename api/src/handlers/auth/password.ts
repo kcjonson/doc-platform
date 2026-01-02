@@ -176,21 +176,25 @@ export async function handleResetPassword(
 		await query('DELETE FROM password_reset_tokens WHERE id = $1', [tokenRecord.id]);
 
 		// Invalidate all existing sessions for this user (force re-login)
-		const sessionsPattern = 'session:*';
-		const sessionKeys = await redis.keys(sessionsPattern);
-		for (const key of sessionKeys) {
-			const sessionData = await redis.get(key);
-			if (sessionData) {
-				try {
-					const session = JSON.parse(sessionData);
-					if (session.userId === tokenRecord.user_id) {
-						await redis.del(key);
+		// Use SCAN instead of KEYS to avoid blocking Redis
+		let cursor = '0';
+		do {
+			const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', 'session:*', 'COUNT', 100);
+			cursor = nextCursor;
+			for (const key of keys) {
+				const sessionData = await redis.get(key);
+				if (sessionData) {
+					try {
+						const session = JSON.parse(sessionData);
+						if (session.userId === tokenRecord.user_id) {
+							await redis.del(key);
+						}
+					} catch {
+						// Skip invalid session data
 					}
-				} catch {
-					// Skip invalid session data
 				}
 			}
-		}
+		} while (cursor !== '0');
 
 		logAuthEvent('password_reset', { userId: tokenRecord.user_id });
 
