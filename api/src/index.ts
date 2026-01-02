@@ -198,6 +198,16 @@ app.use(
 	})
 );
 
+// JSON error responses for API routes
+app.notFound((context) => {
+	return context.json({ error: 'Not found' }, 404);
+});
+
+app.onError((error, context) => {
+	console.error('Unhandled error:', error);
+	return context.json({ error: 'Internal server error' }, 500);
+});
+
 // Health check
 app.get('/health', (context) => context.json({ status: 'ok' }));
 app.get('/api/health', (context) => context.json({ status: 'ok' }));

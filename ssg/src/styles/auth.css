@@ -154,3 +154,9 @@ body {
 	color: var(--color-text-muted);
 	margin-top: 0.25rem;
 }
+
+/* Email display */
+.auth-container .email-display {
+	font-weight: 500;
+	margin-bottom: 1rem;
+}

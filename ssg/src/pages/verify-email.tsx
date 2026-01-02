@@ -20,19 +20,8 @@ export function VerifyEmailContent(): JSX.Element {
 
 			<div class="resend-section">
 				<p>Didn't receive the email?</p>
-				<form id="resend-form">
-					<div class="form-group">
-						<label for="email">Email Address</label>
-						<input
-							type="email"
-							id="email"
-							name="email"
-							required
-							autocomplete="email"
-						/>
-					</div>
-					<button type="submit" id="resend-btn">Resend Verification Email</button>
-				</form>
+				<p id="email-display" class="email-display" />
+				<button type="button" id="resend-btn">Resend Verification Email</button>
 			</div>
 
 			<div class="back-link">
@@ -43,17 +32,20 @@ export function VerifyEmailContent(): JSX.Element {
 }
 
 export const verifyEmailScript = `(function() {
-	var form = document.getElementById('resend-form');
 	var messageEl = document.getElementById('message');
 	var resendBtn = document.getElementById('resend-btn');
-	var emailInput = document.getElementById('email');
+	var emailDisplay = document.getElementById('email-display');
 
-	// Pre-fill email from URL param if provided
 	var params = new URLSearchParams(window.location.search);
-	var emailParam = params.get('email');
-	if (emailParam) {
-		emailInput.value = emailParam;
+	var email = params.get('email');
+
+	if (!email) {
+		// No email param - hide resend section
+		document.querySelector('.resend-section').classList.add('hidden');
+		return;
 	}
+
+	emailDisplay.textContent = email;
 
 	function showMessage(text, isError) {
 		messageEl.textContent = text;
@@ -61,11 +53,7 @@ export const verifyEmailScript = `(function() {
 		messageEl.classList.add(isError ? 'error' : 'success');
 	}
 
-	form.addEventListener('submit', function(e) {
-		e.preventDefault();
-
-		var email = emailInput.value;
-
+	resendBtn.addEventListener('click', function() {
 		resendBtn.disabled = true;
 		resendBtn.textContent = 'Sending...';
 
