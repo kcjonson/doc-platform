@@ -2,6 +2,10 @@
 
 This specification defines the REST API endpoints and database schema for doc-platform.
 
+> **Related Specs**:
+> - [Project Storage](./project-storage.md) - Git repository connection and storage modes
+> - [Authentication](./authentication.md) - Auth flows and session management
+
 ---
 
 ## Database Schema
@@ -20,25 +24,26 @@ This specification defines the REST API endpoints and database schema for doc-pl
 │  phone      │
 └─────────────┘
        │
-       │
+       │ owner_id
        ▼
 ┌─────────────┐       ┌─────────────────┐       ┌─────────────┐
-│repositories │       │   documents     │       │  comments   │
+│  projects   │       │   documents     │       │  comments   │
 │             │       │                 │       │             │
-│  id (PK)    │◄──────│  repo_id (FK)   │◄──────│ document_id │
-│  user_id    │       │  path           │       │  range_start│
-│  github_    │       │  title          │       │  range_end  │
-│   repo      │       │  content_hash   │       │  text       │
-│  name       │       │  last_synced    │       │  author_id  │
-└─────────────┘       └─────────────────┘       └─────────────┘
+│  id (PK)    │◄──────│  project_id(FK) │◄──────│ document_id │
+│  name       │       │  path           │       │  range_start│
+│  owner_id   │       │  title          │       │  range_end  │
+│storage_mode │       │  content_hash   │       │  text       │
+│ repository  │       │  last_synced    │       │  author_id  │
+│ root_paths  │       └─────────────────┘       └─────────────┘
+└─────────────┘
        │
-       │
+       │ project_id
        ▼
 ┌─────────────┐       ┌─────────────────┐
 │   epics     │       │     tasks       │
 │             │       │                 │
 │  id (PK)    │◄──────│  epic_id (FK)   │
-│  repo_id    │       │  title          │
+│  project_id │       │  title          │
 │  title      │       │  description    │
 │  status     │       │  status         │
 │  rank       │       │  assignee_id    │
@@ -86,7 +91,27 @@ CREATE TABLE github_connections (
 	connected_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Repositories (GitHub repos the user has connected)
+-- Projects (container for documentation and planning)
+-- See project-storage.md for storage_mode and repository details
+CREATE TABLE projects (
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	name VARCHAR(255) NOT NULL,
+	description TEXT,
+	owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+	storage_mode TEXT NOT NULL DEFAULT 'local'
+		CHECK (storage_mode IN ('local', 'cloud')),
+	repository JSONB NOT NULL DEFAULT '{}',
+	-- Local: { "localPath": "/path/to/repo", "branch": "main" }
+	-- Cloud: { "remote": { "provider": "github", "owner": "...", "repo": "...", "url": "..." }, "branch": "main" }
+	root_paths JSONB NOT NULL DEFAULT '[]',
+	-- Array of paths within repo to display, e.g., ["/docs", "/specs"]
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_projects_owner_id ON projects(owner_id);
+
+-- Repositories (GitHub repos the user has connected - legacy, see projects)
 CREATE TABLE repositories (
 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 	user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -321,7 +346,47 @@ Response includes pagination info:
 | DELETE | /api/me/emails/:id | Remove email |
 | PATCH | /api/me/emails/:id/primary | Set primary email |
 
-### Repositories
+### Projects
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/projects | List user's projects |
+| POST | /api/projects | Create project |
+| GET | /api/projects/:id | Get project |
+| PATCH | /api/projects/:id | Update project |
+| DELETE | /api/projects/:id | Delete project |
+
+### Project Storage (see [project-storage.md](./project-storage.md))
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /api/projects/:id/folders | Add local folder (local mode) |
+| DELETE | /api/projects/:id/folders | Remove folder from view |
+| POST | /api/projects/:id/repository | Connect GitHub repo (cloud mode) |
+| DELETE | /api/projects/:id/repository | Disconnect repository |
+
+### Project Files
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/projects/:id/tree | List files/folders |
+| GET | /api/projects/:id/files/* | Get file content |
+| PUT | /api/projects/:id/files/* | Save file |
+| POST | /api/projects/:id/files/* | Create file |
+| DELETE | /api/projects/:id/files/* | Delete file |
+
+### Project Git Operations
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | /api/projects/:id/git/status | Get status |
+| GET | /api/projects/:id/git/log | Get commit history |
+| GET | /api/projects/:id/git/diff | Get diff |
+| POST | /api/projects/:id/git/commit | Commit changes |
+| POST | /api/projects/:id/git/push | Push to remote |
+| POST | /api/projects/:id/git/pull | Pull from remote |
+
+### Repositories (Legacy)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -331,7 +396,7 @@ Response includes pagination info:
 | DELETE | /api/repos/:id | Disconnect repository |
 | POST | /api/repos/:id/sync | Sync with GitHub |
 
-### Documents (Web Platform)
+### Documents (Web Platform - Legacy, use Project Files)
 
 | Method | Path | Description |
 |--------|------|-------------|
