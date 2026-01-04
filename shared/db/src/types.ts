@@ -89,11 +89,33 @@ export interface OAuthCode {
  * Planning entity types
  */
 
+export type StorageMode = 'local' | 'cloud';
+
+export interface RepositoryConfigLocal {
+	localPath: string;
+	branch: string;
+}
+
+export interface RepositoryConfigCloud {
+	remote: {
+		provider: 'github';
+		owner: string;
+		repo: string;
+		url: string;
+	};
+	branch: string;
+}
+
+export type RepositoryConfig = RepositoryConfigLocal | RepositoryConfigCloud;
+
 export interface Project {
 	id: string;
 	name: string;
 	description: string | null;
 	owner_id: string;
+	storage_mode: StorageMode;
+	repository: RepositoryConfig | Record<string, never>;
+	root_paths: string[];
 	created_at: Date;
 	updated_at: Date;
 }
