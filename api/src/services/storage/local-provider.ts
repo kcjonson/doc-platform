@@ -89,27 +89,9 @@ export class LocalStorageProvider implements StorageProvider {
 	async readFile(relativePath: string): Promise<string> {
 		const absolutePath = await validatePath(this.repoPath, relativePath);
 
-		// Check for common binary extensions
-		const binaryExtensions = new Set([
-			// Images
-			'.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bmp', '.svg', '.tiff', '.tif', '.psd', '.raw', '.heic', '.heif',
-			// Documents
-			'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.odt', '.ods', '.odp',
-			// Archives
-			'.zip', '.tar', '.gz', '.rar', '.7z', '.bz2', '.xz', '.zst', '.lz4',
-			// Executables/Libraries
-			'.exe', '.dll', '.so', '.dylib', '.bin', '.o', '.a', '.lib',
-			// Fonts
-			'.woff', '.woff2', '.ttf', '.eot', '.otf',
-			// Media
-			'.mp3', '.mp4', '.wav', '.avi', '.mov', '.webm', '.flac', '.aac', '.ogg', '.mkv', '.flv',
-			// Data/Database
-			'.db', '.sqlite', '.sqlite3', '.dat', '.mdb', '.accdb',
-			// Other binary
-			'.class', '.pyc', '.pyo', '.wasm', '.deb', '.rpm', '.dmg', '.iso', '.img',
-		]);
+		// Only allow markdown files
 		const ext = path.extname(relativePath).toLowerCase();
-		if (binaryExtensions.has(ext)) {
+		if (ext !== '.md' && ext !== '.mdx') {
 			throw new Error('BINARY_FILE');
 		}
 
