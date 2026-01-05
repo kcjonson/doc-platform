@@ -224,7 +224,14 @@ export async function handleListFiles(context: Context, redis: Redis): Promise<R
 		const provider = new LocalStorageProvider(repo.localPath);
 
 		// List files at the specified path
-		const entries = await provider.listDirectory(pathParam);
+		const allEntries = await provider.listDirectory(pathParam);
+
+		// Filter to only show directories and markdown files
+		const entries = allEntries.filter((entry) => {
+			if (entry.type === 'directory') return true;
+			const ext = entry.name.toLowerCase().split('.').pop();
+			return ext === 'md' || ext === 'mdx';
+		});
 
 		return context.json({
 			path: pathParam,
