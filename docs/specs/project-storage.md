@@ -8,9 +8,22 @@ This specification defines how projects connect to git repositories for file sto
 
 Every project in doc-platform is backed by exactly **one git repository**. The editor is designed around git workflows: viewing file history, making commits, and pushing changes. This git-centric model is fundamental, not optional.
 
-Projects can operate in two storage modes:
-- **Local**: Backend reads from a git repository on the local filesystem (development)
-- **Cloud**: Backend manages a clone of a remote repository (production)
+### Storage Modes by Platform
+
+| Platform | Storage Mode | How It Works |
+|----------|--------------|--------------|
+| **Electron (desktop)** | Local | Backend reads from local filesystem, runs git commands locally |
+| **Browser (web)** | Cloud only | Backend manages a git checkout on the server |
+
+**Why browser can't use local mode:**
+- Browsers cannot execute git commands (no shell access)
+- The File System Access API only provides file read/write, not git operations
+- All git operations (commit, push, pull) must run on a server
+
+### Mode Details
+
+- **Local Mode** (Electron only): Backend reads from a git repository on the local filesystem. User selects folder via native OS dialog. Git commands run locally.
+- **Cloud Mode** (Browser): Backend clones the repository to managed server storage. User connects via GitHub OAuth. Git commands run on server.
 
 The frontend is storage-agnostic—it uses the same API regardless of mode.
 
@@ -135,24 +148,27 @@ ALTER TABLE projects
 
 ---
 
-## Local Mode
+## Local Mode (Electron Only)
 
 ### Use Case
 
-Developer running the app locally for:
+Developer running the **Electron desktop app** for:
 - Initial documentation setup
 - Editing docs while working in their IDE
 - Testing before pushing to cloud
+
+**Note:** Local mode is not available in the browser. Browser users must use cloud mode.
 
 ### Add Folder Flow
 
 ```
 1. User clicks "Add Folder" in file browser
-2. User selects folder: /Users/me/projects/my-app/docs
-3. Frontend calls POST /api/projects/:id/folders
+2. Electron shows native OS folder picker (dialog.showOpenDialog)
+3. User selects folder: /Users/me/projects/my-app/docs
+4. Frontend calls POST /api/projects/:id/folders
    Body: { "path": "/Users/me/projects/my-app/docs" }
 
-4. Backend validates:
+5. Backend validates:
    a. Folder exists
    b. Folder is inside a git repository
    c. If project already has a repository, it's the same one

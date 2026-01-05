@@ -130,10 +130,10 @@ export function FileBrowser({
 		setExpandedPaths(newExpanded);
 	}, [expandedPaths, fetchFiles]);
 
-	// Handle add folder
+	// Handle add folder (Electron only - browser users must use cloud mode)
+	// TODO: Use platform.System.showOpenDialog({ directory: true }) for native folder picker
+	// TODO: In browser, hide this button and show "Connect Repository" instead
 	const handleAddFolder = useCallback(async () => {
-		// For now, prompt for path
-		// TODO: Use native file picker when available
 		const path = window.prompt('Enter folder path (absolute path to a git repository folder):');
 		if (!path) return;
 
