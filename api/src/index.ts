@@ -332,6 +332,7 @@ app.delete('/api/projects/:id', (context) => handleDeleteProject(context, redis)
 app.post('/api/projects/:id/folders', (context) => handleAddFolder(context, redis));
 app.delete('/api/projects/:id/folders', (context) => handleRemoveFolder(context, redis));
 app.get('/api/projects/:id/tree', (context) => handleListFiles(context, redis));
+app.post('/api/projects/:id/tree', (context) => handleListFiles(context, redis));
 app.get('/api/projects/:id/files/*', (context) => handleReadFile(context, redis));
 app.put('/api/projects/:id/files/*', (context) => handleWriteFile(context, redis));
 app.get('/api/projects/:id/git/status', (context) => handleGitStatus(context, redis));

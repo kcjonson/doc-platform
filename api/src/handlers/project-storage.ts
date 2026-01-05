@@ -12,6 +12,7 @@ import { getProject, addFolder, removeFolder, type RepositoryConfig, isLocalRepo
 import { isValidUUID } from '../validation.js';
 import { findRepoRoot, getCurrentBranch, getRelativePath } from '../services/storage/git-utils.js';
 import { LocalStorageProvider } from '../services/storage/local-provider.js';
+import type { FileEntry } from '../services/storage/types.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Git Error Parsing
@@ -235,15 +236,66 @@ function isPathWithinRoots(targetPath: string, rootPaths: string[]): boolean {
 	const normalizedTarget = targetPath.replace(/\/+$/, '') || '/';
 	for (const root of rootPaths) {
 		const normalizedRoot = root.replace(/\/+$/, '') || '/';
+		// Root '/' contains everything
+		if (normalizedRoot === '/') return true;
 		if (normalizedTarget === normalizedRoot) return true;
 		if (normalizedTarget.startsWith(normalizedRoot + '/')) return true;
 	}
 	return false;
 }
 
+/** Nested tree structure for expanded paths - more compact than flat array */
+type ExpandedTree = { [name: string]: ExpandedTree };
+
+/** Convert nested tree to flat array of paths */
+function expandedTreeToPaths(tree: ExpandedTree, basePath: string = ''): string[] {
+	const paths: string[] = [];
+	for (const [name, subtree] of Object.entries(tree)) {
+		const path = basePath ? `${basePath}/${name}` : `/${name}`;
+		paths.push(path);
+		paths.push(...expandedTreeToPaths(subtree, path));
+	}
+	return paths;
+}
+
+/** Convert flat array of paths to nested tree */
+function pathsToExpandedTree(paths: string[]): ExpandedTree {
+	const tree: ExpandedTree = {};
+	for (const path of paths) {
+		const parts = path.split('/').filter(Boolean);
+		let current = tree;
+		for (const part of parts) {
+			if (!current[part]) {
+				current[part] = {};
+			}
+			current = current[part];
+		}
+	}
+	return tree;
+}
+
+/** Sort paths by depth (shallowest first) */
+function sortPathsByDepth(paths: string[]): string[] {
+	return [...paths].sort((a, b) => {
+		const depthA = a === '/' ? 0 : a.split('/').filter(Boolean).length;
+		const depthB = b === '/' ? 0 : b.split('/').filter(Boolean).length;
+		return depthA - depthB;
+	});
+}
+
+/** Get display name for a path */
+function getDisplayName(path: string): string {
+	return path === '/' ? 'Root' : path.split('/').pop() || path;
+}
+
 /**
- * GET /api/projects/:id/tree
- * List files in the project
+ * POST /api/projects/:id/tree
+ * Load file tree with expanded paths
+ * Body: { expanded?: ExpandedTree }
+ * Returns: { files: FileEntry[], expanded: ExpandedTree, rootPaths: string[] }
+ *
+ * ExpandedTree is a nested object where keys are path segments:
+ * { "docs": { "nested": {} } } represents /docs and /docs/nested expanded
  */
 export async function handleListFiles(context: Context, redis: Redis): Promise<Response> {
 	const userId = await getUserId(context, redis);
@@ -267,23 +319,77 @@ export async function handleListFiles(context: Context, redis: Redis): Promise<R
 			return context.json({ error: 'No repository configured', code: 'REPO_NOT_CONFIGURED' }, 400);
 		}
 
-		const pathParam = context.req.query('path') || '/';
+		// Parse body for expanded tree (POST) or use empty object (GET)
+		let expandedTree: ExpandedTree = {};
+		if (context.req.method === 'POST') {
+			try {
+				const body = await context.req.json() as { expanded?: ExpandedTree };
+				expandedTree = body.expanded || {};
+			} catch {
+				// Invalid JSON, use defaults
+			}
+		}
 
-		// Validate path is within configured root paths
-		if (!isPathWithinRoots(pathParam, project.rootPaths)) {
-			return context.json({ error: 'Path is outside project boundaries', code: 'PATH_OUTSIDE_ROOTS' }, 403);
+		// Convert tree to flat paths for processing
+		const requestedExpandedPaths = expandedTreeToPaths(expandedTree);
+
+		// Limit to prevent abuse
+		if (requestedExpandedPaths.length > 200) {
+			return context.json({ error: 'Too many expanded paths (max 200)' }, 400);
 		}
 
 		const provider = new LocalStorageProvider(repo.localPath);
+		const rootPaths = project.rootPaths || [];
 
-		// List files at the specified path, filtered to markdown files only
-		const entries = await provider.listDirectory(pathParam, {
-			extensions: ['md', 'mdx'],
-		});
+		// Combine root paths with requested expanded paths
+		const pathsToExpand = [...new Set([...rootPaths, ...requestedExpandedPaths])];
+		const sortedPaths = sortPathsByDepth(pathsToExpand);
+
+		const files: FileEntry[] = [];
+		const validExpandedPaths: string[] = [];
+
+		for (const path of sortedPaths) {
+			// Add root folder entry if this is a root path
+			if (rootPaths.includes(path)) {
+				files.push({
+					name: getDisplayName(path),
+					path: path,
+					type: 'directory',
+				});
+			}
+
+			// Validate path is within roots
+			if (!isPathWithinRoots(path, rootPaths)) {
+				continue;
+			}
+
+			// Fetch children
+			try {
+				const children = await provider.listDirectory(path, {
+					extensions: ['md', 'mdx'],
+				});
+
+				validExpandedPaths.push(path);
+
+				// Insert children after their parent folder
+				const parentIndex = files.findIndex((f) => f.path === path);
+				if (parentIndex !== -1) {
+					files.splice(parentIndex + 1, 0, ...children);
+				} else {
+					files.push(...children);
+				}
+			} catch {
+				// Path doesn't exist - skip it
+			}
+		}
+
+		// Convert valid paths back to tree format
+		const validExpandedTree = pathsToExpandedTree(validExpandedPaths);
 
 		return context.json({
-			path: pathParam,
-			entries,
+			files,
+			expanded: validExpandedTree,
+			rootPaths,
 		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

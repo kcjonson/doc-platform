@@ -1,16 +1,9 @@
-import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useEffect, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { fetchClient } from '@doc-platform/fetch';
+import { FileTreeModel, useModel } from '@doc-platform/models';
 import { Button } from '@doc-platform/ui';
+import { fetchClient } from '@doc-platform/fetch';
 import styles from './FileBrowser.module.css';
-
-interface FileEntry {
-	name: string;
-	path: string;
-	type: 'file' | 'directory';
-	size?: number;
-	modifiedAt?: string;
-}
 
 interface ProjectStorage {
 	storageMode: 'local' | 'cloud';
@@ -19,39 +12,6 @@ interface ProjectStorage {
 		branch?: string;
 	};
 	rootPaths: string[];
-}
-
-interface FileTreeResponse {
-	path: string;
-	entries: FileEntry[];
-}
-
-interface ApiError {
-	code?: string;
-	error?: string;
-}
-
-/** Known error codes and their user-friendly messages */
-const ERROR_MESSAGES: Record<string, string> = {
-	NOT_GIT_REPO: 'Folder is not inside a git repository',
-	DIFFERENT_REPO: 'Folder must be in the same git repository',
-	FOLDER_NOT_FOUND: 'Folder does not exist',
-	NOT_DIRECTORY: 'Path is not a directory',
-	DUPLICATE_PATH: 'This folder is already added',
-};
-
-/** Extract user-friendly error message from API error */
-function getErrorMessage(err: unknown, fallback: string): string {
-	if (err && typeof err === 'object') {
-		const apiError = err as ApiError;
-		if (apiError.code && ERROR_MESSAGES[apiError.code]) {
-			return ERROR_MESSAGES[apiError.code];
-		}
-		if (apiError.error) {
-			return apiError.error;
-		}
-	}
-	return fallback;
 }
 
 export interface FileBrowserProps {
@@ -71,154 +31,49 @@ export function FileBrowser({
 	onFileSelect,
 	class: className,
 }: FileBrowserProps): JSX.Element {
-	const [project, setProject] = useState<ProjectStorage | null>(null);
-	const [files, setFiles] = useState<FileEntry[]>([]);
-	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+	// Create model instance once per component
+	const modelRef = useRef<FileTreeModel | null>(null);
+	if (!modelRef.current) {
+		modelRef.current = new FileTreeModel();
+	}
+	const model = modelRef.current;
 
-	// Fetch project to get storage config
-	const fetchProject = useCallback(async () => {
-		try {
-			const data = await fetchClient.get<ProjectStorage>(`/api/projects/${projectId}`);
-			setProject(data);
-		} catch (err) {
-			console.error('Failed to fetch project:', err);
-			setError('Failed to load project');
-		}
-	}, [projectId]);
+	// Subscribe to model changes
+	useModel(model);
 
-	// Fetch files at a specific path
-	const fetchFiles = useCallback(async (path: string) => {
-		try {
-			const data = await fetchClient.get<FileTreeResponse>(
-				`/api/projects/${projectId}/tree?path=${encodeURIComponent(path)}`
-			);
-			return data.entries;
-		} catch (err) {
-			console.error('Failed to fetch files:', err);
-			return [];
-		}
-	}, [projectId]);
+	// Initialize model when projectId changes
+	useEffect(() => {
+		model.initialize(projectId);
+	}, [model, projectId]);
 
-	// Memoize rootPaths to avoid re-renders when other project fields change
-	const rootPaths = project?.rootPaths;
-
-	// Load initial files for all root paths
-	const loadRootFiles = useCallback(async () => {
-		if (!rootPaths || rootPaths.length === 0) {
-			setFiles([]);
-			setLoading(false);
-			return;
-		}
-
-		setLoading(true);
-		try {
-			const allFiles: FileEntry[] = [];
-			for (const rootPath of rootPaths) {
-				// Add root folder entry - children are loaded on expand
-				allFiles.push({
-					name: rootPath === '/' ? 'Root' : rootPath.split('/').pop() || rootPath,
-					path: rootPath,
-					type: 'directory',
-				});
-			}
-			setFiles(allFiles);
-			// Auto-expand root paths
-			setExpandedPaths(new Set(rootPaths));
-		} catch (err) {
-			setError('Failed to load files');
-		}
-		setLoading(false);
-	}, [rootPaths]);
-
-	// Toggle folder expand/collapse
-	const toggleFolder = useCallback(async (path: string) => {
-		const newExpanded = new Set(expandedPaths);
-		if (newExpanded.has(path)) {
-			newExpanded.delete(path);
-		} else {
-			newExpanded.add(path);
-			// Load children if not already loaded
-			const children = await fetchFiles(path);
-			setFiles((prev: FileEntry[]) => {
-				// Find where to insert children
-				const index = prev.findIndex((f: FileEntry) => f.path === path);
-				if (index === -1) return prev;
-
-				// Remove existing children at this path
-				const pathPrefix = path === '/' ? '/' : path + '/';
-				const withoutChildren = prev.filter(
-					(f: FileEntry) => f.path === path || !f.path.startsWith(pathPrefix)
-				);
-
-				// Insert new children after parent
-				const before = withoutChildren.slice(0, index + 1);
-				const after = withoutChildren.slice(index + 1);
-				return [...before, ...children, ...after];
-			});
-		}
-		setExpandedPaths(newExpanded);
-	}, [expandedPaths, fetchFiles]);
-
-	// Handle add folder (Electron only - browser users must use cloud mode)
-	// TODO: Use platform.System.showOpenDialog({ directory: true }) for native folder picker
-	// TODO: In browser, hide this button and show "Connect Repository" instead
-	const handleAddFolder = useCallback(async () => {
+	// Handle add folder
+	const handleAddFolder = async () => {
 		const path = window.prompt('Enter folder path (absolute path to a git repository folder):');
 		if (!path) return;
 
 		try {
-			setError(null);
-			const result = await fetchClient.post<ProjectStorage>(
+			await fetchClient.post<ProjectStorage>(
 				`/api/projects/${projectId}/folders`,
 				{ path }
 			);
-			setProject(result);
+			// Reload the tree to pick up new folder
+			model.reload();
 		} catch (err) {
-			setError(getErrorMessage(err, 'Failed to add folder'));
+			console.error('Failed to add folder:', err);
 		}
-	}, [projectId]);
-
-	// Initial load
-	useEffect(() => {
-		fetchProject();
-	}, [fetchProject]);
-
-	// Reset state when project changes (cleanup expandedPaths)
-	useEffect(() => {
-		setExpandedPaths(new Set());
-		setFiles([]);
-		setError(null);
-	}, [projectId]);
-
-	// Load files when rootPaths change
-	useEffect(() => {
-		if (rootPaths && rootPaths.length > 0) {
-			loadRootFiles();
-		}
-	}, [rootPaths, loadRootFiles]);
-
-	// Calculate depth for indentation
-	const getDepth = (path: string): number => {
-		if (!rootPaths) return 0;
-		for (const rootPath of rootPaths) {
-			if (path === rootPath) return 0;
-			if (path.startsWith(rootPath === '/' ? '/' : rootPath + '/')) {
-				const relative = path.slice(rootPath.length);
-				return relative.split('/').filter(Boolean).length;
-			}
-		}
-		return 0;
 	};
 
-	// Check if path is a root path
-	const isRootPath = (path: string): boolean => {
-		return rootPaths?.includes(path) || false;
+	// Handle item click
+	const handleItemClick = (path: string, type: 'file' | 'directory') => {
+		if (type === 'directory') {
+			model.toggleFolder(path);
+		} else {
+			onFileSelect?.(path);
+		}
 	};
 
 	// Empty state
-	if (!loading && (!rootPaths || rootPaths.length === 0)) {
+	if (!model.loading && model.rootPaths.length === 0) {
 		return (
 			<div class={`${styles.container} ${className || ''}`}>
 				<div class={styles.header}>Files</div>
@@ -231,7 +86,7 @@ export function FileBrowser({
 					<div class={styles.emptyHint}>
 						Add a folder from a git repository to get started.
 					</div>
-					{error && <div class={styles.error}>{error}</div>}
+					{model.error && <div class={styles.error}>{model.error}</div>}
 				</div>
 			</div>
 		);
@@ -241,28 +96,22 @@ export function FileBrowser({
 		<div class={`${styles.container} ${className || ''}`}>
 			<div class={styles.header}>Files</div>
 			<div class={styles.content}>
-				{loading ? (
+				{model.loading ? (
 					<div class={styles.loading}>Loading...</div>
 				) : (
 					<div class={styles.tree}>
-						{files.map((file: FileEntry) => {
-							const depth = getDepth(file.path);
-							const isExpanded = expandedPaths.has(file.path);
+						{model.files.map((file) => {
+							const depth = model.getDepth(file.path);
+							const isExpanded = model.isExpanded(file.path);
 							const isSelected = file.path === selectedPath;
-							const isRoot = isRootPath(file.path);
+							const isRoot = model.isRootPath(file.path);
 
 							return (
 								<div
 									key={file.path}
 									class={`${styles.treeItem} ${isSelected ? styles.selected : ''}`}
 									style={{ paddingLeft: `${depth * 16 + 8}px` }}
-									onClick={() => {
-										if (file.type === 'directory') {
-											toggleFolder(file.path);
-										} else {
-											onFileSelect?.(file.path);
-										}
-									}}
+									onClick={() => handleItemClick(file.path, file.type)}
 								>
 									{file.type === 'directory' ? (
 										<span class={styles.folderIcon}>
@@ -279,12 +128,7 @@ export function FileBrowser({
 						})}
 					</div>
 				)}
-				{error && <div class={styles.error}>{error}</div>}
-			</div>
-			<div class={styles.footer}>
-				<Button onClick={handleAddFolder} class={styles.addButton}>
-					+ Add Folder
-				</Button>
+				{model.error && <div class={styles.error}>{model.error}</div>}
 			</div>
 		</div>
 	);
