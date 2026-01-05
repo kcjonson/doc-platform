@@ -18,6 +18,13 @@ export interface FileEntry {
 	modifiedAt?: Date;
 }
 
+export interface ListDirectoryOptions {
+	/** Show hidden files (starting with .) - default: false */
+	showHidden?: boolean;
+	/** Filter to specific file extensions (e.g., ['md', 'mdx']) - directories always included */
+	extensions?: string[];
+}
+
 export interface GitStatus {
 	branch: string;
 	ahead: number;
@@ -56,7 +63,7 @@ export interface PullResult {
  */
 export interface StorageProvider {
 	// File operations
-	listDirectory(relativePath: string): Promise<FileEntry[]>;
+	listDirectory(relativePath: string, options?: ListDirectoryOptions): Promise<FileEntry[]>;
 	readFile(relativePath: string): Promise<string>;
 	writeFile(relativePath: string, content: string): Promise<void>;
 	deleteFile(relativePath: string): Promise<void>;

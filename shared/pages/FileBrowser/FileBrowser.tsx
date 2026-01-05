@@ -26,6 +26,34 @@ interface FileTreeResponse {
 	entries: FileEntry[];
 }
 
+interface ApiError {
+	code?: string;
+	error?: string;
+}
+
+/** Known error codes and their user-friendly messages */
+const ERROR_MESSAGES: Record<string, string> = {
+	NOT_GIT_REPO: 'Folder is not inside a git repository',
+	DIFFERENT_REPO: 'Folder must be in the same git repository',
+	FOLDER_NOT_FOUND: 'Folder does not exist',
+	NOT_DIRECTORY: 'Path is not a directory',
+	DUPLICATE_PATH: 'This folder is already added',
+};
+
+/** Extract user-friendly error message from API error */
+function getErrorMessage(err: unknown, fallback: string): string {
+	if (err && typeof err === 'object') {
+		const apiError = err as ApiError;
+		if (apiError.code && ERROR_MESSAGES[apiError.code]) {
+			return ERROR_MESSAGES[apiError.code];
+		}
+		if (apiError.error) {
+			return apiError.error;
+		}
+	}
+	return fallback;
+}
+
 export interface FileBrowserProps {
 	/** Project ID */
 	projectId: string;
@@ -73,9 +101,12 @@ export function FileBrowser({
 		}
 	}, [projectId]);
 
+	// Memoize rootPaths to avoid re-renders when other project fields change
+	const rootPaths = project?.rootPaths;
+
 	// Load initial files for all root paths
 	const loadRootFiles = useCallback(async () => {
-		if (!project || project.rootPaths.length === 0) {
+		if (!rootPaths || rootPaths.length === 0) {
 			setFiles([]);
 			setLoading(false);
 			return;
@@ -84,7 +115,7 @@ export function FileBrowser({
 		setLoading(true);
 		try {
 			const allFiles: FileEntry[] = [];
-			for (const rootPath of project.rootPaths) {
+			for (const rootPath of rootPaths) {
 				// Add root folder entry - children are loaded on expand
 				allFiles.push({
 					name: rootPath === '/' ? 'Root' : rootPath.split('/').pop() || rootPath,
@@ -94,12 +125,12 @@ export function FileBrowser({
 			}
 			setFiles(allFiles);
 			// Auto-expand root paths
-			setExpandedPaths(new Set(project.rootPaths));
+			setExpandedPaths(new Set(rootPaths));
 		} catch (err) {
 			setError('Failed to load files');
 		}
 		setLoading(false);
-	}, [project]);
+	}, [rootPaths]);
 
 	// Toggle folder expand/collapse
 	const toggleFolder = useCallback(async (path: string) => {
@@ -145,22 +176,7 @@ export function FileBrowser({
 			);
 			setProject(result);
 		} catch (err) {
-			if (err && typeof err === 'object') {
-				const error = err as { code?: string; error?: string };
-				if (error.code === 'NOT_GIT_REPO') {
-					setError('Folder is not inside a git repository');
-				} else if (error.code === 'DIFFERENT_REPO') {
-					setError('Folder must be in the same git repository');
-				} else if (error.code === 'FOLDER_NOT_FOUND') {
-					setError('Folder does not exist');
-				} else if (error.code === 'NOT_DIRECTORY') {
-					setError('Path is not a directory');
-				} else {
-					setError(error.error || 'Failed to add folder');
-				}
-			} else {
-				setError('Failed to add folder');
-			}
+			setError(getErrorMessage(err, 'Failed to add folder'));
 		}
 	}, [projectId]);
 
@@ -169,17 +185,24 @@ export function FileBrowser({
 		fetchProject();
 	}, [fetchProject]);
 
-	// Load files when project changes
+	// Reset state when project changes (cleanup expandedPaths)
 	useEffect(() => {
-		if (project) {
+		setExpandedPaths(new Set());
+		setFiles([]);
+		setError(null);
+	}, [projectId]);
+
+	// Load files when rootPaths change
+	useEffect(() => {
+		if (rootPaths && rootPaths.length > 0) {
 			loadRootFiles();
 		}
-	}, [project, loadRootFiles]);
+	}, [rootPaths, loadRootFiles]);
 
 	// Calculate depth for indentation
 	const getDepth = (path: string): number => {
-		if (!project) return 0;
-		for (const rootPath of project.rootPaths) {
+		if (!rootPaths) return 0;
+		for (const rootPath of rootPaths) {
 			if (path === rootPath) return 0;
 			if (path.startsWith(rootPath === '/' ? '/' : rootPath + '/')) {
 				const relative = path.slice(rootPath.length);
@@ -191,11 +214,11 @@ export function FileBrowser({
 
 	// Check if path is a root path
 	const isRootPath = (path: string): boolean => {
-		return project?.rootPaths.includes(path) || false;
+		return rootPaths?.includes(path) || false;
 	};
 
 	// Empty state
-	if (!loading && (!project || project.rootPaths.length === 0)) {
+	if (!loading && (!rootPaths || rootPaths.length === 0)) {
 		return (
 			<div class={`${styles.container} ${className || ''}`}>
 				<div class={styles.header}>Files</div>

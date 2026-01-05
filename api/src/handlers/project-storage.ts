@@ -13,6 +13,59 @@ import { isValidUUID } from '../validation.js';
 import { findRepoRoot, getCurrentBranch, getRelativePath } from '../services/storage/git-utils.js';
 import { LocalStorageProvider } from '../services/storage/local-provider.js';
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Git Error Parsing
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface GitErrorInfo {
+	error: string;
+	code: string;
+}
+
+/**
+ * Parse git error messages into user-friendly responses
+ */
+function parseGitError(error: unknown): GitErrorInfo {
+	const message = error instanceof Error ? error.message : String(error);
+	const lowerMessage = message.toLowerCase();
+
+	// Authentication errors
+	if (lowerMessage.includes('authentication') || lowerMessage.includes('permission denied') ||
+		lowerMessage.includes('could not read') || lowerMessage.includes('invalid credentials')) {
+		return { error: 'Authentication failed. Check your git credentials.', code: 'AUTH_FAILED' };
+	}
+
+	// Network errors
+	if (lowerMessage.includes('could not resolve host') || lowerMessage.includes('network') ||
+		lowerMessage.includes('connection refused') || lowerMessage.includes('unable to access')) {
+		return { error: 'Network error. Check your internet connection.', code: 'NETWORK_ERROR' };
+	}
+
+	// Push rejected (need to pull first)
+	if (lowerMessage.includes('rejected') || lowerMessage.includes('non-fast-forward') ||
+		lowerMessage.includes('fetch first')) {
+		return { error: 'Push rejected. Pull changes first and resolve any conflicts.', code: 'PUSH_REJECTED' };
+	}
+
+	// Merge conflicts
+	if (lowerMessage.includes('conflict') || lowerMessage.includes('merge')) {
+		return { error: 'Merge conflict detected. Resolve conflicts before continuing.', code: 'MERGE_CONFLICT' };
+	}
+
+	// Nothing to commit
+	if (lowerMessage.includes('nothing to commit') || lowerMessage.includes('no changes')) {
+		return { error: 'No changes to commit.', code: 'NOTHING_TO_COMMIT' };
+	}
+
+	// Timeout
+	if (lowerMessage.includes('timeout') || lowerMessage.includes('timed out')) {
+		return { error: 'Git operation timed out. Try again.', code: 'TIMEOUT' };
+	}
+
+	// Default
+	return { error: 'Git operation failed. Check the logs for details.', code: 'GIT_ERROR' };
+}
+
 async function getUserId(context: Context, redis: Redis): Promise<string | null> {
 	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
 	if (!sessionId) return null;
@@ -223,14 +276,9 @@ export async function handleListFiles(context: Context, redis: Redis): Promise<R
 
 		const provider = new LocalStorageProvider(repo.localPath);
 
-		// List files at the specified path
-		const allEntries = await provider.listDirectory(pathParam);
-
-		// Filter to only show directories and markdown files
-		const entries = allEntries.filter((entry) => {
-			if (entry.type === 'directory') return true;
-			const ext = entry.name.toLowerCase().split('.').pop();
-			return ext === 'md' || ext === 'mdx';
+		// List files at the specified path, filtered to markdown files only
+		const entries = await provider.listDirectory(pathParam, {
+			extensions: ['md', 'mdx'],
 		});
 
 		return context.json({
@@ -394,7 +442,8 @@ export async function handleGitStatus(context: Context, redis: Redis): Promise<R
 		return context.json(status);
 	} catch (error) {
 		console.error('Failed to get git status:', error);
-		return context.json({ error: 'Server error' }, 500);
+		const gitError = parseGitError(error);
+		return context.json(gitError, 500);
 	}
 }
 
@@ -425,7 +474,8 @@ export async function handleGitLog(context: Context, redis: Redis): Promise<Resp
 		return context.json({ commits });
 	} catch (error) {
 		console.error('Failed to get git log:', error);
-		return context.json({ error: 'Server error' }, 500);
+		const gitError = parseGitError(error);
+		return context.json(gitError, 500);
 	}
 }
 
@@ -448,10 +498,18 @@ export async function handleGitCommit(context: Context, redis: Redis): Promise<R
 		const { message, paths } = body;
 
 		if (!message || typeof message !== 'string') {
-			return context.json({ error: 'Commit message is required' }, 400);
+			return context.json({ error: 'Commit message is required', code: 'MESSAGE_REQUIRED' }, 400);
 		}
 
-		const provider = await getStorageProvider(projectId, userId);
+		const trimmedMessage = message.trim();
+		if (trimmedMessage.length < 3) {
+			return context.json({ error: 'Commit message must be at least 3 characters', code: 'MESSAGE_TOO_SHORT' }, 400);
+		}
+		if (trimmedMessage.length > 500) {
+			return context.json({ error: 'Commit message must be 500 characters or less', code: 'MESSAGE_TOO_LONG' }, 400);
+		}
+
+		const provider = await getStorageProvider(projectId, userId)
 		if (!provider) {
 			return context.json({ error: 'Project not found or no repository configured' }, 404);
 		}
@@ -461,11 +519,12 @@ export async function handleGitCommit(context: Context, redis: Redis): Promise<R
 			await provider.add(paths);
 		}
 
-		const sha = await provider.commit(message);
-		return context.json({ sha, message });
+		const sha = await provider.commit(trimmedMessage);
+		return context.json({ sha, message: trimmedMessage });
 	} catch (error) {
 		console.error('Failed to commit:', error);
-		return context.json({ error: 'Server error' }, 500);
+		const gitError = parseGitError(error);
+		return context.json(gitError, 500);
 	}
 }
 
@@ -493,7 +552,8 @@ export async function handleGitPush(context: Context, redis: Redis): Promise<Res
 		return context.json({ pushed: true });
 	} catch (error) {
 		console.error('Failed to push:', error);
-		return context.json({ error: 'Server error' }, 500);
+		const gitError = parseGitError(error);
+		return context.json(gitError, 500);
 	}
 }
 
@@ -521,6 +581,7 @@ export async function handleGitPull(context: Context, redis: Redis): Promise<Res
 		return context.json(result);
 	} catch (error) {
 		console.error('Failed to pull:', error);
-		return context.json({ error: 'Server error' }, 500);
+		const gitError = parseGitError(error);
+		return context.json(gitError, 500);
 	}
 }

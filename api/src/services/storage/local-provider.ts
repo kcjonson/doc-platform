@@ -9,6 +9,7 @@ import {
 	STORAGE_LIMITS,
 	type StorageProvider,
 	type FileEntry,
+	type ListDirectoryOptions,
 	type GitStatus,
 	type FileChange,
 	type Commit,
@@ -23,13 +24,16 @@ export class LocalStorageProvider implements StorageProvider {
 	// File operations
 	// ─────────────────────────────────────────────────────────────────────────
 
-	async listDirectory(relativePath: string): Promise<FileEntry[]> {
+	async listDirectory(relativePath: string, options?: ListDirectoryOptions): Promise<FileEntry[]> {
 		const absolutePath = await validatePath(this.repoPath, relativePath);
+		const { showHidden = false, extensions } = options ?? {};
 
 		const entries = await fs.readdir(absolutePath, { withFileTypes: true });
 
-		// Filter hidden files and build entry info in parallel
-		const visibleEntries = entries.filter((e) => !e.name.startsWith('.'));
+		// Filter hidden files unless showHidden is true
+		const visibleEntries = showHidden
+			? entries
+			: entries.filter((e) => !e.name.startsWith('.'));
 
 		const results = await Promise.all(
 			visibleEntries.map(async (entry): Promise<FileEntry | null> => {
@@ -44,6 +48,13 @@ export class LocalStorageProvider implements StorageProvider {
 						type: 'directory',
 					};
 				} else if (entry.isFile()) {
+					// Apply extension filter if specified
+					if (extensions && extensions.length > 0) {
+						const ext = entry.name.toLowerCase().split('.').pop();
+						if (!ext || !extensions.includes(ext)) {
+							return null;
+						}
+					}
 					const stats = await fs.stat(entryPath);
 					return {
 						name: entry.name,
