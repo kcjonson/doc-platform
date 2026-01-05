@@ -8,8 +8,8 @@ import type { MarkType, CustomText } from './types';
 import { Toolbar } from './Toolbar';
 import styles from './RichTextEditor.module.css';
 
-// Import types to augment Slate
-import './types';
+// Import Slate type augmentation from MarkdownEditor (single source of truth)
+import '../../pages/MarkdownEditor/types';
 
 export interface RichTextEditorProps {
 	/** Initial value as Slate nodes */
