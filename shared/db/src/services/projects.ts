@@ -280,15 +280,6 @@ export async function removeFolder(
 	const project = existing.rows[0]!;
 	const newRootPaths = project.root_paths.filter((p) => p !== rootPath);
 
-	// If no root paths left, clear the repository config
-	const updates: Record<string, unknown> = {
-		root_paths: newRootPaths,
-	};
-
-	if (newRootPaths.length === 0) {
-		updates.repository = {};
-	}
-
 	const result = await query<Project>(
 		`UPDATE projects
 		 SET root_paths = $1,

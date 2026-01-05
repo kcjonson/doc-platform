@@ -3,11 +3,8 @@
  * Wraps git CLI commands
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn, type ChildProcess } from 'child_process';
 import path from 'path';
-
-const execAsync = promisify(exec);
 
 export interface GitInfo {
 	repoRoot: string;
@@ -17,18 +14,38 @@ export interface GitInfo {
 
 /**
  * Execute a git command in a directory
+ * Uses spawn with args array to prevent command injection
  */
 export async function execGit(
 	cwd: string,
 	args: string[]
 ): Promise<{ stdout: string; stderr: string }> {
-	const command = `git ${args.map((a) => `"${a.replace(/"/g, '\\"')}"`).join(' ')}`;
-	try {
-		return await execAsync(command, { cwd, maxBuffer: 10 * 1024 * 1024 });
-	} catch (error) {
-		const execError = error as { stdout?: string; stderr?: string; message?: string };
-		throw new Error(`Git command failed: ${execError.stderr || execError.message}`);
-	}
+	return new Promise((resolve, reject) => {
+		const proc: ChildProcess = spawn('git', args, { cwd });
+
+		let stdout = '';
+		let stderr = '';
+
+		proc.stdout?.on('data', (data: Buffer) => {
+			stdout += data.toString();
+		});
+
+		proc.stderr?.on('data', (data: Buffer) => {
+			stderr += data.toString();
+		});
+
+		proc.on('error', (error: Error) => {
+			reject(new Error(`Git command failed: ${error.message}`));
+		});
+
+		proc.on('close', (code: number | null) => {
+			if (code === 0) {
+				resolve({ stdout, stderr });
+			} else {
+				reject(new Error(`Git command failed: ${stderr || `exit code ${code}`}`));
+			}
+		});
+	});
 }
 
 /**

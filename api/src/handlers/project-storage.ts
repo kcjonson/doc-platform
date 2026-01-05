@@ -176,6 +176,19 @@ export async function handleRemoveFolder(context: Context, redis: Redis): Promis
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Check if a path is within one of the project's root paths
+ */
+function isPathWithinRoots(targetPath: string, rootPaths: string[]): boolean {
+	const normalizedTarget = targetPath.replace(/\/+$/, '') || '/';
+	for (const root of rootPaths) {
+		const normalizedRoot = root.replace(/\/+$/, '') || '/';
+		if (normalizedTarget === normalizedRoot) return true;
+		if (normalizedTarget.startsWith(normalizedRoot + '/')) return true;
+	}
+	return false;
+}
+
+/**
  * GET /api/projects/:id/tree
  * List files in the project
  */
@@ -201,8 +214,14 @@ export async function handleListFiles(context: Context, redis: Redis): Promise<R
 			return context.json({ error: 'No repository configured', code: 'REPO_NOT_CONFIGURED' }, 400);
 		}
 
-		const provider = new LocalStorageProvider(repo.localPath);
 		const pathParam = context.req.query('path') || '/';
+
+		// Validate path is within configured root paths
+		if (!isPathWithinRoots(pathParam, project.rootPaths)) {
+			return context.json({ error: 'Path is outside project boundaries', code: 'PATH_OUTSIDE_ROOTS' }, 403);
+		}
+
+		const provider = new LocalStorageProvider(repo.localPath);
 
 		// List files at the specified path
 		const entries = await provider.listDirectory(pathParam);
@@ -238,9 +257,19 @@ export async function handleReadFile(context: Context, redis: Redis): Promise<Re
 	const filePath = match?.[1] ?? '/';
 
 	try {
+		const project = await getProject(projectId, userId);
+		if (!project) {
+			return context.json({ error: 'Project not found' }, 404);
+		}
+
+		// Validate path is within configured root paths
+		if (!isPathWithinRoots(filePath, project.rootPaths)) {
+			return context.json({ error: 'Path is outside project boundaries', code: 'PATH_OUTSIDE_ROOTS' }, 403);
+		}
+
 		const provider = await getStorageProvider(projectId, userId);
 		if (!provider) {
-			return context.json({ error: 'Project not found or no repository configured' }, 404);
+			return context.json({ error: 'No repository configured' }, 404);
 		}
 
 		const exists = await provider.exists(filePath);
@@ -256,6 +285,10 @@ export async function handleReadFile(context: Context, redis: Redis): Promise<Re
 			encoding: 'utf-8',
 		});
 	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		if (message === 'BINARY_FILE') {
+			return context.json({ error: 'Cannot read binary file', code: 'BINARY_FILE' }, 400);
+		}
 		console.error('Failed to read file:', error);
 		return context.json({ error: 'Server error' }, 500);
 	}
@@ -282,6 +315,16 @@ export async function handleWriteFile(context: Context, redis: Redis): Promise<R
 	const filePath = match?.[1] ?? '/';
 
 	try {
+		const project = await getProject(projectId, userId);
+		if (!project) {
+			return context.json({ error: 'Project not found' }, 404);
+		}
+
+		// Validate path is within configured root paths
+		if (!isPathWithinRoots(filePath, project.rootPaths)) {
+			return context.json({ error: 'Path is outside project boundaries', code: 'PATH_OUTSIDE_ROOTS' }, 403);
+		}
+
 		const body = await context.req.json();
 		const { content } = body;
 
@@ -291,7 +334,7 @@ export async function handleWriteFile(context: Context, redis: Redis): Promise<R
 
 		const provider = await getStorageProvider(projectId, userId);
 		if (!provider) {
-			return context.json({ error: 'Project not found or no repository configured' }, 404);
+			return context.json({ error: 'No repository configured' }, 404);
 		}
 
 		await provider.writeFile(filePath, content);

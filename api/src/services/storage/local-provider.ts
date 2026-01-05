@@ -27,43 +27,63 @@ export class LocalStorageProvider implements StorageProvider {
 
 		const entries = await fs.readdir(absolutePath, { withFileTypes: true });
 
-		const results: FileEntry[] = [];
-		for (const entry of entries) {
-			// Skip hidden files and .git directory
-			if (entry.name.startsWith('.')) continue;
+		// Filter hidden files and build entry info in parallel
+		const visibleEntries = entries.filter((e) => !e.name.startsWith('.'));
 
-			const entryPath = path.join(absolutePath, entry.name);
-			const entryRelPath = path.join(relativePath, entry.name).replace(/\\/g, '/');
+		const results = await Promise.all(
+			visibleEntries.map(async (entry): Promise<FileEntry | null> => {
+				const entryPath = path.join(absolutePath, entry.name);
+				const entryRelPath = path.join(relativePath, entry.name).replace(/\\/g, '/');
+				const normalizedPath = entryRelPath.startsWith('/') ? entryRelPath : '/' + entryRelPath;
 
-			if (entry.isDirectory()) {
-				results.push({
-					name: entry.name,
-					path: entryRelPath.startsWith('/') ? entryRelPath : '/' + entryRelPath,
-					type: 'directory',
-				});
-			} else if (entry.isFile()) {
-				const stats = await fs.stat(entryPath);
-				results.push({
-					name: entry.name,
-					path: entryRelPath.startsWith('/') ? entryRelPath : '/' + entryRelPath,
-					type: 'file',
-					size: stats.size,
-					modifiedAt: stats.mtime,
-				});
-			}
-		}
+				if (entry.isDirectory()) {
+					return {
+						name: entry.name,
+						path: normalizedPath,
+						type: 'directory',
+					};
+				} else if (entry.isFile()) {
+					const stats = await fs.stat(entryPath);
+					return {
+						name: entry.name,
+						path: normalizedPath,
+						type: 'file',
+						size: stats.size,
+						modifiedAt: stats.mtime,
+					};
+				}
+				return null;
+			})
+		);
 
-		// Sort: directories first, then alphabetically
-		return results.sort((a, b) => {
-			if (a.type !== b.type) {
-				return a.type === 'directory' ? -1 : 1;
-			}
-			return a.name.localeCompare(b.name);
-		});
+		// Filter nulls and sort: directories first, then alphabetically
+		return results
+			.filter((r): r is FileEntry => r !== null)
+			.sort((a, b) => {
+				if (a.type !== b.type) {
+					return a.type === 'directory' ? -1 : 1;
+				}
+				return a.name.localeCompare(b.name);
+			});
 	}
 
 	async readFile(relativePath: string): Promise<string> {
 		const absolutePath = validatePath(this.repoPath, relativePath);
+
+		// Check for common binary extensions
+		const binaryExtensions = new Set([
+			'.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.bmp', '.svg',
+			'.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+			'.zip', '.tar', '.gz', '.rar', '.7z',
+			'.exe', '.dll', '.so', '.dylib',
+			'.woff', '.woff2', '.ttf', '.eot', '.otf',
+			'.mp3', '.mp4', '.wav', '.avi', '.mov', '.webm',
+		]);
+		const ext = path.extname(relativePath).toLowerCase();
+		if (binaryExtensions.has(ext)) {
+			throw new Error('BINARY_FILE');
+		}
+
 		return fs.readFile(absolutePath, 'utf-8');
 	}
 
