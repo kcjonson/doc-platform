@@ -254,6 +254,11 @@ export async function handleUpdateEpic(context: Context): Promise<Response> {
 			updates.push(`rank = $${paramIndex++}`);
 			values.push(body.rank);
 		}
+		if (body.specDocPath !== undefined) {
+			updates.push(`spec_doc_path = $${paramIndex++}`);
+			const normalized = normalizeOptionalString(body.specDocPath);
+			values.push(normalized === undefined ? null : normalized);
+		}
 
 		if (updates.length === 0) {
 			const result = await query<DbEpic>(
