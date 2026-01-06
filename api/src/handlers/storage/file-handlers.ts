@@ -289,7 +289,7 @@ export async function handleCreateFile(context: Context, redis: Redis): Promise<
 		});
 	} catch (error) {
 		console.error('Failed to create file:', error);
-		return context.json({ error: 'Server error' }, 500);
+		return context.json({ error: 'Failed to create file', code: 'FILE_CREATE_FAILED' }, 500);
 	}
 }
 
@@ -382,7 +382,7 @@ export async function handleRenameFile(context: Context, redis: Redis): Promise<
 		});
 	} catch (error) {
 		console.error('Failed to rename file:', error);
-		return context.json({ error: 'Server error' }, 500);
+		return context.json({ error: 'Failed to rename file', code: 'FILE_RENAME_FAILED' }, 500);
 	}
 }
 

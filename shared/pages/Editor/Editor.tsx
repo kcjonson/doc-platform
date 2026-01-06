@@ -177,10 +177,7 @@ export function Editor(props: RouteProps): JSX.Element {
 		if (documentModel.filePath === oldPath) {
 			migrateLocalStorageContent(projectId, oldPath, newPath);
 			saveSelectedFile(projectId, newPath);
-
-			// Update document model with new path and title
-			documentModel.filePath = newPath;
-			documentModel.title = newPath.split('/').pop() || 'Untitled';
+			documentModel.updateFilePath(newPath);
 		}
 	}, [projectId, documentModel]);
 
@@ -384,10 +381,7 @@ export function Editor(props: RouteProps): JSX.Element {
 
 			migrateLocalStorageContent(projectId, oldPath, newPath);
 			saveSelectedFile(projectId, newPath);
-
-			// Update document model with new path and title
-			documentModel.filePath = newPath;
-			documentModel.title = newPath.split('/').pop() || 'Untitled';
+			documentModel.updateFilePath(newPath);
 		} catch (err) {
 			const error = err instanceof Error ? err : new Error(String(err));
 			captureError(error, {
