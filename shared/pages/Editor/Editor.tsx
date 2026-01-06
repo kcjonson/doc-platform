@@ -15,6 +15,7 @@ import { captureError } from '@doc-platform/telemetry';
 import { FileBrowser } from '../FileBrowser/FileBrowser';
 import { MarkdownEditor, mockComments, fromMarkdown, toMarkdown } from '../MarkdownEditor';
 import { EditorHeader } from './EditorHeader';
+import { RecoveryDialog } from './RecoveryDialog';
 import styles from './Editor.module.css';
 
 interface LoadError {
@@ -76,53 +77,65 @@ export function Editor(props: RouteProps): JSX.Element {
 	// Error state for file loading failures
 	const [loadError, setLoadError] = useState<LoadError | null>(null);
 
-	// Handle file selection from FileBrowser
-	const handleFileSelect = useCallback(async (path: string) => {
-		// Clear any previous error
-		setLoadError(null);
+	// Pending recovery dialog state (file path with cached changes)
+	const [pendingRecovery, setPendingRecovery] = useState<string | null>(null);
 
-		// Check for crash recovery
-		if (hasPersistedContent(projectId, path)) {
-			const useCached = window.confirm(
-				'Unsaved changes were found for this file. Would you like to restore them?'
-			);
-			if (useCached) {
-				const cached = loadFromLocalStorage(projectId, path);
-				if (cached) {
-					documentModel.loadDocument(projectId, path, cached, { dirty: true });
-					return;
-				}
-			}
-			// User declined or cache was invalid - clear it
-			clearLocalStorage(projectId, path);
-		}
-
-		// Load fresh from server
+	// Load file from server
+	const loadFileFromServer = useCallback(async (path: string) => {
 		try {
 			const response = await fetchClient.get<{ content: string }>(
 				`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`
 			);
 			const slateContent = fromMarkdown(response.content);
 			documentModel.loadDocument(projectId, path, slateContent);
-			// Save selected file to localStorage
 			saveSelectedFile(projectId, path);
 		} catch (err) {
 			const error = err instanceof Error ? err : new Error(String(err));
-
-			// Send full error to backend for debugging
 			captureError(error, {
 				type: 'file_load_error',
 				filePath: path,
 				projectId,
 			});
-
-			// Show user-friendly error
 			setLoadError({
 				message: 'Unable to load this file. The file may be corrupted or contain unsupported formatting.',
 				filePath: path,
 			});
 		}
 	}, [projectId, documentModel]);
+
+	// Handle file selection from FileBrowser
+	const handleFileSelect = useCallback(async (path: string) => {
+		setLoadError(null);
+
+		// Check for cached changes - show recovery dialog if found
+		if (hasPersistedContent(projectId, path)) {
+			setPendingRecovery(path);
+			return;
+		}
+
+		await loadFileFromServer(path);
+	}, [projectId, loadFileFromServer]);
+
+	// Handle restore from recovery dialog
+	const handleRestore = useCallback(() => {
+		if (!pendingRecovery) return;
+
+		const cached = loadFromLocalStorage(projectId, pendingRecovery);
+		if (cached) {
+			documentModel.loadDocument(projectId, pendingRecovery, cached, { dirty: true });
+			saveSelectedFile(projectId, pendingRecovery);
+		}
+		setPendingRecovery(null);
+	}, [projectId, pendingRecovery, documentModel]);
+
+	// Handle discard from recovery dialog
+	const handleDiscard = useCallback(async () => {
+		if (!pendingRecovery) return;
+
+		clearLocalStorage(projectId, pendingRecovery);
+		await loadFileFromServer(pendingRecovery);
+		setPendingRecovery(null);
+	}, [projectId, pendingRecovery, loadFileFromServer]);
 
 	// Restore previously selected file on mount
 	useEffect(() => {
@@ -262,6 +275,13 @@ export function Editor(props: RouteProps): JSX.Element {
 					)}
 				</main>
 			</div>
+			{pendingRecovery && (
+				<RecoveryDialog
+					filePath={pendingRecovery}
+					onRestore={handleRestore}
+					onDiscard={handleDiscard}
+				/>
+			)}
 		</Page>
 	);
 }
