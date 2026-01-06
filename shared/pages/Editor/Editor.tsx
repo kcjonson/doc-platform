@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useCallback, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import type { RouteProps } from '@doc-platform/router';
+import { navigate, type RouteProps } from '@doc-platform/router';
 import { Page } from '@doc-platform/ui';
 import {
 	DocumentModel,
@@ -80,6 +80,29 @@ export function Editor(props: RouteProps): JSX.Element {
 	// Pending recovery dialog state (file path with cached changes)
 	const [pendingRecovery, setPendingRecovery] = useState<string | null>(null);
 
+	// Epic linking state
+	const [linkedEpicId, setLinkedEpicId] = useState<string | undefined>();
+	const [creatingEpic, setCreatingEpic] = useState(false);
+
+	// Check if file has a linked epic
+	const checkLinkedEpic = useCallback(async (path: string) => {
+		// Only check for markdown files
+		if (!path.endsWith('.md') && !path.endsWith('.markdown')) {
+			setLinkedEpicId(undefined);
+			return;
+		}
+
+		try {
+			const response = await fetchClient.get<{ exists: boolean; epic?: { id: string; title: string } }>(
+				`/api/projects/${projectId}/epics/by-spec?path=${encodeURIComponent(path)}`
+			);
+			setLinkedEpicId(response.exists ? response.epic?.id : undefined);
+		} catch {
+			// Silently fail - epic linking is optional
+			setLinkedEpicId(undefined);
+		}
+	}, [projectId]);
+
 	// Load file from server
 	const loadFileFromServer = useCallback(async (path: string) => {
 		try {
@@ -89,6 +112,8 @@ export function Editor(props: RouteProps): JSX.Element {
 			const slateContent = fromMarkdown(response.content);
 			documentModel.loadDocument(projectId, path, slateContent);
 			saveSelectedFile(projectId, path);
+			// Check if this document has a linked epic
+			checkLinkedEpic(path);
 		} catch (err) {
 			const error = err instanceof Error ? err : new Error(String(err));
 			captureError(error, {
@@ -101,7 +126,7 @@ export function Editor(props: RouteProps): JSX.Element {
 				filePath: path,
 			});
 		}
-	}, [projectId, documentModel]);
+	}, [projectId, documentModel, checkLinkedEpic]);
 
 	// Handle file selection from FileBrowser
 	const handleFileSelect = useCallback(async (path: string) => {
@@ -124,9 +149,11 @@ export function Editor(props: RouteProps): JSX.Element {
 		if (cached) {
 			documentModel.loadDocument(projectId, pendingRecovery, cached, { dirty: true });
 			saveSelectedFile(projectId, pendingRecovery);
+			// Check if this document has a linked epic
+			checkLinkedEpic(pendingRecovery);
 		}
 		setPendingRecovery(null);
-	}, [projectId, pendingRecovery, documentModel]);
+	}, [projectId, pendingRecovery, documentModel, checkLinkedEpic]);
 
 	// Handle discard from recovery dialog
 	const handleDiscard = useCallback(async () => {
@@ -136,6 +163,43 @@ export function Editor(props: RouteProps): JSX.Element {
 		await loadFileFromServer(pendingRecovery);
 		setPendingRecovery(null);
 	}, [projectId, pendingRecovery, loadFileFromServer]);
+
+	// Create epic from current document
+	const handleCreateEpic = useCallback(async () => {
+		const filePath = documentModel.filePath;
+		if (!filePath || creatingEpic) return;
+
+		// Extract title from filename (without extension)
+		const fileName = filePath.split('/').pop() || 'Untitled';
+		const title = fileName.replace(/\.(md|markdown)$/, '');
+
+		setCreatingEpic(true);
+		try {
+			const response = await fetchClient.post<{ id: string }>(
+				`/api/projects/${projectId}/epics`,
+				{
+					title,
+					specDocPath: filePath,
+					status: 'ready',
+				}
+			);
+			setLinkedEpicId(response.id);
+			// Navigate to Planning page
+			navigate(`/projects/${projectId}/planning`);
+		} catch (err) {
+			console.error('Failed to create epic:', err);
+			// Could show error UI here
+		} finally {
+			setCreatingEpic(false);
+		}
+	}, [projectId, documentModel.filePath, creatingEpic]);
+
+	// Navigate to view the linked epic
+	const handleViewEpic = useCallback(() => {
+		if (linkedEpicId) {
+			navigate(`/projects/${projectId}/planning`);
+		}
+	}, [projectId, linkedEpicId]);
 
 	// Restore previously selected file on mount
 	useEffect(() => {
@@ -253,6 +317,10 @@ export function Editor(props: RouteProps): JSX.Element {
 								isDirty={documentModel.isDirty}
 								saving={documentModel.saving}
 								onSave={handleSave}
+								linkedEpicId={linkedEpicId}
+								creatingEpic={creatingEpic}
+								onCreateEpic={handleCreateEpic}
+								onViewEpic={handleViewEpic}
 							/>
 							<div class={styles.editorArea}>
 								<MarkdownEditor

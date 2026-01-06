@@ -13,6 +13,20 @@ export interface EditorHeaderProps {
 	saving: boolean;
 	/** Callback to save the document */
 	onSave: () => void;
+	/** ID of linked epic (if this document has one) */
+	linkedEpicId?: string;
+	/** Whether epic creation is in progress */
+	creatingEpic?: boolean;
+	/** Callback to create an epic from this document */
+	onCreateEpic?: () => void;
+	/** Callback to view the linked epic */
+	onViewEpic?: () => void;
+}
+
+/** Check if file path is a markdown file */
+function isMarkdownFile(filePath: string | null): boolean {
+	if (!filePath) return false;
+	return filePath.endsWith('.md') || filePath.endsWith('.markdown');
 }
 
 export function EditorHeader({
@@ -21,7 +35,13 @@ export function EditorHeader({
 	isDirty,
 	saving,
 	onSave,
+	linkedEpicId,
+	creatingEpic,
+	onCreateEpic,
+	onViewEpic,
 }: EditorHeaderProps): JSX.Element {
+	const showEpicButton = isMarkdownFile(filePath);
+
 	return (
 		<div class={styles.header}>
 			<div class={styles.titleArea}>
@@ -30,6 +50,20 @@ export function EditorHeader({
 			</div>
 			{filePath && (
 				<div class={styles.actions}>
+					{showEpicButton && linkedEpicId && onViewEpic && (
+						<Button onClick={onViewEpic} variant="secondary">
+							View Epic
+						</Button>
+					)}
+					{showEpicButton && !linkedEpicId && onCreateEpic && (
+						<Button
+							onClick={onCreateEpic}
+							variant="secondary"
+							disabled={creatingEpic}
+						>
+							{creatingEpic ? 'Creating...' : 'Create Epic'}
+						</Button>
+					)}
 					<Button
 						onClick={onSave}
 						disabled={!isDirty || saving}

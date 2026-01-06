@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'preact/hooks';
 import type { JSX } from 'preact';
 import type { Descendant } from 'slate';
+import { navigate } from '@doc-platform/router';
 import { useModel, EpicModel, type TaskModel, type Status } from '@doc-platform/models';
 import { Button, Select, Text } from '@doc-platform/ui';
 import { TaskCard } from '../TaskCard/TaskCard';
@@ -218,16 +219,23 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 				</section>
 			)}
 
-			{/* Linked Documents (stub for now) - only show for existing epics */}
+			{/* Specification Document - only show for existing epics */}
 			{!isNew && (
 				<section class={styles.section}>
 					<div class={styles.sectionHeader}>
-						<h3 class={styles.sectionTitle}>Linked Documents</h3>
-						<Button class="text" disabled>
-							+ Link Doc
-						</Button>
+						<h3 class={styles.sectionTitle}>Specification</h3>
 					</div>
-					<p class={styles.placeholder}>No linked documents</p>
+					{epic?.specDocPath ? (
+						<button
+							type="button"
+							class={styles.specLink}
+							onClick={() => navigate(`/projects/${epic.projectId}/pages?file=${encodeURIComponent(epic.specDocPath || '')}`)}
+						>
+							{epic.specDocPath}
+						</button>
+					) : (
+						<p class={styles.placeholder}>No specification linked</p>
+					)}
 				</section>
 			)}
 

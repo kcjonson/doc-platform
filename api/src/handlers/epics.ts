@@ -15,6 +15,46 @@ import {
 	MAX_TITLE_LENGTH,
 } from '../validation.js';
 
+export async function handleGetEpicBySpec(context: Context): Promise<Response> {
+	const projectId = context.req.param('projectId');
+	const specPath = context.req.query('path');
+
+	if (!isValidUUID(projectId)) {
+		return context.json({ error: 'Invalid project ID format' }, 400);
+	}
+
+	if (!specPath || typeof specPath !== 'string') {
+		return context.json({ error: 'path query parameter is required' }, 400);
+	}
+
+	try {
+		const result = await query<DbEpic>(
+			'SELECT * FROM epics WHERE project_id = $1 AND spec_doc_path = $2',
+			[projectId, specPath]
+		);
+
+		if (result.rows.length === 0) {
+			return context.json({ exists: false });
+		}
+
+		const epic = result.rows[0];
+		if (!epic) {
+			return context.json({ exists: false });
+		}
+
+		return context.json({
+			exists: true,
+			epic: {
+				id: epic.id,
+				title: epic.title,
+			},
+		});
+	} catch (error) {
+		console.error('Failed to fetch epic by spec:', error);
+		return context.json({ error: 'Database error' }, 500);
+	}
+}
+
 export async function handleListEpics(context: Context): Promise<Response> {
 	const projectId = context.req.param('projectId');
 
@@ -156,8 +196,8 @@ export async function handleCreateEpic(context: Context): Promise<Response> {
 		const maxRank = rankResult.rows[0]?.max_rank ?? 0;
 
 		const result = await query<DbEpic>(
-			`INSERT INTO epics (project_id, title, description, status, creator, assignee, rank)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			`INSERT INTO epics (project_id, title, description, status, creator, assignee, rank, spec_doc_path)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			 RETURNING *`,
 			[
 				projectId,
@@ -167,6 +207,7 @@ export async function handleCreateEpic(context: Context): Promise<Response> {
 				normalizeOptionalString(body.creator) ?? null,
 				normalizeOptionalString(body.assignee) ?? null,
 				maxRank + 1,
+				normalizeOptionalString(body.specDocPath) ?? null,
 			]
 		);
 
