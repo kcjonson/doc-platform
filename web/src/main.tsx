@@ -14,7 +14,7 @@ initTelemetry({
 
 // Shared feature components
 import { Board, EpicDetail } from '@shared/planning';
-import { Editor } from '@shared/pages';
+import { Editor } from '@doc-platform/pages';
 import { ProjectsList, type Project } from '@shared/projects';
 
 // App-specific routes

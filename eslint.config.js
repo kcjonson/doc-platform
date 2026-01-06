@@ -52,6 +52,9 @@ export default [
 				navigator: 'readonly',
 				location: 'readonly',
 				Blob: 'readonly',
+				requestAnimationFrame: 'readonly',
+				cancelAnimationFrame: 'readonly',
+				MutationObserver: 'readonly',
 			},
 		},
 		plugins: {

@@ -16,6 +16,7 @@
 		"@doc-platform/core": "workspace:*",
 		"@doc-platform/fetch": "workspace:*",
 		"@doc-platform/models": "workspace:*",
+		"@doc-platform/pages": "workspace:*",
 		"@doc-platform/router": "workspace:*",
 		"@doc-platform/telemetry": "workspace:*",
 		"@doc-platform/ui": "workspace:*",

@@ -8,6 +8,7 @@ packages:
   - 'shared/fetch'
   - 'shared/telemetry'
   - 'shared/projects'
+  - 'shared/pages'
   - 'frontend'
   - 'web'
   - 'ssg'

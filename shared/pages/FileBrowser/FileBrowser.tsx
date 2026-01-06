@@ -47,7 +47,7 @@ export function FileBrowser({
 	}, [model, projectId]);
 
 	// Handle add folder
-	const handleAddFolder = async () => {
+	const handleAddFolder = async (): Promise<void> => {
 		const path = window.prompt('Enter folder path (absolute path to a git repository folder):');
 		if (!path) return;
 
@@ -65,7 +65,7 @@ export function FileBrowser({
 	};
 
 	// Handle item click
-	const handleItemClick = (path: string, type: 'file' | 'directory') => {
+	const handleItemClick = (path: string, type: 'file' | 'directory'): void => {
 		if (type === 'directory') {
 			model.toggleFolder(path);
 		} else {
@@ -74,7 +74,7 @@ export function FileBrowser({
 	};
 
 	// Handle remove folder
-	const handleRemoveFolder = async (folderPath: string, event: Event) => {
+	const handleRemoveFolder = async (folderPath: string, event: Event): Promise<void> => {
 		event.stopPropagation();
 
 		try {

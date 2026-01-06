@@ -51,6 +51,22 @@ export type ThematicBreakElement = {
 	children: Descendant[];
 };
 
+export type TableElement = {
+	type: 'table';
+	children: Descendant[];
+};
+
+export type TableRowElement = {
+	type: 'table-row';
+	children: Descendant[];
+};
+
+export type TableCellElement = {
+	type: 'table-cell';
+	header?: boolean;
+	children: Descendant[];
+};
+
 // Union of all element types
 export type CustomElement =
 	| ParagraphElement
@@ -61,7 +77,10 @@ export type CustomElement =
 	| NumberedListElement
 	| ListItemElement
 	| LinkElement
-	| ThematicBreakElement;
+	| ThematicBreakElement
+	| TableElement
+	| TableRowElement
+	| TableCellElement;
 
 // Text marks - using `true` (not `boolean`) per Slate best practices for better type narrowing
 export type FormattedText = {

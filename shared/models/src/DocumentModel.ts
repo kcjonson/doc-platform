@@ -14,6 +14,13 @@ export const EMPTY_DOCUMENT: SlateContent = [
 ];
 
 /**
+ * Deep clone a value using JSON serialization.
+ */
+function deepClone<T>(value: T): T {
+	return JSON.parse(JSON.stringify(value));
+}
+
+/**
  * Model for a markdown document.
  * Stores the Slate AST as its content property.
  *
@@ -33,18 +40,73 @@ export class DocumentModel extends Model {
 	/** The Slate AST representing document content */
 	@prop accessor content: SlateContent = EMPTY_DOCUMENT;
 
+	/** Last saved content snapshot for dirty comparison */
+	@prop accessor savedContent: SlateContent = EMPTY_DOCUMENT;
+
+	/** File path of the loaded document */
+	@prop accessor filePath: string | null = null;
+
+	/** Project ID for API context */
+	@prop accessor projectId: string | null = null;
+
+	/** Whether a save operation is in progress */
+	@prop accessor saving: boolean = false;
+
 	/** Whether the document has unsaved changes */
 	@prop accessor dirty: boolean = false;
 
 	/**
+	 * Check if current content differs from saved content.
+	 * Uses JSON comparison for deep equality.
+	 */
+	get isDirty(): boolean {
+		return JSON.stringify(this.content) !== JSON.stringify(this.savedContent);
+	}
+
+	/**
 	 * Load new document content. Generates a new documentId to force
 	 * Slate editor to re-mount with fresh state.
+	 *
+	 * @param projectId - Project containing the document
+	 * @param filePath - Path to the document file
+	 * @param content - Slate AST content
+	 * @param options - Optional settings
+	 * @param options.dirty - Mark document as dirty (e.g., when restoring unsaved changes)
 	 */
-	loadDocument(title: string, content: SlateContent): void {
-		// Set properties directly to avoid TypeScript inference issues with ModelData<this>
+	loadDocument(
+		projectId: string,
+		filePath: string,
+		content: SlateContent,
+		options?: { dirty?: boolean }
+	): void {
 		this.documentId = crypto.randomUUID();
-		this.title = title;
+		this.projectId = projectId;
+		this.filePath = filePath;
+		this.title = filePath.split('/').pop() || 'Untitled';
 		this.content = content;
+		this.savedContent = options?.dirty ? EMPTY_DOCUMENT : deepClone(content);
+		this.dirty = options?.dirty ?? false;
+	}
+
+	/**
+	 * Mark the current content as saved.
+	 * Updates savedContent snapshot and clears dirty flag.
+	 */
+	markSaved(): void {
+		this.savedContent = deepClone(this.content);
+		this.dirty = false;
+	}
+
+	/**
+	 * Clear the document (reset to empty state).
+	 */
+	clear(): void {
+		this.documentId = crypto.randomUUID();
+		this.projectId = null;
+		this.filePath = null;
+		this.title = 'Untitled';
+		this.content = EMPTY_DOCUMENT;
+		this.savedContent = EMPTY_DOCUMENT;
 		this.dirty = false;
 	}
 }

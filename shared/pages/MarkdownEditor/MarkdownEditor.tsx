@@ -33,8 +33,13 @@ const HOTKEYS: Record<string, MarkType> = {
 
 // Check if a mark is active
 function isMarkActive(editor: Editor, format: MarkType): boolean {
-	const marks = Editor.marks(editor);
-	return marks ? marks[format] === true : false;
+	try {
+		const marks = Editor.marks(editor);
+		return marks ? marks[format] === true : false;
+	} catch {
+		// Can throw if selection is in an invalid position (e.g., inside a table structure)
+		return false;
+	}
 }
 
 // Toggle a mark on/off
@@ -52,15 +57,20 @@ function isBlockActive(editor: Editor, format: string): boolean {
 	const { selection } = editor;
 	if (!selection) return false;
 
-	const [match] = Array.from(
-		Editor.nodes(editor, {
-			at: Editor.unhangRange(editor, selection),
-			match: n =>
-				!Editor.isEditor(n) && SlateElement.isElement(n) && n.type === format,
-		})
-	);
+	try {
+		const [match] = Array.from(
+			Editor.nodes(editor, {
+				at: Editor.unhangRange(editor, selection),
+				match: n =>
+					!Editor.isEditor(n) && SlateElement.isElement(n) && n.type === format,
+			})
+		);
 
-	return !!match;
+		return !!match;
+	} catch {
+		// Can throw if selection is at an invalid path
+		return false;
+	}
 }
 
 // Toggle block type
@@ -167,6 +177,21 @@ function renderElement(props: RenderElementProps): JSX.Element {
 					{children}
 				</div>
 			);
+		case 'table':
+			return (
+				<table {...attributes} class={styles.table}>
+					<tbody>{children}</tbody>
+				</table>
+			);
+		case 'table-row':
+			return <tr {...attributes} class={styles.tableRow}>{children}</tr>;
+		case 'table-cell': {
+			const isHeader = element.header === true;
+			if (isHeader) {
+				return <th {...attributes} class={styles.tableCell}>{children}</th>;
+			}
+			return <td {...attributes} class={styles.tableCell}>{children}</td>;
+		}
 		default:
 			return <p {...attributes} class={styles.paragraph}>{children}</p>;
 	}

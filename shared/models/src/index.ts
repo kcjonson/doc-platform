@@ -35,6 +35,15 @@ export type { Status, TaskStats } from './planning';
 export { DocumentModel, EMPTY_DOCUMENT } from './DocumentModel';
 export type { SlateContent } from './DocumentModel';
 
+// Document persistence (localStorage crash recovery)
+export {
+	saveToLocalStorage,
+	loadFromLocalStorage,
+	hasPersistedContent,
+	clearLocalStorage,
+	getPersistedTimestamp,
+} from './documentPersistence';
+
 // Authorization models
 export { AuthorizationModel, AuthorizationsCollection } from './authorization';
 
