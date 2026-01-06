@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2026-01-05 (Project Storage Implementation)
+Last Updated: 2026-01-05 (Status cleanup based on merged PRs)
 
 ## Epic/Story/Task Template
 
@@ -27,196 +27,54 @@ Use this template for all work items:
 
 ## Recently Completed Epics (Last 4)
 
-### ✅ Marketing SSG
-**Spec/Documentation:** `/docs/specs/marketing-ssg.md`
-**Dependencies:** UI Component Library
-**Status:** complete
-
-**Tasks:**
-- [x] Create SSG specification document
-- [x] Create ssg package with Preact SSR build system
-- [x] Create common.css bundle (reset, tokens, elements)
-- [x] Create Preact page components (login, signup, home, not-found)
-- [x] Update Vite config for SSG CSS entry points
-- [x] Update frontend server with static page cache
-- [x] Add Link preload headers for CSS
-- [x] Update Dockerfile build pipeline
-
----
-
-### ✅ UI Component Library
-**Spec/Documentation:** `shared/ui/src/`
-**Dependencies:** Monorepo Scaffolding
-**Status:** complete
-
-**Tasks:**
-- [x] Create tokens.css with design system values
-- [x] Add dark mode support (prefers-color-scheme)
-- [x] Button, Dialog, Text, Textarea, Select components
-- [x] Card, Badge, StatusDot components
-- [x] UserMenu, AppHeader components
-- [x] Demo page at /ui route
-- [x] Migrate to shared/planning using @doc-platform/ui
-
----
-
-### ✅ Planning UI
-**Spec/Documentation:** `/docs/specs/kanban-ui.md`
-**Dependencies:** Custom State Management, Custom Router
-**Status:** complete
-
-**Tasks:**
-- [x] Board layout (three-column, drag-drop)
-- [x] Epic/Task CRUD endpoints (PostgreSQL-backed)
-- [x] Epic detail dialog with task list
-- [x] Keyboard navigation (arrows, N, 1/2/3, Enter, Escape)
-- [x] User menu and settings page
-
----
-
-### ✅ Pages Layout Setup
-**Spec/Documentation:** `docs/specs/kanban-ui.md` (header layout)
-**Dependencies:** Pages Scaffolding, UI Component Library
-**Status:** complete
-
-**Tasks:**
-- [x] Create shared AppHeader component
-  - [x] Project name display
-  - [x] Navigation tabs (Planning | Pages)
-  - [x] User menu integration
-- [x] Create Pages three-panel layout
-  - [x] FileBrowser placeholder (left sidebar)
-  - [x] Editor content area (center)
-  - [x] CommentsPanel placeholder (right sidebar)
-- [x] Add project-scoped routes
-  - [x] /projects/:projectId/planning
-  - [x] /projects/:projectId/pages
-  - [x] Root redirect to default project
-- [x] Update Planning Board to use shared AppHeader
-- [x] Move "+ New Epic" button to board-specific toolbar
-
----
-
-### ✅ Pages Scaffolding
-**Spec/Documentation:** `docs/tech-stack.md`
-**Dependencies:** Planning UI
-**Status:** complete
-
-**Tasks:**
-- [x] Restructure packages for unified web app
-  - [x] Rename planning-web → web
-  - [x] Delete empty editor-web
-  - [x] Rename editor-desktop → docs-desktop
-- [x] Create shared feature source directories
-  - [x] Create shared/planning/ (moved components from planning-web)
-  - [x] Create shared/pages/ (new Pages feature components)
-- [x] Update routes to use /planning and /pages prefixes
-- [x] Add basic Pages placeholder page
-- [x] Configure Vite aliases for @shared/planning and @shared/pages
-- [x] Update pnpm-workspace.yaml and tsconfig.json
-
----
-
-## In Progress Epics
-
-### Logging & Monitoring
-**Spec/Documentation:** `/docs/specs/logging-monitoring.md`
-**Dependencies:** Staging Deployment
-**Status:** in progress
-
-**Goal:** Error tracking, resource monitoring, and audit logging with minimal external services.
-
-**Tasks:**
-- [x] Error tracking integration (Sentry-compatible, tunneled through our API)
-  - [x] Add `/api/metrics` tunnel endpoint to API
-  - [x] Add custom telemetry package to web (frontend)
-  - [x] Add error reporting utility to API (backend)
-- [x] CloudWatch alarms
-  - [x] CPU utilization alarm (>80%)
-  - [x] Memory utilization alarm (>80%)
-  - [x] 5xx error rate alarm
-- [x] Audit logging
-  - [x] Log successful logins
-  - [x] Log failed login attempts
-  - [x] Log logout events
-  - [x] Log signup events
-- [ ] Configure Sentry DSN in environment variables
-- [ ] Add uptime monitoring (external service)
-
----
-
-### Admin User Management
+### ✅ Admin User Management
 **Spec/Documentation:** `api/src/handlers/users.ts`, `web/src/routes/settings/UserManagement.tsx`
-**Dependencies:** Authentication System
-**Status:** in progress
-
-**Goal:** Admin tools for user management using unified role-based access on existing endpoints.
+**Status:** complete
 
 **Tasks:**
 - [x] Database schema (roles array, is_active, deactivated_at on users)
 - [x] Unified /api/users endpoints with role-based permissions
-  - [x] GET /api/users (admin: list all, user: forbidden)
-  - [x] GET /api/users/:id (admin: any user, user: self only)
-  - [x] PUT /api/users/:id (admin: all fields, user: limited fields on self)
-  - [x] POST /api/users (admin only: create new user)
-  - [x] GET/DELETE /api/users/:id/tokens (OAuth token management)
 - [x] UserManagement component in settings page
-  - [x] User list with search/filter (visible to admins only)
-  - [x] User edit dialog (roles, is_active, all fields)
-  - [x] Pagination support
-- [ ] Password reset flow for admins
+- [x] Password reset flow (admins use standard forgot-password flow)
 
 ---
 
-### Projects Page
-**Spec/Documentation:** `shared/projects/`
-**Dependencies:** Authentication System
+### ✅ Logging & Monitoring
+**Spec/Documentation:** `/docs/specs/logging-monitoring.md`
 **Status:** complete
 
-**Goal:** Multi-project support with projects listing page and smart routing.
+**Tasks:**
+- [x] Error tracking integration (Sentry-compatible, tunneled through our API)
+- [x] CloudWatch alarms (CPU, memory, 5xx errors)
+- [x] Audit logging (login, logout, signup events)
+
+---
+
+### ✅ Staging Deployment
+**Spec/Documentation:** `infra/lib/`, `docs/tech-stack.md`
+**Status:** complete
+
+**Tasks:**
+- [x] CDK Infrastructure (VPC, ECR, ECS, RDS, Redis, ALB)
+- [x] GitHub Actions CD (build, migrate, deploy)
+- [x] Test data seeding (admin account, GitHub secrets)
+
+---
+
+### ✅ Projects Page
+**Spec/Documentation:** `shared/projects/`
+**Status:** complete
 
 **Tasks:**
 - [x] Database schema (projects table, epics.project_id)
-- [x] Project service in @doc-platform/db
 - [x] Project API endpoints (CRUD)
-- [x] ProjectsList UI component
-- [x] ProjectCard component
+- [x] ProjectsList and ProjectCard UI
 - [x] Smart routing (cookie-based last project)
-- [x] Delete project confirmation dialog
-- [x] Project settings/rename UI
-- [x] Epic status breakdown display (ready/in_progress/in_review/done)
+- [x] Delete/rename project functionality
 
 ---
 
-### Staging Deployment
-**Spec/Documentation:** `infra/lib/`, `docs/tech-stack.md`
-**Dependencies:** Container Infrastructure (done)
-**Status:** in progress
-
-**Goal:** Deploy to AWS staging environment with CD from main branch.
-
-**Tasks:**
-- [x] CDK Infrastructure
-  - [x] VPC and networking
-  - [x] ECR repositories for container images
-  - [x] ECS Cluster with Fargate services
-  - [x] RDS Postgres (single-AZ)
-  - [x] ElastiCache Redis
-  - [x] ALB with path-based routing
-  - [x] GitHub OIDC provider + IAM deploy role
-- [x] GitHub Actions CD
-  - [x] Build and push Docker images to ECR
-  - [x] Run database migrations before deploy
-  - [x] Deploy to ECS on push to main
-- [x] Test data seeding
-  - [x] Seed script for admin account (idempotent)
-  - [x] GitHub Secrets for staging credentials (ADMIN_USERNAME/PASSWORD/EMAIL)
-  - [x] Local seed config (seed.local.json, gitignored)
-  - [x] CD workflow runs seed after migrations
-- [ ] Configure GitHub secret (AWS_DEPLOY_ROLE_ARN)
-- [ ] Mock auth middleware (bypass for staging)
-
----
+## In Progress Epics
 
 ### Authentication System
 **Spec/Documentation:** `/docs/specs/authentication.md`
@@ -252,12 +110,15 @@ Use this template for all work items:
 - [x] Real user auth (PostgreSQL + bcrypt)
   - [x] Add bcrypt to @doc-platform/auth
   - [x] Database migration for user_passwords table
-  - [x] Signup endpoint (email verification TODO)
+  - [x] Signup endpoint with email verification
   - [x] Login against database users
-  - [ ] Password reset flow
-- [ ] Email sending (SES)
-  - [ ] Verification emails
-  - [ ] Password reset emails
+  - [x] Password reset flow
+  - [x] Change password in settings
+- [x] Email sending (SES via @doc-platform/email)
+  - [x] Verification emails
+  - [x] Password reset emails
+  - [x] Development mode (console logging)
+  - [x] Staging allowlist for test emails
 - [ ] GitHub OAuth
   - [ ] Connect flow (link to existing account)
   - [ ] Token encryption (KMS)
@@ -354,18 +215,18 @@ Use this template for all work items:
 
 ### File Tree & Command Palette
 **Spec/Documentation:** `/docs/specs/file-tree-command-palette.md`
-**Dependencies:** Project Storage & Git Integration, Platform Abstraction Layer
-**Status:** ready
+**Dependencies:** Project Storage & Git Integration
+**Status:** in progress
 
 **Goal:** Build file navigation sidebar and command palette components.
 
 **Tasks:**
-- [ ] File tree component
-  - [ ] Tree rendering with expand/collapse
-  - [ ] File/folder icons
+- [x] File tree component (basic)
+  - [x] Tree rendering with expand/collapse
+  - [x] Root path management (remove folder from view)
+  - [ ] File/folder icons (better icons)
   - [ ] Context menu (new, rename, delete)
   - [ ] Keyboard navigation
-  - [ ] Root path management (remove folder from view)
 - [ ] Quick open (Cmd+P)
   - [ ] Fuzzy file search
   - [ ] Recent files
@@ -385,19 +246,19 @@ Use this template for all work items:
 **Goal:** Build backend API with Aurora Postgres database.
 
 **Tasks:**
-- [ ] Database setup
-  - [ ] CDK stack for Aurora Serverless v2
-  - [x] Schema migrations (epics, tasks tables)
+- [x] Database setup
+  - [x] RDS Postgres (via CDK staging stack)
+  - [x] Schema migrations (users, epics, tasks, projects)
   - [x] Connection pooling (@doc-platform/db)
 - [x] API framework
   - [x] Hono server setup
-  - [ ] Auth middleware
-  - [ ] Error handling
-- [ ] Core endpoints
-  - [ ] User management
-  - [ ] Repository management
+  - [x] Auth middleware (session-based)
+  - [x] Error handling
+- [x] Core endpoints
+  - [x] User management (CRUD with roles)
+  - [x] Project management (CRUD)
   - [ ] Document CRUD
-  - [ ] Git operations
+  - [x] File/folder operations (local storage)
 - [x] Planning endpoints
   - [x] Epic CRUD (PostgreSQL-backed)
   - [x] Task CRUD (PostgreSQL-backed)
@@ -408,7 +269,7 @@ Use this template for all work items:
 ### MCP Server
 **Spec/Documentation:** `/docs/specs/mcp-integration.md`, `/docs/specs/mcp-claude-workflow.md`
 **Dependencies:** REST API & Database
-**Status:** in progress
+**Status:** complete
 
 **Goal:** Build MCP server for Claude Code integration with planning system.
 
@@ -428,24 +289,14 @@ Use this template for all work items:
   - [x] MCP ECR repo and Fargate service in infra
   - [x] CD workflow for MCP deployment
 - [x] MCP OAuth 2.1 + PKCE
-  - [x] Database migration (add device_name, last_used_at to mcp_tokens)
-  - [x] OAuth metadata endpoint (/.well-known/oauth-authorization-server)
-  - [x] Authorization endpoint (GET/POST /oauth/authorize)
-  - [x] Consent screen UI (device name input, scope display)
-  - [x] Token endpoint (POST /oauth/token)
-  - [x] PKCE validation (code_challenge/code_verifier)
-  - [x] Token refresh flow
-  - [x] MCP auth middleware (validate Bearer token, update last_used_at)
+  - [x] OAuth metadata, authorization, and token endpoints
+  - [x] PKCE validation and token refresh
+  - [x] MCP auth middleware
 - [x] Authorized Apps UI
-  - [x] GET /api/oauth/authorizations endpoint
-  - [x] DELETE /api/oauth/authorizations/:id endpoint
-  - [x] Settings page section (frontend component)
-  - [x] Revoke confirmation dialog
-- [ ] Document tools (v2)
-  - [ ] get_spec, search_docs
-- [ ] CLI tool (v2)
-  - [ ] Connect command (OAuth flow)
-  - [ ] Status command
+  - [x] Authorizations API endpoints
+  - [x] Settings page section with revoke dialog
+
+**Note:** Document tools and CLI tool are v2 features, tracked separately.
 
 ---
 
