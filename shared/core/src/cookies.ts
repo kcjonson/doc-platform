@@ -29,5 +29,8 @@ export function setCookie(name: string, value: string, days: number): void {
 	if (typeof document === 'undefined') return;
 	const expires = new Date();
 	expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-	document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=/;SameSite=Lax;Secure`;
+	// Only set Secure flag over HTTPS (allows localhost development over HTTP)
+	const isHttps = typeof location !== 'undefined' && location.protocol === 'https:';
+	const secureFlag = isHttps ? ';Secure' : '';
+	document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=/;SameSite=Lax${secureFlag}`;
 }

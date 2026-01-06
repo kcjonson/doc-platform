@@ -59,8 +59,11 @@ export async function handleGetProject(context: Context, redis: Redis): Promise<
 	}
 
 	// Support fields filter for lightweight queries (e.g., ?fields=name)
+	// Note: 'id' is always included in filtered responses for client convenience
 	const fieldsParam = context.req.query('fields');
-	const requestedFields = fieldsParam ? fieldsParam.split(',').map((f) => f.trim()) : null;
+	const requestedFields = fieldsParam
+		? fieldsParam.split(',').map((f) => f.trim()).filter((f) => f !== 'id')
+		: null;
 
 	try {
 		const project = await getProject(id, userId);

@@ -46,20 +46,26 @@ export function WebHeader({
 	const isAdmin = user.roles?.includes('admin') ?? false;
 
 	// Get project name from cookie or fetch if needed
-	const lastProjectId = getCookie('lastProjectId');
-	const cachedName = projectId && lastProjectId === projectId ? getCookie('lastProjectName') : null;
 	const [fetchedName, setFetchedName] = useState<string | null>(null);
 
 	useEffect(() => {
+		// Check cookie inside effect to ensure consistent behavior
+		const lastProjectId = getCookie('lastProjectId');
+		const cachedName = projectId && lastProjectId === projectId ? getCookie('lastProjectName') : null;
+
 		if (!projectId || cachedName) {
-			setFetchedName(null);
+			setFetchedName(cachedName);
 			return;
 		}
 
+		// Track if effect is still active for cleanup
+		let cancelled = false;
+
 		// Fetch project name and update cookie
 		fetchClient
-			.get<{ id: string; name: string }>(`/api/projects/${projectId}?fields=name`)
+			.get<{ id: string; name: string }>(`/api/projects/${projectId}`, { params: { fields: 'name' } })
 			.then((project) => {
+				if (cancelled) return;
 				setFetchedName(project.name);
 				setCookie('lastProjectId', projectId, 30);
 				setCookie('lastProjectName', project.name, 30);
@@ -67,9 +73,13 @@ export function WebHeader({
 			.catch(() => {
 				// Silently fail - header will just be empty
 			});
-	}, [projectId, cachedName]);
 
-	const projectName = cachedName ?? fetchedName;
+		return () => {
+			cancelled = true;
+		};
+	}, [projectId]);
+
+	const projectName = fetchedName;
 
 	return (
 		<header class={`${styles.header} ${className || ''}`}>

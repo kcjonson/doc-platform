@@ -64,6 +64,8 @@ function RootRedirect(_props: RouteProps): JSX.Element | null {
 					// Multiple projects with valid cookie - check if project exists
 					const project = projects.find((p) => p.id === lastProjectId);
 					if (project) {
+						// Refresh both cookies together to keep them in sync
+						setCookie('lastProjectId', project.id, 30);
 						setCookie('lastProjectName', project.name, 30);
 						navigate(`/projects/${lastProjectId}/planning`);
 					} else {
