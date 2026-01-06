@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2026-01-05 (Status cleanup based on merged PRs)
+Last Updated: 2026-01-06 (Added document-epic linking feature)
 
 ## Epic/Story/Task Template
 
@@ -262,6 +262,7 @@ Use this template for all work items:
 - [x] Planning endpoints
   - [x] Epic CRUD (PostgreSQL-backed)
   - [x] Task CRUD (PostgreSQL-backed)
+  - [x] Document-epic linking (create epic from spec document)
   - [ ] Document-task links
 
 ---

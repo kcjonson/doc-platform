@@ -18,6 +18,20 @@ export interface EditorHeaderProps {
 	onNewPage?: () => void;
 	/** Callback to rename the current file */
 	onRename?: (newFilename: string) => void;
+	/** ID of linked epic (if this document has one) */
+	linkedEpicId?: string;
+	/** Whether epic creation is in progress */
+	creatingEpic?: boolean;
+	/** Callback to create an epic from this document */
+	onCreateEpic?: () => void;
+	/** Callback to view the linked epic */
+	onViewEpic?: () => void;
+}
+
+/** Check if file path is a markdown file */
+function isMarkdownFile(filePath: string | null): boolean {
+	if (!filePath) return false;
+	return filePath.endsWith('.md') || filePath.endsWith('.markdown');
 }
 
 export function EditorHeader({
@@ -28,10 +42,15 @@ export function EditorHeader({
 	onSave,
 	onNewPage,
 	onRename,
+	linkedEpicId,
+	creatingEpic,
+	onCreateEpic,
+	onViewEpic,
 }: EditorHeaderProps): JSX.Element {
 	const [isEditing, setIsEditing] = useState(false);
 	const [editTitle, setEditTitle] = useState('');
 	const inputRef = useRef<HTMLInputElement>(null);
+	const showEpicButton = isMarkdownFile(filePath);
 
 	// Focus and select input when editing starts
 	// Intentionally only depends on isEditing - we capture the initial title for selection
@@ -123,6 +142,20 @@ export function EditorHeader({
 						variant="secondary"
 					>
 						New Page
+					</Button>
+				)}
+				{showEpicButton && linkedEpicId && onViewEpic && (
+					<Button onClick={onViewEpic} variant="secondary">
+						View Epic
+					</Button>
+				)}
+				{showEpicButton && !linkedEpicId && onCreateEpic && (
+					<Button
+						onClick={onCreateEpic}
+						variant="secondary"
+						disabled={creatingEpic}
+					>
+						{creatingEpic ? 'Creating...' : 'Create Epic'}
 					</Button>
 				)}
 				{filePath && (

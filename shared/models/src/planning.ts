@@ -49,6 +49,7 @@ export class EpicModel extends SyncModel {
 	@prop accessor creator!: string | undefined;
 	@prop accessor assignee!: string | undefined;
 	@prop accessor rank!: number;
+	@prop accessor specDocPath!: string | undefined;
 	@prop accessor createdAt!: string;
 	@prop accessor updatedAt!: string;
 

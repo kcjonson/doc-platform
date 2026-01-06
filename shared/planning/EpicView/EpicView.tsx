@@ -1,7 +1,9 @@
-import { useState, useMemo, useEffect } from 'preact/hooks';
+import { useState, useMemo, useEffect, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
 import type { Descendant } from 'slate';
+import { navigate } from '@doc-platform/router';
 import { useModel, EpicModel, type TaskModel, type Status } from '@doc-platform/models';
+import { fetchClient } from '@doc-platform/fetch';
 import { Button, Select, Text } from '@doc-platform/ui';
 import { TaskCard } from '../TaskCard/TaskCard';
 import { RichTextEditor, serializeToText, deserializeFromText } from '../RichTextEditor';
@@ -53,12 +55,63 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 	const [statusDraft, setStatusDraft] = useState<Status>(epic?.status || 'ready');
 	const [newTaskTitle, setNewTaskTitle] = useState('');
 
+	// Spec document existence check: null = checking, true = exists, false = missing
+	const [specDocExists, setSpecDocExists] = useState<boolean | null>(null);
+
 	const taskStats = epic?.taskStats || { total: 0, done: 0 };
 
 	// Sync description AST state when epic changes (for navigation between epics)
 	useEffect(() => {
 		setDescriptionAst(initialDescriptionAst);
 	}, [initialDescriptionAst]);
+
+	// Check if spec document exists when epic changes
+	useEffect(() => {
+		if (!epic?.specDocPath || !epic?.projectId) {
+			setSpecDocExists(null);
+			return;
+		}
+
+		let cancelled = false;
+		setSpecDocExists(null); // Reset to checking state
+
+		const checkExists = async (): Promise<void> => {
+			try {
+				await fetchClient.get(
+					`/api/projects/${epic.projectId}/files?path=${encodeURIComponent(epic.specDocPath)}`
+				);
+				if (!cancelled) {
+					setSpecDocExists(true);
+				}
+			} catch {
+				if (!cancelled) {
+					setSpecDocExists(false);
+				}
+			}
+		};
+
+		checkExists();
+		return () => {
+			cancelled = true;
+		};
+	}, [epic?.specDocPath, epic?.projectId]);
+
+	// Unlink spec document from epic
+	const handleUnlinkSpec = useCallback(async (): Promise<void> => {
+		if (!epic) return;
+
+		const previousSpecDocPath = epic.specDocPath;
+		epic.specDocPath = undefined;
+
+		try {
+			await epic.save();
+			setSpecDocExists(null);
+		} catch (err) {
+			// Revert on failure
+			epic.specDocPath = previousSpecDocPath;
+			console.error('Failed to unlink spec document:', err);
+		}
+	}, [epic]);
 
 	// Task status toggle
 	const handleToggleTaskStatus = (task: TaskModel): void => {
@@ -218,16 +271,37 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 				</section>
 			)}
 
-			{/* Linked Documents (stub for now) - only show for existing epics */}
+			{/* Specification Document - only show for existing epics */}
 			{!isNew && (
 				<section class={styles.section}>
 					<div class={styles.sectionHeader}>
-						<h3 class={styles.sectionTitle}>Linked Documents</h3>
-						<Button class="text" disabled>
-							+ Link Doc
-						</Button>
+						<h3 class={styles.sectionTitle}>Specification</h3>
 					</div>
-					<p class={styles.placeholder}>No linked documents</p>
+					{epic?.specDocPath ? (
+						<div class={styles.specContainer}>
+							{specDocExists === false && (
+								<div class={styles.specWarning}>
+									Document not found - file may have been moved or deleted
+								</div>
+							)}
+							<div class={styles.specActions}>
+								<button
+									type="button"
+									class={specDocExists === false ? styles.specLinkMissing : styles.specLink}
+									disabled={specDocExists === false}
+									aria-label={specDocExists === false ? 'Specification document not found' : 'Open specification document'}
+									onClick={() => navigate(`/projects/${epic.projectId}/pages?file=${encodeURIComponent(epic.specDocPath)}`)}
+								>
+									{epic.specDocPath}
+								</button>
+								<Button class="text" onClick={handleUnlinkSpec}>
+									Unlink
+								</Button>
+							</div>
+						</div>
+					) : (
+						<p class={styles.placeholder}>No specification linked</p>
+					)}
 				</section>
 			)}
 
