@@ -250,7 +250,9 @@ export function toMarkdown(content: Descendant[]): string {
 
 		return processor.stringify(mdast);
 	} catch (error) {
-		console.error('Failed to serialize to markdown:', error);
+		// Log enough context to diagnose serialization issues
+		const nodeTypes = content.slice(0, 5).map(n => (n as { type?: string }).type || 'unknown');
+		console.error('Failed to serialize to markdown:', error, { nodeTypes, nodeCount: content.length });
 		return '';
 	}
 }

@@ -10,13 +10,16 @@ import type { SlateContent } from './DocumentModel';
 const STORAGE_PREFIX = 'doc.';
 
 /**
- * Get storage interface, handling SSR environments.
+ * Get storage interface, handling SSR and restricted environments.
  */
 function getStorage(): typeof globalThis.localStorage | null {
-	if (typeof globalThis.localStorage === 'undefined') {
+	try {
+		const storage = globalThis.localStorage;
+		return storage ?? null;
+	} catch {
+		// localStorage may throw in restricted contexts (private browsing, etc.)
 		return null;
 	}
-	return globalThis.localStorage;
 }
 
 /**

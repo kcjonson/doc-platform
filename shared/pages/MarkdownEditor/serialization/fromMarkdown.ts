@@ -244,7 +244,9 @@ export function fromMarkdown(markdown: string): Descendant[] {
 
 		return normalized;
 	} catch (error) {
-		console.error('Failed to parse markdown:', error);
+		// Log enough context to diagnose parsing issues
+		const preview = markdown.length > 200 ? markdown.slice(0, 200) + '...' : markdown;
+		console.error('Failed to parse markdown:', error, { preview });
 		return EMPTY_DOCUMENT;
 	}
 }

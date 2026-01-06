@@ -89,8 +89,7 @@ export function Editor(props: RouteProps): JSX.Element {
 			if (useCached) {
 				const cached = loadFromLocalStorage(projectId, path);
 				if (cached) {
-					documentModel.loadDocument(projectId, path, cached);
-					documentModel.dirty = true; // Mark dirty since not saved to server
+					documentModel.loadDocument(projectId, path, cached, { dirty: true });
 					return;
 				}
 			}
@@ -141,15 +140,20 @@ export function Editor(props: RouteProps): JSX.Element {
 		if (!documentModel.filePath || !documentModel.projectId) return;
 		if (documentModel.saving) return;
 
+		const { projectId: pid, filePath: fpath } = documentModel;
 		documentModel.saving = true;
 		try {
-			const markdown = toMarkdown(documentModel.content as Parameters<typeof toMarkdown>[0]);
+			const markdown = toMarkdown(documentModel.content);
 			await fetchClient.put(
-				`/api/projects/${documentModel.projectId}/files?path=${encodeURIComponent(documentModel.filePath)}`,
+				`/api/projects/${pid}/files?path=${encodeURIComponent(fpath)}`,
 				{ content: markdown }
 			);
 			documentModel.markSaved();
-			clearLocalStorage(documentModel.projectId, documentModel.filePath);
+			try {
+				clearLocalStorage(pid, fpath);
+			} catch (storageErr) {
+				console.warn('Failed to clear local draft from localStorage:', storageErr);
+			}
 		} catch (err) {
 			console.error('Failed to save file:', err);
 			// Could show error UI here
@@ -160,7 +164,8 @@ export function Editor(props: RouteProps): JSX.Element {
 
 	// Debounced localStorage persistence on content change
 	useEffect(() => {
-		if (!documentModel.filePath || !documentModel.projectId) return;
+		const { filePath, projectId: pid, content } = documentModel;
+		if (!filePath || !pid) return;
 		if (!documentModel.isDirty) return;
 
 		// Clear previous timer
@@ -169,12 +174,9 @@ export function Editor(props: RouteProps): JSX.Element {
 		}
 
 		// Save to localStorage after 1 second of inactivity
+		// Capture values before setTimeout to avoid stale references
 		saveTimerRef.current = setTimeout(() => {
-			saveToLocalStorage(
-				documentModel.projectId!,
-				documentModel.filePath!,
-				documentModel.content
-			);
+			saveToLocalStorage(pid, filePath, content);
 		}, 1000);
 
 		return () => {

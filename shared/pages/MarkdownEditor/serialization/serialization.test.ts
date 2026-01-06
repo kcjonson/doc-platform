@@ -474,5 +474,61 @@ describe('Markdown Serialization', () => {
 			const output = toMarkdown(ast);
 			expect(output.trim()).toBe(original);
 		});
+
+		it('should round-trip tables', () => {
+			const original = `| A | B |
+| - | - |
+| 1 | 2 |`;
+			const ast = fromMarkdown(original);
+			const output = toMarkdown(ast);
+			// Table formatting may vary slightly, just check content preserved
+			expect(output).toContain('A');
+			expect(output).toContain('B');
+			expect(output).toContain('1');
+			expect(output).toContain('2');
+		});
+	});
+
+	describe('edge cases', () => {
+		it('should handle empty tables', () => {
+			const markdown = `| | |
+| - | - |
+| | |`;
+			const result = fromMarkdown(markdown);
+			expect(result[0]).toMatchObject({ type: 'table' });
+		});
+
+		it('should handle nested formatting (bold+italic)', () => {
+			const result = fromMarkdown('This is **_bold and italic_** text.');
+			expect(result[0]).toMatchObject({ type: 'paragraph' });
+			// The text should be parsed without crashing
+			expect(result).toBeDefined();
+		});
+
+		it('should handle malformed markdown gracefully', () => {
+			// Unclosed code block
+			const result = fromMarkdown('```javascript\nconst x = 1;');
+			expect(result).toBeDefined();
+			expect(result.length).toBeGreaterThan(0);
+		});
+
+		it('should handle very long lines', () => {
+			const longText = 'a'.repeat(10000);
+			const result = fromMarkdown(longText);
+			expect(result[0]).toMatchObject({ type: 'paragraph' });
+		});
+
+		it('should handle special characters in text', () => {
+			const result = fromMarkdown('Text with <angle brackets> and &amp; entities');
+			expect(result).toBeDefined();
+		});
+
+		it('should handle tables with varying column text lengths', () => {
+			const markdown = `| Short | Very Long Header Text |
+| - | - |
+| A | B |`;
+			const result = fromMarkdown(markdown);
+			expect(result[0]).toMatchObject({ type: 'table' });
+		});
 	});
 });

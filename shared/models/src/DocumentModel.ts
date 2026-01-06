@@ -66,15 +66,26 @@ export class DocumentModel extends Model {
 	/**
 	 * Load new document content. Generates a new documentId to force
 	 * Slate editor to re-mount with fresh state.
+	 *
+	 * @param projectId - Project containing the document
+	 * @param filePath - Path to the document file
+	 * @param content - Slate AST content
+	 * @param options - Optional settings
+	 * @param options.dirty - Mark document as dirty (e.g., when restoring unsaved changes)
 	 */
-	loadDocument(projectId: string, filePath: string, content: SlateContent): void {
+	loadDocument(
+		projectId: string,
+		filePath: string,
+		content: SlateContent,
+		options?: { dirty?: boolean }
+	): void {
 		this.documentId = crypto.randomUUID();
 		this.projectId = projectId;
 		this.filePath = filePath;
 		this.title = filePath.split('/').pop() || 'Untitled';
 		this.content = content;
-		this.savedContent = deepClone(content);
-		this.dirty = false;
+		this.savedContent = options?.dirty ? EMPTY_DOCUMENT : deepClone(content);
+		this.dirty = options?.dirty ?? false;
 	}
 
 	/**

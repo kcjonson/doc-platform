@@ -186,7 +186,7 @@ function renderElement(props: RenderElementProps): JSX.Element {
 		case 'table-row':
 			return <tr {...attributes} class={styles.tableRow}>{children}</tr>;
 		case 'table-cell': {
-			const isHeader = element.header;
+			const isHeader = element.header === true;
 			if (isHeader) {
 				return <th {...attributes} class={styles.tableCell}>{children}</th>;
 			}
