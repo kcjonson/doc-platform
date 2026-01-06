@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2026-01-05 (Status cleanup based on merged PRs)
+Last Updated: 2026-01-06 (Added Production Deployment epic)
 
 ## Epic/Story/Task Template
 
@@ -75,6 +75,33 @@ Use this template for all work items:
 ---
 
 ## In Progress Epics
+
+### Production Deployment
+**Spec/Documentation:** `/docs/specs/deployment.md`
+**Dependencies:** Staging Deployment
+**Status:** in progress
+
+**Goal:** Deploy to production via GitHub releases, with image promotion from staging.
+
+**Tasks:**
+- [x] Deployment specification document
+- [x] CDK multi-environment support
+  - [x] Environment configuration (staging vs production)
+  - [x] Shared resources (ECR, hosted zone, certificate)
+  - [x] Per-environment resources (VPC, RDS, Redis, ECS)
+  - [x] Production IAM role for GitHub Actions
+- [x] GitHub Actions workflows
+  - [x] Update reusable workflows for environment parameter
+  - [x] Production deploy workflow (release trigger)
+  - [x] Production rollback workflow
+- [ ] First production deployment
+  - [ ] Add AWS_DEPLOY_ROLE_ARN_PRODUCTION secret to GitHub
+  - [ ] Bootstrap production infrastructure (`cdk deploy --context env=production --context bootstrap=true`)
+  - [ ] Set production secrets (invite keys, superadmin password)
+  - [ ] Create first GitHub release to trigger deploy
+  - [ ] Verify production is healthy
+
+---
 
 ### Authentication System
 **Spec/Documentation:** `/docs/specs/authentication.md`

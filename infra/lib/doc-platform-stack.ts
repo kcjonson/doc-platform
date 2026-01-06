@@ -14,10 +14,20 @@ import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
+import { EnvironmentConfig, getFullDomain } from './environment-config';
+
+export interface DocPlatformStackProps extends cdk.StackProps {
+	config: EnvironmentConfig;
+}
 
 export class DocPlatformStack extends cdk.Stack {
-	constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+	constructor(scope: Construct, id: string, props: DocPlatformStackProps) {
 		super(scope, id, props);
+
+		const { config } = props;
+		const envName = config.name;
+		const fullDomain = getFullDomain(config);
+		const isStaging = envName === 'staging';
 
 		// Bootstrap mode: deploy with desiredCount=0 so services don't fail when images don't exist
 		// Usage: npx cdk deploy --context bootstrap=true
@@ -28,7 +38,7 @@ export class DocPlatformStack extends cdk.Stack {
 		// ===========================================
 		const vpc = new ec2.Vpc(this, 'Vpc', {
 			maxAzs: 2,
-			natGateways: 1, // Cost optimization: 1 NAT gateway for staging
+			natGateways: 1, // Cost optimization: 1 NAT gateway
 			subnetConfiguration: [
 				{
 					cidrMask: 24,
@@ -49,70 +59,92 @@ export class DocPlatformStack extends cdk.Stack {
 		});
 
 		// ===========================================
-		// DNS & SSL
+		// DNS & SSL (Shared - only staging creates, production imports)
 		// ===========================================
-		const domainName = 'specboard.io';
-		const stagingSubdomain = 'staging';
-		const stagingDomain = `${stagingSubdomain}.${domainName}`;
+		let hostedZone: route53.IHostedZone;
+		let certificate: acm.ICertificate;
 
-		// Route53 Hosted Zone for specboard.io
-		const hostedZone = new route53.HostedZone(this, 'HostedZone', {
-			zoneName: domainName,
-			comment: 'Managed by CDK - doc-platform',
-		});
+		if (isStaging) {
+			// Staging creates the hosted zone and certificate
+			const createdHostedZone = new route53.HostedZone(this, 'HostedZone', {
+				zoneName: config.domain,
+				comment: 'Managed by CDK - doc-platform',
+			});
+			hostedZone = createdHostedZone;
 
-		// ACM Certificate - wildcard for all subdomains + apex domain (us-west-2 for ALB)
-		const certificate = new acm.Certificate(this, 'Certificate', {
-			domainName: domainName,
-			subjectAlternativeNames: [`*.${domainName}`],
-			validation: acm.CertificateValidation.fromDns(hostedZone),
-		});
+			certificate = new acm.Certificate(this, 'Certificate', {
+				domainName: config.domain,
+				subjectAlternativeNames: [`*.${config.domain}`],
+				validation: acm.CertificateValidation.fromDns(createdHostedZone),
+			});
 
-
-		// ===========================================
-		// ECR Repositories
-		// ===========================================
-		// ECR repos use RETAIN so they survive failed deployments
-		// (services fail on first deploy if images don't exist yet)
-		// Lifecycle policy keeps last 3 images for rollback, deletes older ones
-		const ecrLifecycleRules: ecr.LifecycleRule[] = [
-			{
-				description: 'Keep last 3 images for rollback',
-				maxImageCount: 3,
-				rulePriority: 1,
-				tagStatus: ecr.TagStatus.ANY,
-			},
-		];
-
-		const apiRepository = new ecr.Repository(this, 'ApiRepository', {
-			repositoryName: 'doc-platform/api',
-			removalPolicy: cdk.RemovalPolicy.RETAIN,
-			lifecycleRules: ecrLifecycleRules,
-		});
-
-		const frontendRepository = new ecr.Repository(this, 'FrontendRepository', {
-			repositoryName: 'doc-platform/frontend',
-			removalPolicy: cdk.RemovalPolicy.RETAIN,
-			lifecycleRules: ecrLifecycleRules,
-		});
-
-		const mcpRepository = new ecr.Repository(this, 'McpRepository', {
-			repositoryName: 'doc-platform/mcp',
-			removalPolicy: cdk.RemovalPolicy.RETAIN,
-			lifecycleRules: ecrLifecycleRules,
-		});
+			// Output nameservers for staging stack
+			new cdk.CfnOutput(this, 'HostedZoneNameServers', {
+				value: cdk.Fn.join(', ', createdHostedZone.hostedZoneNameServers || []),
+				description: 'Route53 Nameservers - update these in GoDaddy',
+			});
+		} else {
+			// Production imports the hosted zone and certificate from staging
+			hostedZone = route53.HostedZone.fromLookup(this, 'HostedZone', {
+				domainName: config.domain,
+			});
+			// Import certificate by looking it up (or we could pass ARN as context)
+			certificate = acm.Certificate.fromCertificateArn(
+				this,
+				'Certificate',
+				cdk.Fn.importValue('DocPlatformStagingCertificateArn')
+			);
+		}
 
 		// ===========================================
-		// RDS PostgreSQL (Single-AZ for staging)
+		// ECR Repositories (Shared - staging creates, production imports)
 		// ===========================================
-		const dbSecurityGroup = new ec2.SecurityGroup(this, 'DbSecurityGroup', {
-			vpc,
-			description: 'Security group for RDS PostgreSQL',
-			allowAllOutbound: false,
-		});
+		let apiRepository: ecr.IRepository;
+		let frontendRepository: ecr.IRepository;
+		let mcpRepository: ecr.IRepository;
+
+		if (isStaging) {
+			// ECR repos use RETAIN so they survive failed deployments
+			const ecrLifecycleRules: ecr.LifecycleRule[] = [
+				{
+					description: `Keep last ${config.ecrMaxImageCount} images for rollback`,
+					maxImageCount: config.ecrMaxImageCount,
+					rulePriority: 1,
+					tagStatus: ecr.TagStatus.ANY,
+				},
+			];
+
+			apiRepository = new ecr.Repository(this, 'ApiRepository', {
+				repositoryName: 'doc-platform/api',
+				removalPolicy: cdk.RemovalPolicy.RETAIN,
+				lifecycleRules: ecrLifecycleRules,
+			});
+
+			frontendRepository = new ecr.Repository(this, 'FrontendRepository', {
+				repositoryName: 'doc-platform/frontend',
+				removalPolicy: cdk.RemovalPolicy.RETAIN,
+				lifecycleRules: ecrLifecycleRules,
+			});
+
+			mcpRepository = new ecr.Repository(this, 'McpRepository', {
+				repositoryName: 'doc-platform/mcp',
+				removalPolicy: cdk.RemovalPolicy.RETAIN,
+				lifecycleRules: ecrLifecycleRules,
+			});
+		} else {
+			// Production imports ECR repos by name (they're shared)
+			apiRepository = ecr.Repository.fromRepositoryName(this, 'ApiRepository', 'doc-platform/api');
+			frontendRepository = ecr.Repository.fromRepositoryName(this, 'FrontendRepository', 'doc-platform/frontend');
+			mcpRepository = ecr.Repository.fromRepositoryName(this, 'McpRepository', 'doc-platform/mcp');
+		}
+
+		// ===========================================
+		// Secrets (Per-environment)
+		// ===========================================
+		const secretsPrefix = `${envName}/doc-platform`;
 
 		const dbCredentials = new secretsmanager.Secret(this, 'DbCredentials', {
-			secretName: 'doc-platform/db-credentials',
+			secretName: `${secretsPrefix}/db-credentials`,
 			generateSecretString: {
 				secretStringTemplate: JSON.stringify({ username: 'postgres' }),
 				generateStringKey: 'password',
@@ -121,11 +153,18 @@ export class DocPlatformStack extends cdk.Stack {
 			},
 		});
 
-		// Invite keys for signup gating (comma-separated list)
-		// Set this secret value in AWS Secrets Manager or via GitHub Actions
 		const inviteKeysSecret = new secretsmanager.Secret(this, 'InviteKeys', {
-			secretName: 'doc-platform/invite-keys',
+			secretName: `${secretsPrefix}/invite-keys`,
 			description: 'Comma-separated list of valid invite keys for signup',
+		});
+
+		// ===========================================
+		// RDS PostgreSQL (Per-environment)
+		// ===========================================
+		const dbSecurityGroup = new ec2.SecurityGroup(this, 'DbSecurityGroup', {
+			vpc,
+			description: `Security group for RDS PostgreSQL (${envName})`,
+			allowAllOutbound: false,
 		});
 
 		const database = new rds.DatabaseInstance(this, 'Database', {
@@ -133,8 +172,8 @@ export class DocPlatformStack extends cdk.Stack {
 				version: rds.PostgresEngineVersion.VER_16,
 			}),
 			instanceType: ec2.InstanceType.of(
-				ec2.InstanceClass.T4G,
-				ec2.InstanceSize.MICRO
+				config.database.instanceClass,
+				config.database.instanceSize
 			),
 			vpc,
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
@@ -143,25 +182,25 @@ export class DocPlatformStack extends cdk.Stack {
 			databaseName: 'doc_platform',
 			allocatedStorage: 20,
 			maxAllocatedStorage: 100,
-			multiAz: false, // Single-AZ for staging (cost optimization)
-			deletionProtection: false,
-			removalPolicy: cdk.RemovalPolicy.DESTROY,
-			backupRetention: cdk.Duration.days(1),
+			multiAz: config.database.multiAz,
+			deletionProtection: config.database.deletionProtection,
+			removalPolicy: config.database.deletionProtection ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+			backupRetention: cdk.Duration.days(config.database.backupRetentionDays),
 		});
 
 		// ===========================================
-		// ElastiCache Redis
+		// ElastiCache Redis (Per-environment)
 		// ===========================================
 		const redisSecurityGroup = new ec2.SecurityGroup(this, 'RedisSecurityGroup', {
 			vpc,
-			description: 'Security group for ElastiCache Redis',
+			description: `Security group for ElastiCache Redis (${envName})`,
 			allowAllOutbound: false,
 		});
 
 		const redisSubnetGroup = new elasticache.CfnSubnetGroup(this, 'RedisSubnetGroup', {
-			description: 'Subnet group for Redis',
+			description: `Subnet group for Redis (${envName})`,
 			subnetIds: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }).subnetIds,
-			cacheSubnetGroupName: 'doc-platform-redis-subnet-group',
+			cacheSubnetGroupName: `doc-platform-redis-${envName}`,
 		});
 
 		const redis = new elasticache.CfnCacheCluster(this, 'Redis', {
@@ -170,25 +209,26 @@ export class DocPlatformStack extends cdk.Stack {
 			numCacheNodes: 1,
 			vpcSecurityGroupIds: [redisSecurityGroup.securityGroupId],
 			cacheSubnetGroupName: redisSubnetGroup.cacheSubnetGroupName,
+			clusterName: `doc-platform-${envName}`,
 		});
 		redis.addDependency(redisSubnetGroup);
 
 		// ===========================================
-		// ECS Cluster
+		// ECS Cluster (Per-environment)
 		// ===========================================
 		const cluster = new ecs.Cluster(this, 'Cluster', {
 			vpc,
-			clusterName: 'doc-platform',
+			clusterName: `doc-platform-${envName}`,
 			containerInsights: true,
 		});
 
 		// ===========================================
-		// Application Load Balancer
+		// Application Load Balancer (Per-environment)
 		// ===========================================
 		const alb = new elbv2.ApplicationLoadBalancer(this, 'Alb', {
 			vpc,
 			internetFacing: true,
-			loadBalancerName: 'doc-platform-alb',
+			loadBalancerName: `doc-platform-${envName}`,
 		});
 
 		// HTTPS Listener (primary)
@@ -211,34 +251,45 @@ export class DocPlatformStack extends cdk.Stack {
 			}),
 		});
 
-		// DNS A Record for staging.specboard.io -> ALB
-		new route53.ARecord(this, 'StagingARecord', {
-			zone: hostedZone,
-			recordName: stagingSubdomain,
-			target: route53.RecordTarget.fromAlias(
-				new route53Targets.LoadBalancerTarget(alb)
-			),
-			comment: 'Staging environment ALB',
-		});
+		// DNS A Record - staging uses subdomain, production uses apex
+		if (config.subdomain) {
+			new route53.ARecord(this, 'DnsRecord', {
+				zone: hostedZone,
+				recordName: config.subdomain,
+				target: route53.RecordTarget.fromAlias(
+					new route53Targets.LoadBalancerTarget(alb)
+				),
+				comment: `${envName} environment ALB`,
+			});
+		} else {
+			// Apex domain for production
+			new route53.ARecord(this, 'DnsRecord', {
+				zone: hostedZone,
+				target: route53.RecordTarget.fromAlias(
+					new route53Targets.LoadBalancerTarget(alb)
+				),
+				comment: `${envName} environment ALB (apex)`,
+			});
+		}
 
 		// ===========================================
 		// Security Groups for ECS Services
 		// ===========================================
 		const apiSecurityGroup = new ec2.SecurityGroup(this, 'ApiSecurityGroup', {
 			vpc,
-			description: 'Security group for API service',
+			description: `Security group for API service (${envName})`,
 			allowAllOutbound: true,
 		});
 
 		const frontendSecurityGroup = new ec2.SecurityGroup(this, 'FrontendSecurityGroup', {
 			vpc,
-			description: 'Security group for Frontend service',
+			description: `Security group for Frontend service (${envName})`,
 			allowAllOutbound: true,
 		});
 
 		const mcpSecurityGroup = new ec2.SecurityGroup(this, 'McpSecurityGroup', {
 			vpc,
-			description: 'Security group for MCP service',
+			description: `Security group for MCP service (${envName})`,
 			allowAllOutbound: true,
 		});
 
@@ -289,9 +340,7 @@ export class DocPlatformStack extends cdk.Stack {
 		// Log Groups
 		// ===========================================
 		// Error logs - 1 year retention for debugging and compliance
-		// Uses custom resource to handle "already exists" case (e.g., after failed deployments)
-		// Note: No onDelete handler = log group is retained on stack deletion (equivalent to RETAIN policy)
-		const errorLogGroupName = '/doc-platform/errors';
+		const errorLogGroupName = `/doc-platform/${envName}/errors`;
 		const errorLogGroupArn = cdk.Stack.of(this).formatArn({
 			service: 'logs',
 			resource: 'log-group',
@@ -342,7 +391,6 @@ export class DocPlatformStack extends cdk.Stack {
 			]),
 		});
 
-		// Ensure log group exists before setting retention policy
 		setErrorLogRetention.node.addDependency(ensureErrorLogGroup);
 
 		const errorLogGroup = logs.LogGroup.fromLogGroupName(this, 'ErrorLogGroup', errorLogGroupName);
@@ -350,17 +398,36 @@ export class DocPlatformStack extends cdk.Stack {
 		// ===========================================
 		// API Service (Fargate)
 		// ===========================================
-		// Access logs - 30 days retention
 		const apiLogGroup = new logs.LogGroup(this, 'ApiLogGroup', {
-			logGroupName: '/ecs/api',
+			logGroupName: `/ecs/${envName}/api`,
 			retention: logs.RetentionDays.ONE_MONTH,
 			removalPolicy: cdk.RemovalPolicy.DESTROY,
 		});
 
 		const apiTaskDefinition = new ecs.FargateTaskDefinition(this, 'ApiTaskDef', {
-			memoryLimitMiB: 512,
-			cpu: 256,
+			memoryLimitMiB: config.ecs.memory,
+			cpu: config.ecs.cpu,
 		});
+
+		const apiEnvironment: Record<string, string> = {
+			PORT: '3001',
+			NODE_ENV: 'production',
+			APP_ENV: envName,
+			REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
+			DB_HOST: database.instanceEndpoint.hostname,
+			DB_PORT: database.instanceEndpoint.port.toString(),
+			DB_NAME: 'doc_platform',
+			DB_USER: 'postgres',
+			ERROR_LOG_GROUP: errorLogGroup.logGroupName,
+			SES_REGION: 'us-west-2',
+			EMAIL_FROM: `noreply@${config.domain}`,
+			APP_URL: `https://${fullDomain}`,
+		};
+
+		// Only set email allowlist in staging
+		if (config.emailAllowlist) {
+			apiEnvironment.EMAIL_ALLOWLIST = config.emailAllowlist;
+		}
 
 		apiTaskDefinition.addContainer('api', {
 			image: ecs.ContainerImage.fromEcrRepository(apiRepository, 'latest'),
@@ -368,25 +435,7 @@ export class DocPlatformStack extends cdk.Stack {
 				logGroup: apiLogGroup,
 				streamPrefix: 'api',
 			}),
-			environment: {
-				PORT: '3001',
-				NODE_ENV: 'production',
-				APP_ENV: 'staging',
-				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
-				// Database connection built from components
-				DB_HOST: database.instanceEndpoint.hostname,
-				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
-				DB_USER: 'postgres',
-				// Error logging
-				ERROR_LOG_GROUP: errorLogGroup.logGroupName,
-				// Email service (SES)
-				SES_REGION: 'us-west-2',
-				EMAIL_FROM: `noreply@${domainName}`,
-				APP_URL: `https://${stagingDomain}`,
-				// Email safety: only send to team domains in staging
-				EMAIL_ALLOWLIST: 'specboard.io',
-			},
+			environment: apiEnvironment,
 			secrets: {
 				DB_PASSWORD: ecs.Secret.fromSecretsManager(dbCredentials, 'password'),
 				INVITE_KEYS: ecs.Secret.fromSecretsManager(inviteKeysSecret),
@@ -404,7 +453,7 @@ export class DocPlatformStack extends cdk.Stack {
 		const apiService = new ecs.FargateService(this, 'ApiService', {
 			cluster,
 			taskDefinition: apiTaskDefinition,
-			desiredCount: isBootstrap ? 0 : 1,
+			desiredCount: isBootstrap ? 0 : config.ecs.desiredCount,
 			securityGroups: [apiSecurityGroup],
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'api',
@@ -414,15 +463,13 @@ export class DocPlatformStack extends cdk.Stack {
 			healthCheckGracePeriod: cdk.Duration.seconds(60),
 		});
 
-		// Grant API task permission to write to error log group
 		errorLogGroup.grantWrite(apiTaskDefinition.taskRole);
 
 		// Grant API task permission to send emails via SES
-		// Scoped to domain identity to follow least privilege principle
 		const sesIdentityArn = cdk.Arn.format({
 			service: 'ses',
 			resource: 'identity',
-			resourceName: domainName,
+			resourceName: config.domain,
 			region: this.region,
 			account: this.account,
 		}, this);
@@ -435,8 +482,8 @@ export class DocPlatformStack extends cdk.Stack {
 		// Frontend Service (Fargate)
 		// ===========================================
 		const frontendTaskDefinition = new ecs.FargateTaskDefinition(this, 'FrontendTaskDef', {
-			memoryLimitMiB: 512,
-			cpu: 256,
+			memoryLimitMiB: config.ecs.memory,
+			cpu: config.ecs.cpu,
 		});
 
 		frontendTaskDefinition.addContainer('frontend', {
@@ -445,10 +492,8 @@ export class DocPlatformStack extends cdk.Stack {
 			environment: {
 				PORT: '3000',
 				NODE_ENV: 'production',
-				// Frontend calls API through the staging domain
-				API_URL: `https://${stagingDomain}`,
+				API_URL: `https://${fullDomain}`,
 				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
-				// Database connection (required by @doc-platform/db imported via @doc-platform/auth)
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
 				DB_NAME: 'doc_platform',
@@ -470,7 +515,7 @@ export class DocPlatformStack extends cdk.Stack {
 		const frontendService = new ecs.FargateService(this, 'FrontendService', {
 			cluster,
 			taskDefinition: frontendTaskDefinition,
-			desiredCount: isBootstrap ? 0 : 1,
+			desiredCount: isBootstrap ? 0 : config.ecs.desiredCount,
 			securityGroups: [frontendSecurityGroup],
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'frontend',
@@ -483,16 +528,15 @@ export class DocPlatformStack extends cdk.Stack {
 		// ===========================================
 		// MCP Service (Fargate)
 		// ===========================================
-		// Access logs - 30 days retention
 		const mcpLogGroup = new logs.LogGroup(this, 'McpLogGroup', {
-			logGroupName: '/ecs/mcp',
+			logGroupName: `/ecs/${envName}/mcp`,
 			retention: logs.RetentionDays.ONE_MONTH,
 			removalPolicy: cdk.RemovalPolicy.DESTROY,
 		});
 
 		const mcpTaskDefinition = new ecs.FargateTaskDefinition(this, 'McpTaskDef', {
-			memoryLimitMiB: 512,
-			cpu: 256,
+			memoryLimitMiB: config.ecs.memory,
+			cpu: config.ecs.cpu,
 		});
 
 		mcpTaskDefinition.addContainer('mcp', {
@@ -504,14 +548,11 @@ export class DocPlatformStack extends cdk.Stack {
 			environment: {
 				PORT: '3002',
 				NODE_ENV: 'production',
-				// MCP calls API via staging domain
-				API_URL: `https://${stagingDomain}`,
-				// Database connection for direct DB access
+				API_URL: `https://${fullDomain}`,
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
 				DB_NAME: 'doc_platform',
 				DB_USER: 'postgres',
-				// Error logging
 				ERROR_LOG_GROUP: errorLogGroup.logGroupName,
 			},
 			secrets: {
@@ -530,7 +571,7 @@ export class DocPlatformStack extends cdk.Stack {
 		new ecs.FargateService(this, 'McpService', {
 			cluster,
 			taskDefinition: mcpTaskDefinition,
-			desiredCount: isBootstrap ? 0 : 1,
+			desiredCount: isBootstrap ? 0 : config.ecs.desiredCount,
 			securityGroups: [mcpSecurityGroup],
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'mcp',
@@ -540,7 +581,6 @@ export class DocPlatformStack extends cdk.Stack {
 			healthCheckGracePeriod: cdk.Duration.seconds(60),
 		});
 
-		// Grant MCP task permission to write to error log group
 		errorLogGroup.grantWrite(mcpTaskDefinition.taskRole);
 
 		// ===========================================
@@ -608,11 +648,9 @@ export class DocPlatformStack extends cdk.Stack {
 		// ===========================================
 		// CloudWatch Alarms
 		// ===========================================
-
-		// API Service CPU Alarm
 		new cloudwatch.Alarm(this, 'ApiCpuAlarm', {
-			alarmName: 'doc-platform-api-cpu-high',
-			alarmDescription: 'API service CPU utilization exceeds 80%',
+			alarmName: `doc-platform-${envName}-api-cpu-high`,
+			alarmDescription: `API service CPU utilization exceeds 80% (${envName})`,
 			metric: apiService.metricCpuUtilization({
 				period: cdk.Duration.minutes(5),
 				statistic: 'Average',
@@ -622,10 +660,9 @@ export class DocPlatformStack extends cdk.Stack {
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 
-		// API Service Memory Alarm
 		new cloudwatch.Alarm(this, 'ApiMemoryAlarm', {
-			alarmName: 'doc-platform-api-memory-high',
-			alarmDescription: 'API service memory utilization exceeds 80%',
+			alarmName: `doc-platform-${envName}-api-memory-high`,
+			alarmDescription: `API service memory utilization exceeds 80% (${envName})`,
 			metric: apiService.metricMemoryUtilization({
 				period: cdk.Duration.minutes(5),
 				statistic: 'Average',
@@ -635,10 +672,9 @@ export class DocPlatformStack extends cdk.Stack {
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 
-		// Frontend Service CPU Alarm
 		new cloudwatch.Alarm(this, 'FrontendCpuAlarm', {
-			alarmName: 'doc-platform-frontend-cpu-high',
-			alarmDescription: 'Frontend service CPU utilization exceeds 80%',
+			alarmName: `doc-platform-${envName}-frontend-cpu-high`,
+			alarmDescription: `Frontend service CPU utilization exceeds 80% (${envName})`,
 			metric: frontendService.metricCpuUtilization({
 				period: cdk.Duration.minutes(5),
 				statistic: 'Average',
@@ -648,10 +684,9 @@ export class DocPlatformStack extends cdk.Stack {
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 
-		// Frontend Service Memory Alarm
 		new cloudwatch.Alarm(this, 'FrontendMemoryAlarm', {
-			alarmName: 'doc-platform-frontend-memory-high',
-			alarmDescription: 'Frontend service memory utilization exceeds 80%',
+			alarmName: `doc-platform-${envName}-frontend-memory-high`,
+			alarmDescription: `Frontend service memory utilization exceeds 80% (${envName})`,
 			metric: frontendService.metricMemoryUtilization({
 				period: cdk.Duration.minutes(5),
 				statistic: 'Average',
@@ -661,10 +696,9 @@ export class DocPlatformStack extends cdk.Stack {
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 
-		// ALB 5xx Error Alarm
 		new cloudwatch.Alarm(this, 'Alb5xxAlarm', {
-			alarmName: 'doc-platform-alb-5xx-errors',
-			alarmDescription: 'ALB 5xx errors exceed 10 in 5 minutes',
+			alarmName: `doc-platform-${envName}-alb-5xx-errors`,
+			alarmDescription: `ALB 5xx errors exceed 10 in 5 minutes (${envName})`,
 			metric: alb.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, {
 				period: cdk.Duration.minutes(5),
 				statistic: 'Sum',
@@ -674,10 +708,9 @@ export class DocPlatformStack extends cdk.Stack {
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 
-		// Target 5xx Error Alarm (errors from API/Frontend services)
 		new cloudwatch.Alarm(this, 'Target5xxAlarm', {
-			alarmName: 'doc-platform-target-5xx-errors',
-			alarmDescription: 'Target 5xx errors exceed 10 in 5 minutes',
+			alarmName: `doc-platform-${envName}-target-5xx-errors`,
+			alarmDescription: `Target 5xx errors exceed 10 in 5 minutes (${envName})`,
 			metric: alb.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
 				period: cdk.Duration.minutes(5),
 				statistic: 'Sum',
@@ -688,135 +721,93 @@ export class DocPlatformStack extends cdk.Stack {
 		});
 
 		// ===========================================
-		// GitHub Actions OIDC & IAM Role
+		// GitHub Actions OIDC & IAM Role (Shared - only staging creates)
 		// ===========================================
-		const githubOidcProvider = new iam.OpenIdConnectProvider(this, 'GitHubOidcProvider', {
-			url: 'https://token.actions.githubusercontent.com',
-			clientIds: ['sts.amazonaws.com'],
-			thumbprints: ['6938fd4d98bab03faadb97b34396831e3780aea1'],
-		});
+		if (isStaging) {
+			const githubOidcProvider = new iam.OpenIdConnectProvider(this, 'GitHubOidcProvider', {
+				url: 'https://token.actions.githubusercontent.com',
+				clientIds: ['sts.amazonaws.com'],
+				thumbprints: ['6938fd4d98bab03faadb97b34396831e3780aea1'],
+			});
 
-		const deployRole = new iam.Role(this, 'GitHubActionsDeployRole', {
-			roleName: 'doc-platform-github-actions-deploy',
-			assumedBy: new iam.FederatedPrincipal(
-				githubOidcProvider.openIdConnectProviderArn,
-				{
-					StringEquals: {
-						'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-						'token.actions.githubusercontent.com:sub': 'repo:kcjonson/doc-platform:ref:refs/heads/main',
+			// Role for staging deployments (main branch only)
+			const stagingDeployRole = new iam.Role(this, 'GitHubActionsDeployRole', {
+				roleName: 'doc-platform-github-actions-deploy',
+				assumedBy: new iam.FederatedPrincipal(
+					githubOidcProvider.openIdConnectProviderArn,
+					{
+						StringEquals: {
+							'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+							'token.actions.githubusercontent.com:sub': 'repo:kcjonson/doc-platform:ref:refs/heads/main',
+						},
 					},
-				},
-				'sts:AssumeRoleWithWebIdentity'
-			),
-			description: 'Role for GitHub Actions to deploy to ECS',
-		});
+					'sts:AssumeRoleWithWebIdentity'
+				),
+				description: 'Role for GitHub Actions to deploy to staging',
+			});
 
-		// ECR permissions - GetAuthorizationToken requires * resource
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: ['ecr:GetAuthorizationToken'],
-			resources: ['*'],
-		}));
+			this.addDeployRolePermissions(stagingDeployRole, apiRepository, frontendRepository, mcpRepository, cluster, apiTaskDefinition, apiLogGroup);
 
-		// ECR permissions - push images to specific repositories
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: [
-				'ecr:BatchCheckLayerAvailability',
-				'ecr:GetDownloadUrlForLayer',
-				'ecr:BatchGetImage',
-				'ecr:PutImage',
-				'ecr:InitiateLayerUpload',
-				'ecr:UploadLayerPart',
-				'ecr:CompleteLayerUpload',
-			],
-			resources: [
-				apiRepository.repositoryArn,
-				frontendRepository.repositoryArn,
-				mcpRepository.repositoryArn,
-			],
-		}));
+			// Role for production deployments (release tags)
+			const productionDeployRole = new iam.Role(this, 'GitHubActionsProductionDeployRole', {
+				roleName: 'doc-platform-github-actions-deploy-production',
+				assumedBy: new iam.FederatedPrincipal(
+					githubOidcProvider.openIdConnectProviderArn,
+					{
+						StringLike: {
+							'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+							'token.actions.githubusercontent.com:sub': 'repo:kcjonson/doc-platform:ref:refs/tags/*',
+						},
+					},
+					'sts:AssumeRoleWithWebIdentity'
+				),
+				description: 'Role for GitHub Actions to deploy to production via releases',
+			});
 
-		// ECS permissions - consolidated (DescribeServices/Tasks need * for waiters)
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: [
-				'ecs:DescribeServices',
-				'ecs:DescribeTasks',
-				'ecs:DescribeTaskDefinition',
-			],
-			resources: ['*'],
-		}));
+			this.addDeployRolePermissions(productionDeployRole, apiRepository, frontendRepository, mcpRepository, cluster, apiTaskDefinition, apiLogGroup);
 
-		// ECS permissions - scoped to cluster for mutations
-		const serviceArnPattern = `arn:aws:ecs:${this.region}:${this.account}:service/${cluster.clusterName}/*`;
-		const taskArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task/${cluster.clusterName}/*`;
-		// Use wildcard for task definition revisions - specific ARN breaks when CDK updates the revision
-		const taskDefArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task-definition/${apiTaskDefinition.family}:*`;
+			// Production role needs access to production cluster too
+			const productionClusterArn = `arn:aws:ecs:${this.region}:${this.account}:cluster/doc-platform-production`;
+			const productionServiceArn = `arn:aws:ecs:${this.region}:${this.account}:service/doc-platform-production/*`;
+			const productionTaskArn = `arn:aws:ecs:${this.region}:${this.account}:task/doc-platform-production/*`;
 
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: ['ecs:UpdateService'],
-			resources: [serviceArnPattern],
-		}));
+			productionDeployRole.addToPolicy(new iam.PolicyStatement({
+				effect: iam.Effect.ALLOW,
+				actions: ['ecs:UpdateService'],
+				resources: [productionServiceArn],
+			}));
 
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: ['ecs:RunTask'],
-			resources: [taskDefArnPattern],
-		}));
+			productionDeployRole.addToPolicy(new iam.PolicyStatement({
+				effect: iam.Effect.ALLOW,
+				actions: ['ecs:RunTask'],
+				resources: [`arn:aws:ecs:${this.region}:${this.account}:task-definition/*`],
+			}));
 
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: ['ecs:StopTask'],
-			resources: [taskArnPattern],
-		}));
+			productionDeployRole.addToPolicy(new iam.PolicyStatement({
+				effect: iam.Effect.ALLOW,
+				actions: ['ecs:StopTask'],
+				resources: [productionTaskArn],
+			}));
 
-		// Pass role to ECS tasks
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: ['iam:PassRole'],
-			resources: [
-				apiTaskDefinition.taskRole.roleArn,
-				apiTaskDefinition.executionRole!.roleArn,
-			],
-		}));
+			// Output role ARNs
+			new cdk.CfnOutput(this, 'GitHubActionsRoleArn', {
+				value: stagingDeployRole.roleArn,
+				description: 'ARN of IAM role for GitHub Actions staging deployment',
+			});
 
-		// CloudFormation - read stack outputs
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: ['cloudformation:DescribeStacks'],
-			resources: [this.stackId],
-		}));
-
-		// CDK deployment - assume CDK bootstrap roles (created by `cdk bootstrap`)
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: ['sts:AssumeRole'],
-			resources: [`arn:aws:iam::${this.account}:role/cdk-hnb659fds-*-${this.account}-${this.region}`],
-		}));
-
-		// CloudWatch Logs - scoped to API log group for viewing migration logs
-		deployRole.addToPolicy(new iam.PolicyStatement({
-			effect: iam.Effect.ALLOW,
-			actions: [
-				'logs:GetLogEvents',
-				'logs:DescribeLogStreams',
-			],
-			resources: [apiLogGroup.logGroupArn, `${apiLogGroup.logGroupArn}:*`],
-		}));
+			new cdk.CfnOutput(this, 'GitHubActionsProductionRoleArn', {
+				value: productionDeployRole.roleArn,
+				description: 'ARN of IAM role for GitHub Actions production deployment',
+				exportName: 'DocPlatformProductionDeployRoleArn',
+			});
+		}
 
 		// ===========================================
 		// Outputs
 		// ===========================================
-		new cdk.CfnOutput(this, 'GitHubActionsRoleArn', {
-			value: deployRole.roleArn,
-			description: 'ARN of IAM role for GitHub Actions deployment',
-		});
-
 		new cdk.CfnOutput(this, 'AlbDnsName', {
 			value: alb.loadBalancerDnsName,
-			description: 'Application Load Balancer DNS Name',
+			description: `Application Load Balancer DNS Name (${envName})`,
 		});
 
 		new cdk.CfnOutput(this, 'ApiRepositoryUri', {
@@ -836,17 +827,17 @@ export class DocPlatformStack extends cdk.Stack {
 
 		new cdk.CfnOutput(this, 'ClusterName', {
 			value: cluster.clusterName,
-			description: 'ECS Cluster Name',
+			description: `ECS Cluster Name (${envName})`,
 		});
 
 		new cdk.CfnOutput(this, 'DatabaseEndpoint', {
 			value: database.instanceEndpoint.hostname,
-			description: 'RDS PostgreSQL Endpoint',
+			description: `RDS PostgreSQL Endpoint (${envName})`,
 		});
 
 		new cdk.CfnOutput(this, 'RedisEndpoint', {
 			value: redis.attrRedisEndpointAddress,
-			description: 'ElastiCache Redis Endpoint',
+			description: `ElastiCache Redis Endpoint (${envName})`,
 		});
 
 		new cdk.CfnOutput(this, 'ApiTaskDefinitionArn', {
@@ -874,20 +865,125 @@ export class DocPlatformStack extends cdk.Stack {
 			description: 'Route53 Hosted Zone ID',
 		});
 
-		new cdk.CfnOutput(this, 'HostedZoneNameServers', {
-			value: cdk.Fn.join(', ', hostedZone.hostedZoneNameServers || []),
-			description: 'Route53 Nameservers - update these in GoDaddy',
-		});
+		if (isStaging) {
+			new cdk.CfnOutput(this, 'CertificateArn', {
+				value: certificate.certificateArn,
+				description: 'ACM Certificate ARN',
+				exportName: 'DocPlatformStagingCertificateArn',
+			});
+		}
 
-		new cdk.CfnOutput(this, 'CertificateArn', {
-			value: certificate.certificateArn,
-			description: 'ACM Certificate ARN',
+		new cdk.CfnOutput(this, 'EnvironmentUrl', {
+			value: `https://${fullDomain}`,
+			description: `${envName} environment URL`,
 		});
+	}
 
-		new cdk.CfnOutput(this, 'StagingUrl', {
-			value: `https://${stagingDomain}`,
-			description: 'Staging environment URL',
-		});
+	private addDeployRolePermissions(
+		role: iam.Role,
+		apiRepository: ecr.IRepository,
+		frontendRepository: ecr.IRepository,
+		mcpRepository: ecr.IRepository,
+		cluster: ecs.ICluster,
+		apiTaskDefinition: ecs.FargateTaskDefinition,
+		apiLogGroup: logs.ILogGroup
+	): void {
+		// ECR permissions - GetAuthorizationToken requires * resource
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: ['ecr:GetAuthorizationToken'],
+			resources: ['*'],
+		}));
 
+		// ECR permissions - push images and describe for verification
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: [
+				'ecr:BatchCheckLayerAvailability',
+				'ecr:GetDownloadUrlForLayer',
+				'ecr:BatchGetImage',
+				'ecr:PutImage',
+				'ecr:InitiateLayerUpload',
+				'ecr:UploadLayerPart',
+				'ecr:CompleteLayerUpload',
+				'ecr:DescribeImages',
+			],
+			resources: [
+				apiRepository.repositoryArn,
+				frontendRepository.repositoryArn,
+				mcpRepository.repositoryArn,
+			],
+		}));
+
+		// ECS permissions - describe operations need * for waiters
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: [
+				'ecs:DescribeServices',
+				'ecs:DescribeTasks',
+				'ecs:DescribeTaskDefinition',
+				'ecs:ListTasks',
+			],
+			resources: ['*'],
+		}));
+
+		// ECS permissions - scoped to cluster for mutations
+		const serviceArnPattern = `arn:aws:ecs:${this.region}:${this.account}:service/${cluster.clusterName}/*`;
+		const taskArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task/${cluster.clusterName}/*`;
+		const taskDefArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task-definition/*`;
+
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: ['ecs:UpdateService'],
+			resources: [serviceArnPattern],
+		}));
+
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: ['ecs:RunTask'],
+			resources: [taskDefArnPattern],
+		}));
+
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: ['ecs:StopTask'],
+			resources: [taskArnPattern],
+		}));
+
+		// Pass role to ECS tasks
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: ['iam:PassRole'],
+			resources: [
+				apiTaskDefinition.taskRole.roleArn,
+				apiTaskDefinition.executionRole!.roleArn,
+				// Allow passing any task role (needed for production)
+				`arn:aws:iam::${this.account}:role/*`,
+			],
+		}));
+
+		// CloudFormation - read stack outputs
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: ['cloudformation:DescribeStacks'],
+			resources: ['*'],
+		}));
+
+		// CDK deployment - assume CDK bootstrap roles
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: ['sts:AssumeRole'],
+			resources: [`arn:aws:iam::${this.account}:role/cdk-hnb659fds-*-${this.account}-${this.region}`],
+		}));
+
+		// CloudWatch Logs - for viewing migration logs
+		role.addToPolicy(new iam.PolicyStatement({
+			effect: iam.Effect.ALLOW,
+			actions: [
+				'logs:GetLogEvents',
+				'logs:DescribeLogStreams',
+			],
+			resources: [apiLogGroup.logGroupArn, `${apiLogGroup.logGroupArn}:*`],
+		}));
 	}
 }

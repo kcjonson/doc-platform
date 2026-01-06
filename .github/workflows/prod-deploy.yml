@@ -1,0 +1,156 @@
+name: Production Deploy
+
+on:
+  release:
+    types: [published]
+
+# Never cancel production deploys
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  verify:
+    name: Verify Release
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Get release info
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Release tag: ${{ github.event.release.tag_name }}"
+          echo "Target: ${{ github.event.release.target_commitish }}"
+
+          # Get the commit SHA for the tag
+          DEPLOY_SHA="${{ github.event.release.target_commitish }}"
+
+          # If target_commitish is a branch name, resolve to SHA
+          if [[ ! "$DEPLOY_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            DEPLOY_SHA=$(gh api repos/${{ github.repository }}/commits/$DEPLOY_SHA --jq '.sha')
+          fi
+
+          echo "Deploy SHA: $DEPLOY_SHA"
+          echo "sha=$DEPLOY_SHA" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify images exist in ECR
+        run: |
+          DEPLOY_SHA="${{ steps.release.outputs.sha }}"
+          echo "Verifying images exist for SHA: $DEPLOY_SHA"
+
+          for service in api frontend mcp; do
+            echo "Checking doc-platform/$service:$DEPLOY_SHA"
+            aws ecr describe-images \
+              --repository-name "doc-platform/$service" \
+              --image-ids imageTag="$DEPLOY_SHA" \
+              --region ${{ env.AWS_REGION }} > /dev/null
+            echo "✓ doc-platform/$service:$DEPLOY_SHA exists"
+          done
+
+  migrate:
+    name: Run Migrations
+    needs: verify
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_run-ecs-task.yml
+    with:
+      task_name: migrate
+      command: '["node", "shared/db/dist/migrate.js"]'
+      environment: production
+    secrets: inherit
+
+  seed:
+    name: Seed Database
+    needs: migrate
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_run-ecs-task.yml
+    with:
+      task_name: seed
+      command: '["node", "shared/db/seed.mjs"]'
+      include_superadmin_env: true
+      environment: production
+    secrets: inherit
+
+  deploy-infra:
+    name: Deploy Infrastructure
+    needs: seed
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_deploy-cdk.yml
+    with:
+      action: deploy
+      environment: production
+    secrets: inherit
+
+  deploy-services:
+    name: Deploy Services
+    needs: deploy-infra
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy services
+        run: |
+          source .github/scripts/get-stack-outputs.sh production
+          .github/scripts/deploy-services.sh
+
+      - name: Health check
+        run: |
+          source .github/scripts/get-stack-outputs.sh production
+          echo "Checking health at $ENV_URL..."
+
+          # Wait a bit for services to be fully ready
+          sleep 10
+
+          # Check health endpoint
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$ENV_URL/api/health" || echo "000")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Health check passed"
+          else
+            echo "⚠ Health check returned HTTP $HTTP_CODE (may still be warming up)"
+          fi
+
+      - name: Update release with deployment info
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source .github/scripts/get-stack-outputs.sh production
+
+          # Add deployment info to release body
+          CURRENT_BODY="${{ github.event.release.body }}"
+          DEPLOY_INFO="
+
+---
+**Deployed to production**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+**URL**: $ENV_URL"
+
+          gh release edit ${{ github.event.release.tag_name }} \
+            --notes "${CURRENT_BODY}${DEPLOY_INFO}"

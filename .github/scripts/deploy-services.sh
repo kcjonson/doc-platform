@@ -10,7 +10,7 @@ set -euo pipefail
 # tag (latest) hasn't changed. This runs after deploy-infra completes.
 #
 # Required environment variables:
-#   AWS_REGION, CLUSTER, ALB_DNS
+#   AWS_REGION, CLUSTER, ALB_DNS, ENV_URL (optional)
 
 echo "Forcing new deployment on all services..."
 
@@ -24,4 +24,8 @@ aws ecs wait services-stable \
   --services api frontend mcp \
   --region "$AWS_REGION"
 
-echo "Deployed to: http://$ALB_DNS"
+if [ -n "${ENV_URL:-}" ]; then
+  echo "Deployed to: $ENV_URL"
+else
+  echo "Deployed to: http://$ALB_DNS"
+fi

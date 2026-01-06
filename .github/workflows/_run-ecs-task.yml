@@ -16,13 +16,18 @@ on:
         required: false
         type: boolean
         default: false
+      environment:
+        description: 'Environment (staging, production)'
+        required: false
+        type: string
+        default: 'staging'
 
 env:
   AWS_REGION: us-west-2
 
 jobs:
   run:
-    name: ${{ inputs.task_name }}
+    name: ${{ inputs.task_name }} (${{ inputs.environment }})
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -34,12 +39,12 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ inputs.environment == 'production' && secrets.AWS_DEPLOY_ROLE_ARN_PRODUCTION || secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Run ${{ inputs.task_name }}
         env:
           SUPERADMIN_PASSWORD: ${{ inputs.include_superadmin_env && secrets.SUPERADMIN_PASSWORD || '' }}
         run: |
-          source .github/scripts/get-stack-outputs.sh
+          source .github/scripts/get-stack-outputs.sh ${{ inputs.environment }}
           .github/scripts/run-ecs-task.sh "${{ inputs.task_name }}" '${{ inputs.command }}' "${{ inputs.include_superadmin_env }}"

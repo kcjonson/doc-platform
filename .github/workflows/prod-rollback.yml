@@ -1,0 +1,134 @@
+name: Production Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to rollback to (e.g., v1.2.2)'
+        required: true
+        type: string
+      run_migrations:
+        description: 'Run migrations (usually skip for rollbacks)'
+        required: false
+        type: boolean
+        default: false
+
+# Never cancel production deploys
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-west-2
+
+jobs:
+  verify:
+    name: Verify Rollback Target
+    runs-on: ubuntu-latest
+    outputs:
+      deploy_sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Get release info
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Rolling back to release: ${{ inputs.release_tag }}"
+
+          # Get the release info
+          RELEASE_INFO=$(gh api repos/${{ github.repository }}/releases/tags/${{ inputs.release_tag }})
+          TARGET=$(echo "$RELEASE_INFO" | jq -r '.target_commitish')
+
+          # Get the commit SHA
+          if [[ "$TARGET" =~ ^[a-f0-9]{40}$ ]]; then
+            DEPLOY_SHA="$TARGET"
+          else
+            DEPLOY_SHA=$(gh api repos/${{ github.repository }}/commits/$TARGET --jq '.sha')
+          fi
+
+          echo "Rollback SHA: $DEPLOY_SHA"
+          echo "sha=$DEPLOY_SHA" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify images exist in ECR
+        run: |
+          DEPLOY_SHA="${{ steps.release.outputs.sha }}"
+          echo "Verifying images exist for SHA: $DEPLOY_SHA"
+
+          for service in api frontend mcp; do
+            echo "Checking doc-platform/$service:$DEPLOY_SHA"
+            aws ecr describe-images \
+              --repository-name "doc-platform/$service" \
+              --image-ids imageTag="$DEPLOY_SHA" \
+              --region ${{ env.AWS_REGION }} > /dev/null
+            echo "✓ doc-platform/$service:$DEPLOY_SHA exists"
+          done
+
+  migrate:
+    name: Run Migrations (optional)
+    needs: verify
+    if: inputs.run_migrations
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_run-ecs-task.yml
+    with:
+      task_name: migrate
+      command: '["node", "shared/db/dist/migrate.js"]'
+      environment: production
+    secrets: inherit
+
+  deploy-services:
+    name: Deploy Services
+    needs: [verify, migrate]
+    if: always() && needs.verify.result == 'success' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy services
+        run: |
+          source .github/scripts/get-stack-outputs.sh production
+          .github/scripts/deploy-services.sh
+
+      - name: Health check
+        run: |
+          source .github/scripts/get-stack-outputs.sh production
+          echo "Checking health at $ENV_URL..."
+
+          sleep 10
+
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$ENV_URL/api/health" || echo "000")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Health check passed"
+          else
+            echo "⚠ Health check returned HTTP $HTTP_CODE (may still be warming up)"
+          fi
+
+      - name: Summary
+        run: |
+          source .github/scripts/get-stack-outputs.sh production
+          echo "## Rollback Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target release**: ${{ inputs.release_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit SHA**: ${{ needs.verify.outputs.deploy_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Migrations**: ${{ inputs.run_migrations && 'Yes' || 'Skipped' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL**: $ENV_URL" >> $GITHUB_STEP_SUMMARY

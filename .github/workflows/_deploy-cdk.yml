@@ -8,13 +8,18 @@ on:
         required: false
         type: string
         default: 'deploy'
+      environment:
+        description: 'Environment (staging, production)'
+        required: false
+        type: string
+        default: 'staging'
 
 env:
   AWS_REGION: us-west-2
 
 jobs:
   cdk:
-    name: CDK ${{ inputs.action }}
+    name: CDK ${{ inputs.action }} (${{ inputs.environment }})
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -41,7 +46,7 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ inputs.environment == 'production' && secrets.AWS_DEPLOY_ROLE_ARN_PRODUCTION || secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: CDK ${{ inputs.action }}
@@ -49,13 +54,13 @@ jobs:
           cd infra
           case "${{ inputs.action }}" in
             diff)
-              npx cdk diff
+              npx cdk diff --context env=${{ inputs.environment }}
               ;;
             deploy)
-              npx cdk deploy --require-approval never
+              npx cdk deploy --require-approval never --context env=${{ inputs.environment }}
               ;;
             destroy)
-              npx cdk destroy --force
+              npx cdk destroy --force --context env=${{ inputs.environment }}
               ;;
             *)
               echo "Unknown action: ${{ inputs.action }}"
@@ -66,8 +71,13 @@ jobs:
       - name: Output Stack Info
         if: inputs.action == 'deploy'
         run: |
+          if [ "${{ inputs.environment }}" = "staging" ]; then
+            STACK_NAME="DocPlatformStack"
+          else
+            STACK_NAME="DocPlatform-${{ inputs.environment }}"
+          fi
           aws cloudformation describe-stacks \
-            --stack-name DocPlatformStack \
+            --stack-name "$STACK_NAME" \
             --query "Stacks[0].Outputs" \
             --output table \
             --region ${{ env.AWS_REGION }}
