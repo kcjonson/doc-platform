@@ -69,7 +69,7 @@ export function ProjectCard({ project, onClick, onEdit }: ProjectCardProps): JSX
 						onKeyDown={handleEditKeyDown}
 						aria-label="Edit project"
 					>
-						<Icon name="pencil" size={14} />
+						<Icon name="pencil" class="size-sm" />
 					</button>
 				)}
 			</div>

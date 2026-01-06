@@ -21,9 +21,7 @@ export type IconName =
 export interface IconProps {
 	/** The icon to display */
 	name: IconName;
-	/** Icon size in pixels (default: 16) */
-	size?: number;
-	/** Additional CSS class */
+	/** Additional CSS class for styling (use size-xs, size-sm, size-lg, size-xl for sizes) */
 	class?: string;
 	/** Accessible label for screen readers */
 	'aria-label'?: string;
@@ -34,6 +32,14 @@ export interface IconProps {
 /**
  * Professional outline-style SVG icons.
  * All icons use a 24x24 viewBox with stroke-based paths.
+ *
+ * Size classes:
+ * - size-xs: 12px
+ * - size-sm: 14px
+ * - (default): 16px
+ * - size-lg: 20px
+ * - size-xl: 24px
+ * - size-2xl: 32px
  */
 const icons: Record<IconName, JSX.Element> = {
 	file: (
@@ -111,7 +117,6 @@ const icons: Record<IconName, JSX.Element> = {
 
 export function Icon({
 	name,
-	size = 16,
 	class: className,
 	'aria-label': ariaLabel,
 	'aria-hidden': ariaHidden,
@@ -121,8 +126,6 @@ export function Icon({
 	return (
 		<svg
 			class={iconClasses}
-			width={size}
-			height={size}
 			viewBox="0 0 24 24"
 			fill="none"
 			stroke="currentColor"

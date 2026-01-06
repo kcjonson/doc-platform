@@ -47,7 +47,7 @@ export function EpicDetail({ params }: RouteProps): JSX.Element {
 			<div class={styles.content}>
 				<nav class={styles.nav}>
 					<a href={`/projects/${projectId}/planning`} class={styles.backLink}>
-						<Icon name="arrow-left" size={14} /> Back to Board
+						<Icon name="arrow-left" class="size-sm" /> Back to Board
 					</a>
 				</nav>
 				<EpicView epic={epic} onDelete={handleDelete} />

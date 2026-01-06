@@ -49,7 +49,7 @@ export function TaskCard({ task, onToggleStatus }: TaskCardProps): JSX.Element {
 					onClick={handleCheckboxClick}
 					aria-label={isDone ? 'Mark as incomplete' : 'Mark as complete'}
 				>
-					<Icon name={isDone ? 'checkbox-checked' : 'checkbox-unchecked'} size={16} />
+					<Icon name={isDone ? 'checkbox-checked' : 'checkbox-unchecked'} />
 				</button>
 				<div class={styles.details}>
 					<span class={styles.title}>{task.title}</span>

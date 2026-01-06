@@ -89,7 +89,7 @@ export function AuthorizedApps({ authorizations }: AuthorizedAppsProps): JSX.Ele
 					{authorizations.map((auth) => (
 						<div key={auth.id} class={styles.item}>
 							<div class={styles.itemHeader}>
-								<span class={styles.icon}><Icon name="robot" size={20} /></span>
+								<span class={styles.icon}><Icon name="robot" class="size-lg" /></span>
 								<div class={styles.itemInfo}>
 									<div class={styles.clientName}>
 										{CLIENT_NAMES[auth.client_id] || auth.client_id}

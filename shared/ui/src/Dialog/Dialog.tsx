@@ -91,7 +91,7 @@ export function Dialog({
 								onClick={onClose}
 								aria-label="Close"
 							>
-								<Icon name="close" size={18} />
+								<Icon name="close" class="size-lg" />
 							</button>
 						)}
 					</div>
