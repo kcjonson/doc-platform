@@ -24,10 +24,17 @@ export async function handleListEpics(context: Context): Promise<Response> {
 
 	try {
 		const statusParam = context.req.query('status');
+		const specDocPath = context.req.query('specDocPath');
 		const validStatuses = ['ready', 'in_progress', 'in_review', 'done'];
 
 		let result;
-		if (statusParam && validStatuses.includes(statusParam)) {
+		if (specDocPath) {
+			// Filter by spec document path
+			result = await query<DbEpic>(
+				`SELECT * FROM epics WHERE project_id = $1 AND spec_doc_path = $2 ORDER BY rank ASC`,
+				[projectId, specDocPath]
+			);
+		} else if (statusParam && validStatuses.includes(statusParam)) {
 			result = await query<DbEpic>(
 				`SELECT * FROM epics WHERE project_id = $1 AND status = $2 ORDER BY rank ASC`,
 				[projectId, statusParam]
@@ -149,15 +156,19 @@ export async function handleCreateEpic(context: Context): Promise<Response> {
 	}
 
 	try {
-		const rankResult = await query<{ max_rank: number | null }>(
-			`SELECT MAX(rank) as max_rank FROM epics WHERE project_id = $1 AND status = $2`,
+		// New epics go to the top of the column (lowest rank)
+		// Use a high default initial rank to avoid starting at 0 and going negative
+		const DEFAULT_INITIAL_RANK = 1000;
+		const rankResult = await query<{ min_rank: number | null }>(
+			`SELECT MIN(rank) as min_rank FROM epics WHERE project_id = $1 AND status = $2`,
 			[projectId, status]
 		);
-		const maxRank = rankResult.rows[0]?.max_rank ?? 0;
+		const minRank = rankResult.rows[0]?.min_rank ?? DEFAULT_INITIAL_RANK;
+		const newRank = minRank - 1;
 
 		const result = await query<DbEpic>(
-			`INSERT INTO epics (project_id, title, description, status, creator, assignee, rank)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7)
+			`INSERT INTO epics (project_id, title, description, status, creator, assignee, rank, spec_doc_path)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 			 RETURNING *`,
 			[
 				projectId,
@@ -166,7 +177,8 @@ export async function handleCreateEpic(context: Context): Promise<Response> {
 				status,
 				normalizeOptionalString(body.creator) ?? null,
 				normalizeOptionalString(body.assignee) ?? null,
-				maxRank + 1,
+				newRank,
+				normalizeOptionalString(body.specDocPath) ?? null,
 			]
 		);
 
@@ -243,6 +255,11 @@ export async function handleUpdateEpic(context: Context): Promise<Response> {
 		if (body.rank !== undefined) {
 			updates.push(`rank = $${paramIndex++}`);
 			values.push(body.rank);
+		}
+		if (body.specDocPath !== undefined) {
+			updates.push(`spec_doc_path = $${paramIndex++}`);
+			const normalized = normalizeOptionalString(body.specDocPath);
+			values.push(normalized === undefined ? null : normalized);
 		}
 
 		if (updates.length === 0) {
