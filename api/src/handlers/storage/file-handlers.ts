@@ -4,7 +4,7 @@
 
 import type { Context } from 'hono';
 import type { Redis } from 'ioredis';
-import { getProject } from '@doc-platform/db';
+import { getProject, query } from '@doc-platform/db';
 import { isValidUUID } from '../../validation.js';
 import type { FileEntry } from '../../services/storage/types.js';
 import {
@@ -222,6 +222,153 @@ export async function handleReadFile(context: Context, redis: Redis): Promise<Re
 			return context.json({ error: 'File too large (limit: 5MB)', code: 'FILE_TOO_LARGE' }, 400);
 		}
 		console.error('Failed to read file:', error);
+		return context.json({ error: 'Server error' }, 500);
+	}
+}
+
+/**
+ * POST /api/projects/:id/files?path=/docs/file.md
+ * Create a new file
+ */
+export async function handleCreateFile(context: Context, redis: Redis): Promise<Response> {
+	const userId = await getUserId(context, redis);
+	if (!userId) {
+		return context.json({ error: 'Unauthorized' }, 401);
+	}
+
+	const projectId = context.req.param('id');
+	if (!isValidUUID(projectId)) {
+		return context.json({ error: 'Invalid project ID format' }, 400);
+	}
+
+	// Get file path from query parameter
+	const rawPath = context.req.query('path');
+	if (!rawPath) {
+		return context.json({ error: 'Path query parameter is required', code: 'PATH_REQUIRED' }, 400);
+	}
+
+	// Normalize and validate path
+	let filePath = normalizePath(rawPath);
+	if (!filePath) {
+		return context.json({ error: 'Invalid path', code: 'INVALID_PATH' }, 400);
+	}
+
+	// Auto-add .md extension if not present
+	if (!filePath.endsWith('.md') && !filePath.endsWith('.mdx')) {
+		filePath = filePath + '.md';
+	}
+
+	try {
+		const project = await getProject(projectId, userId);
+		if (!project) {
+			return context.json({ error: 'Project not found' }, 404);
+		}
+
+		// Validate path is within configured root paths
+		if (!isPathWithinRoots(filePath, project.rootPaths)) {
+			return context.json({ error: 'Path is outside project boundaries', code: 'PATH_OUTSIDE_ROOTS' }, 403);
+		}
+
+		const provider = await getStorageProvider(projectId, userId);
+		if (!provider) {
+			return context.json({ error: 'No repository configured' }, 404);
+		}
+
+		// Check if file already exists
+		const exists = await provider.exists(filePath);
+		if (exists) {
+			return context.json({ error: 'File already exists', code: 'FILE_EXISTS' }, 409);
+		}
+
+		// Create file with empty content (single paragraph)
+		await provider.writeFile(filePath, '\n');
+
+		return context.json({
+			path: filePath,
+			success: true,
+		});
+	} catch (error) {
+		console.error('Failed to create file:', error);
+		return context.json({ error: 'Server error' }, 500);
+	}
+}
+
+/**
+ * PUT /api/projects/:id/files/rename
+ * Rename a file
+ */
+export async function handleRenameFile(context: Context, redis: Redis): Promise<Response> {
+	const userId = await getUserId(context, redis);
+	if (!userId) {
+		return context.json({ error: 'Unauthorized' }, 401);
+	}
+
+	const projectId = context.req.param('id');
+	if (!isValidUUID(projectId)) {
+		return context.json({ error: 'Invalid project ID format' }, 400);
+	}
+
+	try {
+		const body = await context.req.json() as { oldPath?: string; newPath?: string };
+		const { oldPath: rawOldPath, newPath: rawNewPath } = body;
+
+		if (!rawOldPath || !rawNewPath) {
+			return context.json({ error: 'oldPath and newPath are required' }, 400);
+		}
+
+		// Normalize paths
+		const oldPath = normalizePath(rawOldPath);
+		const newPath = normalizePath(rawNewPath);
+
+		if (!oldPath || !newPath) {
+			return context.json({ error: 'Invalid path', code: 'INVALID_PATH' }, 400);
+		}
+
+		const project = await getProject(projectId, userId);
+		if (!project) {
+			return context.json({ error: 'Project not found' }, 404);
+		}
+
+		// Validate both paths are within roots
+		if (!isPathWithinRoots(oldPath, project.rootPaths)) {
+			return context.json({ error: 'Source path is outside project boundaries', code: 'PATH_OUTSIDE_ROOTS' }, 403);
+		}
+		if (!isPathWithinRoots(newPath, project.rootPaths)) {
+			return context.json({ error: 'Destination path is outside project boundaries', code: 'PATH_OUTSIDE_ROOTS' }, 403);
+		}
+
+		const provider = await getStorageProvider(projectId, userId);
+		if (!provider) {
+			return context.json({ error: 'No repository configured' }, 404);
+		}
+
+		// Check source exists
+		const sourceExists = await provider.exists(oldPath);
+		if (!sourceExists) {
+			return context.json({ error: 'Source file not found' }, 404);
+		}
+
+		// Check destination doesn't exist
+		const destExists = await provider.exists(newPath);
+		if (destExists) {
+			return context.json({ error: 'A file with that name already exists', code: 'FILE_EXISTS' }, 409);
+		}
+
+		await provider.rename(oldPath, newPath);
+
+		// Update any epics that link to this file
+		await query(
+			`UPDATE epics SET spec_doc_path = $1 WHERE project_id = $2 AND spec_doc_path = $3`,
+			[newPath, projectId, oldPath]
+		);
+
+		return context.json({
+			oldPath,
+			newPath,
+			success: true,
+		});
+	} catch (error) {
+		console.error('Failed to rename file:', error);
 		return context.json({ error: 'Server error' }, 500);
 	}
 }

@@ -80,6 +80,15 @@ export function Editor(props: RouteProps): JSX.Element {
 	// Pending recovery dialog state (file path with cached changes)
 	const [pendingRecovery, setPendingRecovery] = useState<string | null>(null);
 
+	// Reference to the startNewFile function from FileBrowser
+	const startNewFileRef = useRef<((parentPath?: string) => void) | null>(null);
+
+	// Track pending new file state to show creating notice
+	const [isCreatingFile, setIsCreatingFile] = useState(false);
+
+	// Reference to the renameFile function from FileBrowser
+	const renameFileRef = useRef<((path: string, newFilename: string) => Promise<string>) | null>(null);
+
 	// Load file from server
 	const loadFileFromServer = useCallback(async (path: string) => {
 		try {
@@ -115,6 +124,28 @@ export function Editor(props: RouteProps): JSX.Element {
 
 		await loadFileFromServer(path);
 	}, [projectId, loadFileFromServer]);
+
+	// Handle file renamed via sidebar double-click
+	const handleFileRenamed = useCallback((oldPath: string, newPath: string) => {
+		// If the renamed file is the currently open file, update the model
+		if (documentModel.filePath === oldPath) {
+			// Move cached changes to new path
+			if (hasPersistedContent(projectId, oldPath)) {
+				const cached = loadFromLocalStorage(projectId, oldPath);
+				if (cached) {
+					saveToLocalStorage(projectId, newPath, cached);
+				}
+				clearLocalStorage(projectId, oldPath);
+			}
+
+			// Update selected file in localStorage
+			saveSelectedFile(projectId, newPath);
+
+			// Update document model with new path and title
+			documentModel.filePath = newPath;
+			documentModel.title = newPath.split('/').pop() || 'Untitled';
+		}
+	}, [projectId, documentModel]);
 
 	// Handle restore from recovery dialog
 	const handleRestore = useCallback(() => {
@@ -212,6 +243,78 @@ export function Editor(props: RouteProps): JSX.Element {
 		return () => window.removeEventListener('keydown', handleKeyDown);
 	}, [handleSave]);
 
+	// Handle receiving the startNewFile function from FileBrowser
+	const handleStartNewFileRef = useCallback((startNewFile: (parentPath: string) => void) => {
+		startNewFileRef.current = startNewFile;
+	}, []);
+
+	// Handle "New Page" button click from EditorHeader
+	const handleNewPage = useCallback(() => {
+		if (!startNewFileRef.current) return;
+
+		// Determine target directory:
+		// - If a file is open, use its directory
+		// - Otherwise, FileBrowser will use first rootPath
+		let targetDir: string | undefined;
+
+		if (documentModel.filePath) {
+			// Extract directory from current file path
+			const lastSlash = documentModel.filePath.lastIndexOf('/');
+			if (lastSlash > 0) {
+				targetDir = documentModel.filePath.substring(0, lastSlash);
+			}
+		}
+
+		startNewFileRef.current(targetDir);
+		setIsCreatingFile(true);
+	}, [documentModel.filePath]);
+
+	// Handle file created callback from FileBrowser
+	const handleFileCreated = useCallback(async (path: string) => {
+		setIsCreatingFile(false);
+		// Select the newly created file
+		await handleFileSelect(path);
+	}, [handleFileSelect]);
+
+	// Handle file creation cancelled
+	const handleCancelNewFile = useCallback(() => {
+		setIsCreatingFile(false);
+	}, []);
+
+	// Handle receiving the renameFile function from FileBrowser
+	const handleRenameFileRef = useCallback((renameFile: (path: string, newFilename: string) => Promise<string>) => {
+		renameFileRef.current = renameFile;
+	}, []);
+
+	// Handle rename from EditorHeader
+	const handleRename = useCallback(async (newFilename: string) => {
+		if (!documentModel.filePath || !renameFileRef.current) return;
+
+		const oldPath = documentModel.filePath;
+		try {
+			const newPath = await renameFileRef.current(oldPath, newFilename);
+
+			// Update localStorage - move cached changes to new path
+			if (hasPersistedContent(projectId, oldPath)) {
+				const cached = loadFromLocalStorage(projectId, oldPath);
+				if (cached) {
+					saveToLocalStorage(projectId, newPath, cached);
+				}
+				clearLocalStorage(projectId, oldPath);
+			}
+
+			// Update selected file in localStorage
+			saveSelectedFile(projectId, newPath);
+
+			// Update document model with new path and title
+			documentModel.filePath = newPath;
+			documentModel.title = newPath.split('/').pop() || 'Untitled';
+		} catch (err) {
+			console.error('Failed to rename file:', err);
+			// Could show error UI here
+		}
+	}, [projectId, documentModel]);
+
 	return (
 		<Page projectId={projectId} activeTab="Pages">
 			<div class={styles.body}>
@@ -219,6 +322,11 @@ export function Editor(props: RouteProps): JSX.Element {
 					projectId={projectId}
 					selectedPath={documentModel.filePath || undefined}
 					onFileSelect={handleFileSelect}
+					onFileCreated={handleFileCreated}
+					onCancelNewFile={handleCancelNewFile}
+					onFileRenamed={handleFileRenamed}
+					onStartNewFileRef={handleStartNewFileRef}
+					onRenameFileRef={handleRenameFileRef}
 					class={styles.sidebar}
 				/>
 				<main class={styles.main}>
@@ -245,6 +353,16 @@ export function Editor(props: RouteProps): JSX.Element {
 								</div>
 							</div>
 						</div>
+					) : isCreatingFile ? (
+						<div class={styles.creatingState}>
+							<div class={styles.creatingStateContent}>
+								<div class={styles.creatingStateIcon}>📝</div>
+								<div class={styles.creatingStateTitle}>Creating new file</div>
+								<div class={styles.creatingStateHint}>
+									Enter a filename in the sidebar to continue
+								</div>
+							</div>
+						</div>
 					) : documentModel.filePath ? (
 						<>
 							<EditorHeader
@@ -253,6 +371,8 @@ export function Editor(props: RouteProps): JSX.Element {
 								isDirty={documentModel.isDirty}
 								saving={documentModel.saving}
 								onSave={handleSave}
+								onNewPage={handleNewPage}
+								onRename={handleRename}
 							/>
 							<div class={styles.editorArea}>
 								<MarkdownEditor
