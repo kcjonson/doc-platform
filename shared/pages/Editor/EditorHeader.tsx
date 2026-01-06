@@ -34,6 +34,8 @@ export function EditorHeader({
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	// Focus and select input when editing starts
+	// Intentionally only depends on isEditing - we capture the initial title for selection
+	// but don't want to refocus/reselect on every keystroke
 	useEffect(() => {
 		if (isEditing && inputRef.current) {
 			inputRef.current.focus();
@@ -45,8 +47,6 @@ export function EditorHeader({
 				inputRef.current.select();
 			}
 		}
-		// Only run when isEditing changes, not on every keystroke
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [isEditing]);
 
 	const handleStartEditing = (): void => {
