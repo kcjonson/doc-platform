@@ -157,11 +157,13 @@ export async function handleCreateEpic(context: Context): Promise<Response> {
 
 	try {
 		// New epics go to the top of the column (lowest rank)
+		// Use a high default initial rank to avoid starting at 0 and going negative
+		const DEFAULT_INITIAL_RANK = 1000;
 		const rankResult = await query<{ min_rank: number | null }>(
 			`SELECT MIN(rank) as min_rank FROM epics WHERE project_id = $1 AND status = $2`,
 			[projectId, status]
 		);
-		const minRank = rankResult.rows[0]?.min_rank ?? 1;
+		const minRank = rankResult.rows[0]?.min_rank ?? DEFAULT_INITIAL_RANK;
 		const newRank = minRank - 1;
 
 		const result = await query<DbEpic>(

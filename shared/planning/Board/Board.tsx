@@ -36,9 +36,14 @@ export function Board(props: RouteProps): JSX.Element {
 		const highlightId = params.get('highlight');
 		if (highlightId) {
 			setHighlightedEpicId(highlightId);
-			// Clear the URL param without triggering navigation
-			const newUrl = window.location.pathname;
-			window.history.replaceState({}, '', newUrl);
+			// Clear only the highlight URL param, preserving other params and hash
+			params.delete('highlight');
+			const search = params.toString();
+			const newUrl =
+				window.location.pathname +
+				(search ? `?${search}` : '') +
+				window.location.hash;
+			window.history.replaceState(window.history.state, '', newUrl);
 			// Clear highlight after duration
 			const timer = setTimeout(() => {
 				setHighlightedEpicId(undefined);

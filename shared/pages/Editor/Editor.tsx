@@ -97,8 +97,14 @@ export function Editor(props: RouteProps): JSX.Element {
 				`/api/projects/${projectId}/epics?specDocPath=${encodeURIComponent(path)}`
 			);
 			setLinkedEpicId(epics.length > 0 ? epics[0]?.id : undefined);
-		} catch {
-			// Silently fail - epic linking is optional
+		} catch (err) {
+			const error = err instanceof Error ? err : new Error(String(err));
+			captureError(error, {
+				type: 'epic_link_check_error',
+				filePath: path,
+				projectId,
+			});
+			// Fail gracefully - epic linking is optional
 			setLinkedEpicId(undefined);
 		}
 	}, [projectId]);
@@ -171,7 +177,10 @@ export function Editor(props: RouteProps): JSX.Element {
 
 		// Extract title from filename (without extension)
 		const fileName = filePath.split('/').pop() || 'Untitled';
-		const title = fileName.replace(/\.(md|markdown)$/, '');
+		let title = fileName.replace(/\.(md|markdown)$/, '');
+		if (!title.trim()) {
+			title = 'Untitled';
+		}
 
 		setCreatingEpic(true);
 		try {
@@ -187,8 +196,14 @@ export function Editor(props: RouteProps): JSX.Element {
 			// Navigate to Planning page with highlight param
 			navigate(`/projects/${projectId}/planning?highlight=${response.id}`);
 		} catch (err) {
-			console.error('Failed to create epic:', err);
-			// Could show error UI here
+			const error = err instanceof Error ? err : new Error(String(err));
+			captureError(error, {
+				type: 'epic_create_error',
+				filePath,
+				projectId,
+			});
+			// Show user feedback
+			globalThis.alert?.('Failed to create epic. Please try again.');
 		} finally {
 			setCreatingEpic(false);
 		}
@@ -197,7 +212,7 @@ export function Editor(props: RouteProps): JSX.Element {
 	// Navigate to view the linked epic
 	const handleViewEpic = useCallback(() => {
 		if (linkedEpicId) {
-			navigate(`/projects/${projectId}/planning`);
+			navigate(`/projects/${projectId}/planning?highlight=${linkedEpicId}`);
 		}
 	}, [projectId, linkedEpicId]);
 
