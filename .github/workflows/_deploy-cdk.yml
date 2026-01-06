@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: 'staging'
+      image_tag:
+        description: 'Docker image tag to deploy (defaults to latest)'
+        required: false
+        type: string
+        default: 'latest'
 
 env:
   AWS_REGION: us-west-2
@@ -25,6 +30,13 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Validate environment
+        run: |
+          if [[ ! "${{ inputs.environment }}" =~ ^(staging|production)$ ]]; then
+            echo "ERROR: environment must be 'staging' or 'production', got '${{ inputs.environment }}'"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -52,15 +64,17 @@ jobs:
       - name: CDK ${{ inputs.action }}
         run: |
           cd infra
+          CDK_CONTEXT="--context env=${{ inputs.environment }} --context imageTag=${{ inputs.image_tag }}"
+
           case "${{ inputs.action }}" in
             diff)
-              npx cdk diff --context env=${{ inputs.environment }}
+              npx cdk diff $CDK_CONTEXT
               ;;
             deploy)
-              npx cdk deploy --require-approval never --context env=${{ inputs.environment }}
+              npx cdk deploy --require-approval never $CDK_CONTEXT
               ;;
             destroy)
-              npx cdk destroy --force --context env=${{ inputs.environment }}
+              npx cdk destroy --force $CDK_CONTEXT
               ;;
             *)
               echo "Unknown action: ${{ inputs.action }}"
@@ -71,6 +85,7 @@ jobs:
       - name: Output Stack Info
         if: inputs.action == 'deploy'
         run: |
+          # Staging uses legacy stack name for backward compatibility
           if [ "${{ inputs.environment }}" = "staging" ]; then
             STACK_NAME="DocPlatformStack"
           else

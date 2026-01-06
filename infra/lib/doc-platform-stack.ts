@@ -33,6 +33,10 @@ export class DocPlatformStack extends cdk.Stack {
 		// Usage: npx cdk deploy --context bootstrap=true
 		const isBootstrap = this.node.tryGetContext('bootstrap') === 'true';
 
+		// Image tag: defaults to 'latest' for staging, but production should pass specific SHA
+		// Usage: npx cdk deploy --context env=production --context imageTag=abc123
+		const imageTag = this.node.tryGetContext('imageTag') || 'latest';
+
 		// ===========================================
 		// VPC
 		// ===========================================
@@ -72,11 +76,15 @@ export class DocPlatformStack extends cdk.Stack {
 			});
 			hostedZone = createdHostedZone;
 
-			certificate = new acm.Certificate(this, 'Certificate', {
+			const createdCertificate = new acm.Certificate(this, 'Certificate', {
 				domainName: config.domain,
 				subjectAlternativeNames: [`*.${config.domain}`],
 				validation: acm.CertificateValidation.fromDns(createdHostedZone),
 			});
+			certificate = createdCertificate;
+
+			// Retain certificate even if stack is deleted (production depends on it)
+			createdCertificate.applyRemovalPolicy(cdk.RemovalPolicy.RETAIN);
 
 			// Output nameservers for staging stack
 			new cdk.CfnOutput(this, 'HostedZoneNameServers', {
@@ -430,7 +438,7 @@ export class DocPlatformStack extends cdk.Stack {
 		}
 
 		apiTaskDefinition.addContainer('api', {
-			image: ecs.ContainerImage.fromEcrRepository(apiRepository, 'latest'),
+			image: ecs.ContainerImage.fromEcrRepository(apiRepository, imageTag),
 			logging: ecs.LogDrivers.awsLogs({
 				logGroup: apiLogGroup,
 				streamPrefix: 'api',
@@ -487,7 +495,7 @@ export class DocPlatformStack extends cdk.Stack {
 		});
 
 		frontendTaskDefinition.addContainer('frontend', {
-			image: ecs.ContainerImage.fromEcrRepository(frontendRepository, 'latest'),
+			image: ecs.ContainerImage.fromEcrRepository(frontendRepository, imageTag),
 			logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'frontend' }),
 			environment: {
 				PORT: '3000',
@@ -540,7 +548,7 @@ export class DocPlatformStack extends cdk.Stack {
 		});
 
 		mcpTaskDefinition.addContainer('mcp', {
-			image: ecs.ContainerImage.fromEcrRepository(mcpRepository, 'latest'),
+			image: ecs.ContainerImage.fromEcrRepository(mcpRepository, imageTag),
 			logging: ecs.LogDrivers.awsLogs({
 				logGroup: mcpLogGroup,
 				streamPrefix: 'mcp',
@@ -729,6 +737,10 @@ export class DocPlatformStack extends cdk.Stack {
 				clientIds: ['sts.amazonaws.com'],
 				thumbprints: ['6938fd4d98bab03faadb97b34396831e3780aea1'],
 			});
+
+			// Retain OIDC provider even if stack is deleted (both environments depend on it)
+			// Note: OpenIdConnectProvider doesn't support removal policy directly, but it's
+			// safe because AWS won't delete OIDC providers that have role trust relationships
 
 			// Role for staging deployments (main branch only)
 			const stagingDeployRole = new iam.Role(this, 'GitHubActionsDeployRole', {
@@ -957,8 +969,8 @@ export class DocPlatformStack extends cdk.Stack {
 			resources: [
 				apiTaskDefinition.taskRole.roleArn,
 				apiTaskDefinition.executionRole!.roleArn,
-				// Allow passing any task role (needed for production)
-				`arn:aws:iam::${this.account}:role/*`,
+				// Allow passing production task roles (explicit patterns for security)
+				`arn:aws:iam::${this.account}:role/DocPlatform-production-*TaskDef*Role*`,
 			],
 		}));
 

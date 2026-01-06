@@ -38,8 +38,10 @@ jobs:
           echo "Deploy SHA: $DEPLOY_SHA"
           echo "sha=$DEPLOY_SHA" >> $GITHUB_OUTPUT
 
-      - name: Checkout
+      - name: Checkout at release SHA
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -61,9 +63,22 @@ jobs:
             echo "✓ doc-platform/$service:$DEPLOY_SHA exists"
           done
 
+  deploy-infra:
+    name: Deploy Infrastructure
+    needs: verify
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_deploy-cdk.yml
+    with:
+      action: deploy
+      environment: production
+      image_tag: ${{ needs.verify.outputs.deploy_sha }}
+    secrets: inherit
+
   migrate:
     name: Run Migrations
-    needs: verify
+    needs: [verify, deploy-infra]
     permissions:
       id-token: write
       contents: read
@@ -75,8 +90,9 @@ jobs:
     secrets: inherit
 
   seed:
-    name: Seed Database
-    needs: migrate
+    name: Seed Database (First Deploy Only)
+    needs: [verify, migrate]
+    if: github.event.release.tag_name == 'v1.0.0'
     permissions:
       id-token: write
       contents: read
@@ -88,28 +104,19 @@ jobs:
       environment: production
     secrets: inherit
 
-  deploy-infra:
-    name: Deploy Infrastructure
-    needs: seed
-    permissions:
-      id-token: write
-      contents: read
-    uses: ./.github/workflows/_deploy-cdk.yml
-    with:
-      action: deploy
-      environment: production
-    secrets: inherit
-
   deploy-services:
     name: Deploy Services
-    needs: deploy-infra
+    needs: [verify, migrate, seed]
+    if: always() && needs.verify.result == 'success' && needs.migrate.result == 'success' && (needs.seed.result == 'success' || needs.seed.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
-      - name: Checkout
+      - name: Checkout at release SHA
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.deploy_sha }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -122,23 +129,28 @@ jobs:
           source .github/scripts/get-stack-outputs.sh production
           .github/scripts/deploy-services.sh
 
-      - name: Health check
+      - name: Health check with retry
         run: |
           source .github/scripts/get-stack-outputs.sh production
           echo "Checking health at $ENV_URL..."
 
-          # Wait a bit for services to be fully ready
-          sleep 10
+          # Retry health check up to 6 times (total ~60 seconds)
+          for i in {1..6}; do
+            sleep 10
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$ENV_URL/api/health" || echo "000")
+            echo "Attempt $i: HTTP $HTTP_CODE"
 
-          # Check health endpoint
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$ENV_URL/api/health" || echo "000")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ Health check passed"
-          else
-            echo "⚠ Health check returned HTTP $HTTP_CODE (may still be warming up)"
-          fi
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✓ Health check passed"
+              exit 0
+            fi
+          done
+
+          echo "ERROR: Health check failed after 6 attempts"
+          exit 1
 
       - name: Update release with deployment info
+        if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -150,7 +162,8 @@ jobs:
 
 ---
 **Deployed to production**: $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-**URL**: $ENV_URL"
+**URL**: $ENV_URL
+**Commit**: ${{ needs.verify.outputs.deploy_sha }}"
 
           gh release edit ${{ github.event.release.tag_name }} \
             --notes "${CURRENT_BODY}${DEPLOY_INFO}"

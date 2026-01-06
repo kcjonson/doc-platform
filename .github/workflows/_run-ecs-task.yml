@@ -33,6 +33,13 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Validate environment
+        run: |
+          if [[ ! "${{ inputs.environment }}" =~ ^(staging|production)$ ]]; then
+            echo "ERROR: environment must be 'staging' or 'production', got '${{ inputs.environment }}'"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 

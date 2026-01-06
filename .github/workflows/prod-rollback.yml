@@ -13,9 +13,9 @@ on:
         type: boolean
         default: false
 
-# Never cancel production deploys
+# Never cancel production deploys - use separate group for rollback
 concurrency:
-  group: production-deploy
+  group: production-rollback
   cancel-in-progress: false
 
 env:
@@ -49,8 +49,10 @@ jobs:
           echo "Rollback SHA: $DEPLOY_SHA"
           echo "sha=$DEPLOY_SHA" >> $GITHUB_OUTPUT
 
-      - name: Checkout
+      - name: Checkout at rollback SHA
         uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.sha }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -72,9 +74,22 @@ jobs:
             echo "✓ doc-platform/$service:$DEPLOY_SHA exists"
           done
 
+  deploy-infra:
+    name: Deploy Infrastructure
+    needs: verify
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_deploy-cdk.yml
+    with:
+      action: deploy
+      environment: production
+      image_tag: ${{ needs.verify.outputs.deploy_sha }}
+    secrets: inherit
+
   migrate:
     name: Run Migrations (optional)
-    needs: verify
+    needs: [verify, deploy-infra]
     if: inputs.run_migrations
     permissions:
       id-token: write
@@ -88,15 +103,17 @@ jobs:
 
   deploy-services:
     name: Deploy Services
-    needs: [verify, migrate]
-    if: always() && needs.verify.result == 'success' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
+    needs: [verify, deploy-infra, migrate]
+    if: always() && needs.verify.result == 'success' && needs.deploy-infra.result == 'success' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
-      - name: Checkout
+      - name: Checkout at rollback SHA
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify.outputs.deploy_sha }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -109,21 +126,28 @@ jobs:
           source .github/scripts/get-stack-outputs.sh production
           .github/scripts/deploy-services.sh
 
-      - name: Health check
+      - name: Health check with retry
         run: |
           source .github/scripts/get-stack-outputs.sh production
           echo "Checking health at $ENV_URL..."
 
-          sleep 10
+          # Retry health check up to 6 times (total ~60 seconds)
+          for i in {1..6}; do
+            sleep 10
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$ENV_URL/api/health" || echo "000")
+            echo "Attempt $i: HTTP $HTTP_CODE"
 
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$ENV_URL/api/health" || echo "000")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "✓ Health check passed"
-          else
-            echo "⚠ Health check returned HTTP $HTTP_CODE (may still be warming up)"
-          fi
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✓ Health check passed"
+              exit 0
+            fi
+          done
+
+          echo "ERROR: Health check failed after 6 attempts"
+          exit 1
 
       - name: Summary
+        if: success()
         run: |
           source .github/scripts/get-stack-outputs.sh production
           echo "## Rollback Complete" >> $GITHUB_STEP_SUMMARY
