@@ -26,6 +26,7 @@ COPY shared/models/package.json ./shared/models/
 COPY shared/router/package.json ./shared/router/
 COPY shared/fetch/package.json ./shared/fetch/
 COPY shared/telemetry/package.json ./shared/telemetry/
+COPY shared/pages/package.json ./shared/pages/
 COPY web/package.json ./web/
 COPY ssg/package.json ./ssg/
 

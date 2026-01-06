@@ -1,0 +1,33 @@
+{
+	"name": "@doc-platform/pages",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"main": "./index.ts",
+	"types": "./index.ts",
+	"scripts": {
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"test": "vitest run"
+	},
+	"devDependencies": {
+		"vitest": "^2.1.9"
+	},
+	"dependencies": {
+		"@doc-platform/fetch": "workspace:*",
+		"@doc-platform/models": "workspace:*",
+		"@doc-platform/router": "workspace:*",
+		"@doc-platform/telemetry": "workspace:*",
+		"@doc-platform/ui": "workspace:*",
+		"is-hotkey": "^0.2.0",
+		"preact": "^10.25.4",
+		"remark-gfm": "^4.0.1",
+		"remark-parse": "^11.0.0",
+		"remark-slate-transformer": "^0.9.0",
+		"remark-stringify": "^11.0.0",
+		"slate": "^0.120.0",
+		"slate-history": "^0.113.1",
+		"slate-react": "^0.120.0",
+		"unified": "^11.0.5"
+	}
+}
