@@ -93,6 +93,10 @@ export function EpicCard({
 				)}
 			</div>
 
+			{epic.description && (
+				<p class={styles.description}>{epic.description}</p>
+			)}
+
 			{taskStats.total > 0 && (
 				<div class={styles.progress}>
 					<div class={styles.progressBar}>
@@ -108,9 +112,7 @@ export function EpicCard({
 			)}
 
 			<div class={styles.footer}>
-				<span class={styles.id}>#{epic.id}</span>
-				<span>·</span>
-				<span>Updated {formatTimeAgo(epic.updatedAt)}</span>
+				Updated {formatTimeAgo(epic.updatedAt)}
 			</div>
 		</div>
 	);
