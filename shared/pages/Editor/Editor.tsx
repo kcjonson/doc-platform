@@ -59,6 +59,20 @@ function saveSelectedFile(projectId: string, filePath: string | null): void {
 	}
 }
 
+/**
+ * Migrate cached localStorage content from one file path to another.
+ * Used when renaming files to preserve unsaved edits.
+ */
+function migrateLocalStorageContent(projectId: string, oldPath: string, newPath: string): void {
+	if (hasPersistedContent(projectId, oldPath)) {
+		const cached = loadFromLocalStorage(projectId, oldPath);
+		if (cached) {
+			saveToLocalStorage(projectId, newPath, cached);
+		}
+		clearLocalStorage(projectId, oldPath);
+	}
+}
+
 export function Editor(props: RouteProps): JSX.Element {
 	const projectId = props.params.projectId || 'demo';
 
@@ -129,16 +143,7 @@ export function Editor(props: RouteProps): JSX.Element {
 	const handleFileRenamed = useCallback((oldPath: string, newPath: string) => {
 		// If the renamed file is the currently open file, update the model
 		if (documentModel.filePath === oldPath) {
-			// Move cached changes to new path
-			if (hasPersistedContent(projectId, oldPath)) {
-				const cached = loadFromLocalStorage(projectId, oldPath);
-				if (cached) {
-					saveToLocalStorage(projectId, newPath, cached);
-				}
-				clearLocalStorage(projectId, oldPath);
-			}
-
-			// Update selected file in localStorage
+			migrateLocalStorageContent(projectId, oldPath, newPath);
 			saveSelectedFile(projectId, newPath);
 
 			// Update document model with new path and title
@@ -294,24 +299,23 @@ export function Editor(props: RouteProps): JSX.Element {
 		try {
 			const newPath = await renameFileRef.current(oldPath, newFilename);
 
-			// Update localStorage - move cached changes to new path
-			if (hasPersistedContent(projectId, oldPath)) {
-				const cached = loadFromLocalStorage(projectId, oldPath);
-				if (cached) {
-					saveToLocalStorage(projectId, newPath, cached);
-				}
-				clearLocalStorage(projectId, oldPath);
-			}
-
-			// Update selected file in localStorage
+			migrateLocalStorageContent(projectId, oldPath, newPath);
 			saveSelectedFile(projectId, newPath);
 
 			// Update document model with new path and title
 			documentModel.filePath = newPath;
 			documentModel.title = newPath.split('/').pop() || 'Untitled';
 		} catch (err) {
-			console.error('Failed to rename file:', err);
-			// Could show error UI here
+			const error = err instanceof Error ? err : new Error(String(err));
+			captureError(error, {
+				type: 'file_rename_error',
+				filePath: oldPath,
+				newFilename,
+				projectId,
+			});
+			// Show user-friendly error - using alert for simplicity
+			// (File operations typically succeed, so a dedicated UI component isn't warranted)
+			alert(`Failed to rename file: ${error.message}`);
 		}
 	}, [projectId, documentModel]);
 

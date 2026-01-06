@@ -10,6 +10,22 @@ import { prop } from './prop';
 import { fetchClient } from '@doc-platform/fetch';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Ensure filename has a markdown extension (.md or .mdx).
+ * Adds .md if no extension is present.
+ */
+function ensureMarkdownExtension(filename: string): string {
+	const trimmed = filename.trim();
+	if (trimmed.endsWith('.md') || trimmed.endsWith('.mdx')) {
+		return trimmed;
+	}
+	return `${trimmed}.md`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -330,13 +346,7 @@ export class FileTreeModel extends Model {
 		}
 
 		const { parentPath } = this.pendingNewFile;
-		let finalName = filename.trim();
-
-		// Auto-add .md extension if not present
-		if (!finalName.endsWith('.md') && !finalName.endsWith('.mdx')) {
-			finalName = finalName + '.md';
-		}
-
+		const finalName = ensureMarkdownExtension(filename);
 		const fullPath = `${parentPath}/${finalName}`;
 
 		try {
@@ -372,8 +382,13 @@ export class FileTreeModel extends Model {
 	 */
 	startRename(path: string): void {
 		const file = this.files.find((f) => f.path === path);
-		if (!file || file.type === 'directory') {
-			return; // Only rename files, not directories
+		if (!file) {
+			this.error = 'File not found';
+			return;
+		}
+		if (file.type === 'directory') {
+			this.error = 'Renaming directories is not supported';
+			return;
 		}
 
 		this.pendingRename = {
@@ -393,12 +408,7 @@ export class FileTreeModel extends Model {
 		}
 
 		const { path: oldPath } = this.pendingRename;
-		let finalName = newFilename.trim();
-
-		// Auto-add .md extension if not present
-		if (!finalName.endsWith('.md') && !finalName.endsWith('.mdx')) {
-			finalName = finalName + '.md';
-		}
+		const finalName = ensureMarkdownExtension(newFilename);
 
 		// Get parent directory
 		const lastSlash = oldPath.lastIndexOf('/');

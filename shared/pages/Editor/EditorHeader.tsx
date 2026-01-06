@@ -74,12 +74,12 @@ export function EditorHeader({
 	};
 
 	const handleBlur = (): void => {
-		// Small delay to allow click events to fire first
+		// Delay to allow click events to fire first (200ms handles slower devices)
 		setTimeout(() => {
 			if (isEditing) {
 				handleSubmit();
 			}
-		}, 100);
+		}, 200);
 	};
 
 	return (
@@ -94,6 +94,7 @@ export function EditorHeader({
 						onInput={(e) => setEditTitle((e.target as HTMLInputElement).value)}
 						onKeyDown={handleKeyDown}
 						onBlur={handleBlur}
+						aria-label="Rename file"
 					/>
 				) : (
 					<>

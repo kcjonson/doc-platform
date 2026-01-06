@@ -280,8 +280,8 @@ export async function handleCreateFile(context: Context, redis: Redis): Promise<
 			return context.json({ error: 'File already exists', code: 'FILE_EXISTS' }, 409);
 		}
 
-		// Create file with empty content (single paragraph)
-		await provider.writeFile(filePath, '\n');
+		// Create file with default markdown heading
+		await provider.writeFile(filePath, '# Untitled\n\n');
 
 		return context.json({
 			path: filePath,
@@ -354,13 +354,26 @@ export async function handleRenameFile(context: Context, redis: Redis): Promise<
 			return context.json({ error: 'A file with that name already exists', code: 'FILE_EXISTS' }, 409);
 		}
 
+		// Rename file first
 		await provider.rename(oldPath, newPath);
 
 		// Update any epics that link to this file
-		await query(
-			`UPDATE epics SET spec_doc_path = $1 WHERE project_id = $2 AND spec_doc_path = $3`,
-			[newPath, projectId, oldPath]
-		);
+		// If this fails, rollback the file rename to maintain consistency
+		try {
+			await query(
+				`UPDATE epics SET spec_doc_path = $1 WHERE project_id = $2 AND spec_doc_path = $3`,
+				[newPath, projectId, oldPath]
+			);
+		} catch (dbError) {
+			// Rollback file rename
+			console.error('Epic update failed, rolling back file rename:', dbError);
+			try {
+				await provider.rename(newPath, oldPath);
+			} catch (rollbackError) {
+				console.error('Rollback failed:', rollbackError);
+			}
+			return context.json({ error: 'Failed to update epic references' }, 500);
+		}
 
 		return context.json({
 			oldPath,

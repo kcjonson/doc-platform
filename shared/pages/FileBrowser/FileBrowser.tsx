@@ -5,6 +5,22 @@ import { Button } from '@doc-platform/ui';
 import { fetchClient } from '@doc-platform/fetch';
 import styles from './FileBrowser.module.css';
 
+// Timing constants for blur handlers and rename interactions
+const BLUR_SUBMIT_DELAY_MS = 200; // Delay before blur triggers submit (allows clicks to fire first)
+const RENAME_START_GRACE_PERIOD_MS = 200; // Ignore blur events within this time after rename starts
+
+/**
+ * Ensure filename has a markdown extension (.md or .mdx).
+ * Adds .md if no extension is present.
+ */
+function ensureMarkdownExtension(filename: string): string {
+	const trimmed = filename.trim();
+	if (trimmed.endsWith('.md') || trimmed.endsWith('.mdx')) {
+		return trimmed;
+	}
+	return `${trimmed}.md`;
+}
+
 interface ProjectStorage {
 	storageMode: 'local' | 'cloud';
 	repository: {
@@ -87,13 +103,7 @@ export function FileBrowser({
 		// Get parent directory from path
 		const lastSlash = path.lastIndexOf('/');
 		const parentPath = lastSlash > 0 ? path.slice(0, lastSlash) : '/';
-		let finalName = newFilename.trim();
-
-		// Auto-add .md extension if not present
-		if (!finalName.endsWith('.md') && !finalName.endsWith('.mdx')) {
-			finalName = finalName + '.md';
-		}
-
+		const finalName = ensureMarkdownExtension(newFilename);
 		const newPath = `${parentPath}/${finalName}`;
 
 		// If name unchanged, just return
@@ -189,12 +199,12 @@ export function FileBrowser({
 
 	// Handle new file input blur
 	const handleNewFileBlur = (): void => {
-		// Small delay to allow click events to fire first
+		// Delay to allow click events to fire first
 		setTimeout(() => {
 			if (model.pendingNewFile) {
 				handleNewFileSubmit();
 			}
-		}, 100);
+		}, BLUR_SUBMIT_DELAY_MS);
 	};
 
 	// Handle rename submit
@@ -232,10 +242,10 @@ export function FileBrowser({
 
 	// Handle rename input blur
 	const handleRenameBlur = (): void => {
-		// Ignore blur if rename just started (within 200ms) - this prevents
-		// the double-click events from immediately closing the input
+		// Ignore blur if rename just started - this prevents the double-click
+		// events from immediately closing the input
 		const timeSinceStart = Date.now() - renameStartTimeRef.current;
-		if (timeSinceStart < 200) {
+		if (timeSinceStart < RENAME_START_GRACE_PERIOD_MS) {
 			// Re-focus the input
 			requestAnimationFrame(() => {
 				renameInputRef.current?.focus();
@@ -243,12 +253,12 @@ export function FileBrowser({
 			return;
 		}
 
-		// Small delay to allow click events to fire first
+		// Delay to allow click events to fire first
 		setTimeout(() => {
 			if (model.pendingRename) {
 				handleRenameSubmit();
 			}
-		}, 100);
+		}, BLUR_SUBMIT_DELAY_MS);
 	};
 
 	// Handle double-click on file to start rename
@@ -331,6 +341,7 @@ export function FileBrowser({
 					onKeyDown={handleNewFileKeyDown}
 					onBlur={handleNewFileBlur}
 					placeholder="filename.md"
+					aria-label="New file name"
 				/>
 			</div>
 		);
@@ -403,6 +414,7 @@ export function FileBrowser({
 											onKeyDown={handleRenameKeyDown}
 											onBlur={handleRenameBlur}
 											placeholder="filename.md"
+											aria-label="Rename file"
 										/>
 									) : (
 										<span class={styles.fileName}>{file.name}</span>
