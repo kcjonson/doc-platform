@@ -8,13 +8,13 @@
 .body {
 	flex: 1;
 	display: flex;
-	overflow: hidden;
+	min-height: 0;
 }
 
 .sidebar {
 	width: 240px;
 	flex-shrink: 0;
-	height: 100%;
+	align-self: stretch;
 }
 
 .main {
