@@ -8,6 +8,20 @@ import { prop } from './prop';
  */
 export type SlateContent = unknown[];
 
+/**
+ * Comment type for document comments.
+ * Matches the Comment interface from MarkdownEditor.
+ */
+export interface DocumentComment {
+	id: string;
+	text: string;
+	author: string;
+	authorEmail: string;
+	timestamp: string;
+	resolved: boolean;
+	replies: DocumentComment[];
+}
+
 /** Empty document content */
 export const EMPTY_DOCUMENT: SlateContent = [
 	{ type: 'paragraph', children: [{ text: '' }] }
@@ -55,12 +69,19 @@ export class DocumentModel extends Model {
 	/** Whether the document has unsaved changes */
 	@prop accessor dirty: boolean = false;
 
+	/** Comments attached to the document */
+	@prop accessor comments: DocumentComment[] = [];
+
+	/** Last saved comments snapshot for dirty comparison */
+	@prop accessor savedComments: DocumentComment[] = [];
+
 	/**
 	 * Check if current content differs from saved content.
 	 * Uses JSON comparison for deep equality.
 	 */
 	get isDirty(): boolean {
-		return JSON.stringify(this.content) !== JSON.stringify(this.savedContent);
+		return JSON.stringify(this.content) !== JSON.stringify(this.savedContent) ||
+			JSON.stringify(this.comments) !== JSON.stringify(this.savedComments);
 	}
 
 	/**
@@ -72,12 +93,13 @@ export class DocumentModel extends Model {
 	 * @param content - Slate AST content
 	 * @param options - Optional settings
 	 * @param options.dirty - Mark document as dirty (e.g., when restoring unsaved changes)
+	 * @param options.comments - Comments attached to the document
 	 */
 	loadDocument(
 		projectId: string,
 		filePath: string,
 		content: SlateContent,
-		options?: { dirty?: boolean }
+		options?: { dirty?: boolean; comments?: DocumentComment[] }
 	): void {
 		this.documentId = crypto.randomUUID();
 		this.projectId = projectId;
@@ -85,6 +107,8 @@ export class DocumentModel extends Model {
 		this.title = filePath.split('/').pop() || 'Untitled';
 		this.content = content;
 		this.savedContent = options?.dirty ? EMPTY_DOCUMENT : deepClone(content);
+		this.comments = options?.comments ?? [];
+		this.savedComments = options?.dirty ? [] : deepClone(this.comments);
 		this.dirty = options?.dirty ?? false;
 	}
 
@@ -94,6 +118,7 @@ export class DocumentModel extends Model {
 	 */
 	markSaved(): void {
 		this.savedContent = deepClone(this.content);
+		this.savedComments = deepClone(this.comments);
 		this.dirty = false;
 	}
 
@@ -107,6 +132,48 @@ export class DocumentModel extends Model {
 		this.title = 'Untitled';
 		this.content = EMPTY_DOCUMENT;
 		this.savedContent = EMPTY_DOCUMENT;
+		this.comments = [];
+		this.savedComments = [];
 		this.dirty = false;
+	}
+
+	/**
+	 * Add a new comment to the document.
+	 */
+	addComment(comment: DocumentComment): void {
+		this.comments = [...this.comments, comment];
+		this.dirty = true;
+	}
+
+	/**
+	 * Update an existing comment.
+	 */
+	updateComment(commentId: string, updates: Partial<DocumentComment>): void {
+		this.comments = this.comments.map(c =>
+			c.id === commentId ? { ...c, ...updates } : c
+		);
+		this.dirty = true;
+	}
+
+	/**
+	 * Add a reply to a comment.
+	 */
+	addReply(commentId: string, reply: DocumentComment): void {
+		this.comments = this.comments.map(c =>
+			c.id === commentId
+				? { ...c, replies: [...c.replies, reply] }
+				: c
+		);
+		this.dirty = true;
+	}
+
+	/**
+	 * Toggle the resolved status of a comment.
+	 */
+	toggleResolved(commentId: string): void {
+		this.comments = this.comments.map(c =>
+			c.id === commentId ? { ...c, resolved: !c.resolved } : c
+		);
+		this.dirty = true;
 	}
 }

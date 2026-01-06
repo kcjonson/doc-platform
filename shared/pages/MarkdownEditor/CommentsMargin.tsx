@@ -9,6 +9,12 @@ export interface CommentPosition {
 	top: number;
 }
 
+/** Represents a pending new comment being created */
+export interface PendingComment {
+	/** Approximate top position for the input form */
+	top: number;
+}
+
 export interface CommentsMarginProps {
 	/** Comments to display */
 	comments: Comment[];
@@ -18,6 +24,16 @@ export interface CommentsMarginProps {
 	activeCommentId?: string;
 	/** Called when a comment is clicked */
 	onCommentClick?: (commentId: string) => void;
+	/** Called when user submits a reply to a comment */
+	onReply?: (commentId: string, replyText: string) => void;
+	/** Called when user toggles resolved status */
+	onToggleResolved?: (commentId: string) => void;
+	/** Pending new comment (shows input form) */
+	pendingComment?: PendingComment;
+	/** Called when user submits a new comment */
+	onSubmitNewComment?: (text: string) => void;
+	/** Called when user cancels new comment */
+	onCancelNewComment?: () => void;
 }
 
 /**
@@ -29,10 +45,17 @@ export function CommentsMargin({
 	editorRef,
 	activeCommentId,
 	onCommentClick,
+	onReply,
+	onToggleResolved,
+	pendingComment,
+	onSubmitNewComment,
+	onCancelNewComment,
 }: CommentsMarginProps): JSX.Element {
 	const [positions, setPositions] = useState<CommentPosition[]>([]);
+	const [newCommentText, setNewCommentText] = useState('');
 	const containerRef = useRef<HTMLDivElement>(null);
 	const rafIdRef = useRef<number>(0);
+	const newCommentInputRef = useRef<HTMLTextAreaElement>(null);
 
 	// Calculate positions for each comment based on highlighted text positions
 	useEffect(() => {
@@ -124,8 +147,71 @@ export function CommentsMargin({
 		}
 	}
 
+	// Focus input when pending comment appears
+	useEffect(() => {
+		if (pendingComment && newCommentInputRef.current) {
+			newCommentInputRef.current.focus();
+		}
+	}, [pendingComment]);
+
+	// Reset text when pending comment is cancelled
+	useEffect(() => {
+		if (!pendingComment) {
+			setNewCommentText('');
+		}
+	}, [pendingComment]);
+
+	function handleNewCommentSubmit(e: Event): void {
+		e.preventDefault();
+		if (newCommentText.trim() && onSubmitNewComment) {
+			onSubmitNewComment(newCommentText.trim());
+			setNewCommentText('');
+		}
+	}
+
+	function handleNewCommentKeyDown(e: KeyboardEvent): void {
+		if (e.key === 'Escape' && onCancelNewComment) {
+			onCancelNewComment();
+		}
+	}
+
 	return (
 		<div ref={containerRef} class={styles.container}>
+			{/* Pending new comment input */}
+			{pendingComment && (
+				<div class={styles.newCommentContainer} style={{ top: `${pendingComment.top}px` }}>
+					<div class={styles.connector} />
+					<form onSubmit={handleNewCommentSubmit} class={styles.newCommentForm}>
+						<textarea
+							ref={newCommentInputRef}
+							class={styles.newCommentInput}
+							placeholder="Add a comment..."
+							value={newCommentText}
+							onInput={(e) => setNewCommentText((e.target as HTMLTextAreaElement).value)}
+							onKeyDown={handleNewCommentKeyDown}
+							rows={3}
+						/>
+						<div class={styles.newCommentActions}>
+							<button
+								type="button"
+								class={styles.cancelButton}
+								onClick={onCancelNewComment}
+							>
+								Cancel
+							</button>
+							<button
+								type="submit"
+								class={styles.submitButton}
+								disabled={!newCommentText.trim()}
+							>
+								Comment
+							</button>
+						</div>
+					</form>
+				</div>
+			)}
+
+			{/* Existing comments */}
 			{comments.map(comment => {
 				const position = positions.find(p => p.commentId === comment.id);
 				if (!position) return null;
@@ -137,6 +223,8 @@ export function CommentsMargin({
 						top={position.top}
 						isActive={activeCommentId === comment.id}
 						onClick={() => handleCommentClick(comment.id)}
+						onReply={onReply}
+						onToggleResolved={onToggleResolved}
 					/>
 				);
 			})}

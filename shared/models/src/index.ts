@@ -33,7 +33,7 @@ export type { Status, TaskStats } from './planning';
 
 // Document models
 export { DocumentModel, EMPTY_DOCUMENT } from './DocumentModel';
-export type { SlateContent } from './DocumentModel';
+export type { SlateContent, DocumentComment } from './DocumentModel';
 
 // Document persistence (localStorage crash recovery)
 export {

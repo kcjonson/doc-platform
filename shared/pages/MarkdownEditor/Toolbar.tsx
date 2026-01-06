@@ -8,6 +8,10 @@ export interface ToolbarProps {
 	isBlockActive: (block: string) => boolean;
 	toggleMark: (mark: MarkType) => void;
 	toggleBlock: (block: string) => void;
+	/** Called when user wants to add a comment (has text selected) */
+	onAddComment?: () => void;
+	/** Whether add comment is enabled (text is selected) */
+	canAddComment?: boolean;
 }
 
 interface MarkButtonProps {
@@ -60,7 +64,17 @@ function BlockButton({ format, icon, title, ariaLabel, isActive, toggle }: Block
 	);
 }
 
-export function Toolbar({ isMarkActive, isBlockActive, toggleMark, toggleBlock }: ToolbarProps): JSX.Element {
+export function Toolbar({
+	isMarkActive,
+	isBlockActive,
+	toggleMark,
+	toggleBlock,
+	onAddComment,
+	canAddComment = false,
+}: ToolbarProps): JSX.Element {
+	// Access editor context for re-renders on selection change
+	useSlate();
+
 	return (
 		<ToolbarContainer ariaLabel="Formatting options">
 			<ToolbarGroup ariaLabel="Text formatting">
@@ -80,6 +94,22 @@ export function Toolbar({ isMarkActive, isBlockActive, toggleMark, toggleBlock }
 				<BlockButton format="bulleted-list" icon="•" title="Bulleted List" ariaLabel="Bulleted list" isActive={isBlockActive} toggle={toggleBlock} />
 				<BlockButton format="numbered-list" icon="1." title="Numbered List" ariaLabel="Numbered list" isActive={isBlockActive} toggle={toggleBlock} />
 			</ToolbarGroup>
+			{onAddComment && (
+				<>
+					<ToolbarSeparator />
+					<ToolbarGroup ariaLabel="Comments">
+						<ToolbarButton
+							active={false}
+							disabled={!canAddComment}
+							onAction={onAddComment}
+							title="Add Comment (Ctrl+Shift+M)"
+							ariaLabel="Add comment"
+						>
+							💬
+						</ToolbarButton>
+					</ToolbarGroup>
+				</>
+			)}
 		</ToolbarContainer>
 	);
 }

@@ -10,7 +10,8 @@ import remarkStringify from 'remark-stringify';
 import remarkGfm from 'remark-gfm';
 import type { Descendant } from 'slate';
 import type { Root, RootContent, PhrasingContent, TableContent, RowContent } from 'mdast';
-import type { CustomElement, CustomText } from '../types';
+import type { CustomElement, CustomText, Comment, CommentWithRange } from '../types';
+import { appendCommentsToMarkdown, calculateCommentRange } from './comments';
 
 /**
  * Convert a Slate text node to mdast phrasing content.
@@ -221,12 +222,137 @@ function slateToMdastTree(content: Descendant[]): Root {
 }
 
 /**
+ * Track comment positions while extracting text from Slate tree.
+ * Used to calculate line/column ranges for comment anchors.
+ */
+interface CommentAnchor {
+	commentId: string;
+	startOffset: number;
+	endOffset: number;
+	text: string;
+}
+
+/**
+ * Extract plain text from Slate tree, tracking comment positions.
+ * Returns the plain text and an array of comment anchors with their offsets.
+ */
+function extractTextWithComments(content: Descendant[]): {
+	text: string;
+	anchors: CommentAnchor[];
+} {
+	let text = '';
+	const anchors: CommentAnchor[] = [];
+	const activeComments = new Map<string, { startOffset: number; text: string }>();
+
+	function walk(nodes: Descendant[]): void {
+		for (const node of nodes) {
+			if ('text' in node) {
+				const textNode = node as CustomText;
+				const startOffset = text.length;
+
+				if (textNode.commentId) {
+					// Track start of commented text
+					if (!activeComments.has(textNode.commentId)) {
+						activeComments.set(textNode.commentId, {
+							startOffset,
+							text: '',
+						});
+					}
+					const anchor = activeComments.get(textNode.commentId)!;
+					anchor.text += textNode.text;
+				}
+
+				text += textNode.text;
+
+				// Check if this ends a comment (next node doesn't have same commentId)
+				if (textNode.commentId) {
+					const endOffset = text.length;
+					// We'll finalize anchors after walking
+				}
+			} else if ('children' in node) {
+				const element = node as CustomElement;
+
+				// Add appropriate whitespace/newlines for block elements
+				if (element.type === 'paragraph' || element.type === 'heading') {
+					if (text.length > 0 && !text.endsWith('\n')) {
+						text += '\n';
+					}
+				}
+
+				walk(element.children);
+
+				if (element.type === 'paragraph' || element.type === 'heading') {
+					text += '\n';
+				}
+			}
+		}
+	}
+
+	walk(content);
+
+	// Finalize all anchors
+	for (const [commentId, anchor] of activeComments) {
+		anchors.push({
+			commentId,
+			startOffset: anchor.startOffset,
+			endOffset: anchor.startOffset + anchor.text.length,
+			text: anchor.text,
+		});
+	}
+
+	return { text, anchors };
+}
+
+/**
+ * Build CommentWithRange array from comments and markdown text.
+ */
+function buildCommentsWithRanges(
+	comments: Comment[],
+	markdown: string,
+	content: Descendant[]
+): CommentWithRange[] {
+	// Extract comment positions from Slate content
+	const { anchors } = extractTextWithComments(content);
+
+	// Map comment IDs to anchors
+	const anchorMap = new Map<string, CommentAnchor>();
+	for (const anchor of anchors) {
+		anchorMap.set(anchor.commentId, anchor);
+	}
+
+	// Build CommentWithRange for each comment
+	return comments.map((comment): CommentWithRange => {
+		const anchor = anchorMap.get(comment.id);
+
+		if (anchor) {
+			// Calculate range in markdown text
+			// Note: This is approximate since markdown formatting affects positions
+			// We use the anchor text for reliable matching when loading
+			const range = calculateCommentRange(markdown, anchor.startOffset, anchor.endOffset);
+			return {
+				...comment,
+				range,
+				anchorText: anchor.text,
+			};
+		}
+
+		// Comment without anchor (orphaned) - use placeholder range
+		return {
+			...comment,
+			range: { startLine: 1, startColumn: 1, endLine: 1, endColumn: 1 },
+			anchorText: '',
+		};
+	});
+}
+
+/**
  * Serialize Slate AST to markdown string.
  *
  * @param content - The Slate Descendant[] array
- * @returns Markdown string
+ * @param comments - Optional array of comments to include in footer
+ * @returns Markdown string (with comments footer if comments provided)
  */
-export function toMarkdown(content: Descendant[]): string {
+export function toMarkdown(content: Descendant[], comments?: Comment[]): string {
 	if (!content || content.length === 0) {
 		return '';
 	}
@@ -248,7 +374,15 @@ export function toMarkdown(content: Descendant[]): string {
 				rule: '-',
 			});
 
-		return processor.stringify(mdast);
+		let markdown = processor.stringify(mdast);
+
+		// Append comments footer if there are comments
+		if (comments && comments.length > 0) {
+			const commentsWithRanges = buildCommentsWithRanges(comments, markdown, content);
+			markdown = appendCommentsToMarkdown(markdown, commentsWithRanges);
+		}
+
+		return markdown;
 	} catch (error) {
 		// Log enough context to diagnose serialization issues
 		const nodeTypes = content.slice(0, 5).map(n => (n as { type?: string }).type || 'unknown');

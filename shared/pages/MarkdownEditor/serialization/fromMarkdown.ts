@@ -7,7 +7,8 @@ import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import { remarkToSlate } from 'remark-slate-transformer';
 import type { Descendant } from 'slate';
-import type { CustomElement } from '../types';
+import type { CustomElement, CustomText, Comment, CommentWithRange } from '../types';
+import { parseCommentsFromMarkdown, stripRanges } from './comments';
 
 // Default empty document
 const EMPTY_DOCUMENT: Descendant[] = [
@@ -215,23 +216,128 @@ function normalizeTree(nodes: unknown[]): Descendant[] {
 }
 
 /**
- * Parse markdown string to Slate AST.
- *
- * @param markdown - The markdown string to parse
- * @returns Slate Descendant[] array
+ * Extract all text content from a Slate tree.
  */
-export function fromMarkdown(markdown: string): Descendant[] {
+function extractText(nodes: Descendant[]): string {
+	let text = '';
+	for (const node of nodes) {
+		if ('text' in node) {
+			text += (node as CustomText).text;
+		} else if ('children' in node) {
+			text += extractText((node as CustomElement).children);
+		}
+	}
+	return text;
+}
+
+/**
+ * Apply comment marks to the Slate tree by matching anchor text.
+ * This mutates the tree in place.
+ */
+function applyCommentMarks(
+	nodes: Descendant[],
+	comments: CommentWithRange[]
+): void {
+	if (comments.length === 0) return;
+
+	// Build a map of anchor text -> comment ID for quick lookup
+	const anchorMap = new Map<string, string>();
+	for (const comment of comments) {
+		if (comment.anchorText) {
+			anchorMap.set(comment.anchorText, comment.id);
+		}
+	}
+
+	// Walk the tree and look for text that matches comment anchors
+	function walkAndMark(nodes: Descendant[]): void {
+		for (let i = 0; i < nodes.length; i++) {
+			const node = nodes[i];
+			if (!node) continue;
+
+			if ('text' in node) {
+				const textNode = node as CustomText;
+				// Check if this text node's content matches any anchor
+				for (const [anchorText, commentId] of anchorMap) {
+					if (textNode.text === anchorText) {
+						// Exact match - apply the comment mark
+						textNode.commentId = commentId;
+						anchorMap.delete(anchorText); // Each comment only matches once
+						break;
+					} else if (textNode.text.includes(anchorText)) {
+						// Partial match - need to split the text node
+						const idx = textNode.text.indexOf(anchorText);
+						const before = textNode.text.slice(0, idx);
+						const match = anchorText;
+						const after = textNode.text.slice(idx + match.length);
+
+						// Build new nodes
+						const newNodes: CustomText[] = [];
+						if (before) {
+							newNodes.push({ ...textNode, text: before, commentId: undefined });
+						}
+						newNodes.push({ ...textNode, text: match, commentId: commentId });
+						if (after) {
+							newNodes.push({ ...textNode, text: after, commentId: undefined });
+						}
+
+						// Replace the current node with the new nodes
+						nodes.splice(i, 1, ...newNodes);
+						anchorMap.delete(anchorText);
+						i += newNodes.length - 1; // Adjust index
+						break;
+					}
+				}
+			} else if ('children' in node) {
+				// Check if concatenated children text matches any anchor
+				const element = node as CustomElement;
+				const fullText = extractText(element.children);
+
+				for (const [anchorText, commentId] of anchorMap) {
+					if (fullText.includes(anchorText)) {
+						// The anchor text spans across this element's children
+						// Recurse into children to apply marks
+						walkAndMark(element.children);
+						break;
+					}
+				}
+
+				// Always recurse to handle nested comments
+				walkAndMark(element.children);
+			}
+		}
+	}
+
+	walkAndMark(nodes);
+}
+
+/** Result of parsing markdown with comments */
+export interface ParseResult {
+	content: Descendant[];
+	comments: Comment[];
+}
+
+/**
+ * Parse markdown string to Slate AST, extracting comments from footer.
+ *
+ * @param markdown - The markdown string to parse (may include comments footer)
+ * @returns Object with Slate content and comments array
+ */
+export function fromMarkdown(markdown: string): ParseResult {
 	if (!markdown || markdown.trim() === '') {
-		return EMPTY_DOCUMENT;
+		return { content: EMPTY_DOCUMENT, comments: [] };
 	}
 
 	try {
+		// Parse comments from footer first
+		const { content: contentMarkdown, comments: commentsWithRanges } =
+			parseCommentsFromMarkdown(markdown);
+
 		const processor = unified()
 			.use(remarkParse)
 			.use(remarkGfm)
 			.use(remarkToSlate);
 
-		const result = processor.processSync(markdown);
+		const result = processor.processSync(contentMarkdown);
 		const slateNodes = result.result as unknown[];
 
 		// Normalize the output to match our custom types
@@ -239,14 +345,20 @@ export function fromMarkdown(markdown: string): Descendant[] {
 
 		// Ensure we have at least one node
 		if (normalized.length === 0) {
-			return EMPTY_DOCUMENT;
+			return { content: EMPTY_DOCUMENT, comments: stripRanges(commentsWithRanges) };
 		}
 
-		return normalized;
+		// Apply comment marks to the Slate tree
+		applyCommentMarks(normalized, commentsWithRanges);
+
+		// Strip ranges from comments for UI use
+		const comments = stripRanges(commentsWithRanges);
+
+		return { content: normalized, comments };
 	} catch (error) {
 		// Log enough context to diagnose parsing issues
 		const preview = markdown.length > 200 ? markdown.slice(0, 200) + '...' : markdown;
 		console.error('Failed to parse markdown:', error, { preview });
-		return EMPTY_DOCUMENT;
+		return { content: EMPTY_DOCUMENT, comments: [] };
 	}
 }
