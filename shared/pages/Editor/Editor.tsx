@@ -68,9 +68,11 @@ export function Editor(props: RouteProps): JSX.Element {
 	const documentModel = useMemo(() => new DocumentModel(), []);
 
 	// Current user model - for comment author info
+	// SyncModel auto-fetches from /api/users/me when given id='me'.
+	// If not authenticated, fetch fails and we fall back to "Anonymous" in getCommentAuthor.
 	const currentUser = useMemo(() => new UserModel({ id: 'me' }), []);
 
-	// Subscribe to model changes
+	// Subscribe to model changes - this re-renders when user data loads
 	useModel(documentModel);
 	useModel(currentUser);
 
