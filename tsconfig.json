@@ -20,6 +20,7 @@
 		"baseUrl": ".",
 		"paths": {
 			"@doc-platform/core": ["./shared/core/src"],
+			"@doc-platform/core/*": ["./shared/core/src/*"],
 			"@doc-platform/ui": ["./shared/ui/src"],
 			"@doc-platform/platform": ["./shared/platform/src"],
 			"@doc-platform/platform-electron": ["./shared/platform-electron/src"],
