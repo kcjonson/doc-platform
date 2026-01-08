@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2026-01-06 (Implemented page comments feature)
+Last Updated: 2026-01-08 (Planning AI Chat Sidebar feature)
 
 ## Epic/Story/Task Template
 
@@ -185,6 +185,35 @@ Use this template for all work items:
   - [x] Display validation errors (not git repo, different repo)
   - [x] File tree display with expand/collapse
   - [x] Remove folder button on root items
+
+---
+
+### AI Chat Sidebar
+**Spec/Documentation:** `.claude/plans/ai-chat-sidebar.md`
+**Dependencies:** Markdown Editor, Authentication System
+**Status:** in progress
+
+**Goal:** Add AI chat sidebar to document editor using user's own Anthropic API key.
+
+**Tasks:**
+- [ ] Database & Encryption
+  - [ ] Create AES-256-GCM encryption utilities in @doc-platform/auth
+  - [ ] Database migration for user_api_keys table
+  - [ ] Add UserApiKey type to shared/db
+- [ ] Backend API
+  - [ ] API key CRUD endpoints (list, create, delete, validate)
+  - [ ] Chat streaming endpoint with SSE
+  - [ ] Install Anthropic SDK
+- [ ] Settings UI
+  - [ ] ApiKeys component (list, add dialog, delete)
+  - [ ] Integrate into UserSettings page
+- [ ] Chat Sidebar
+  - [ ] ChatSidebar component with message list and input
+  - [ ] ChatMessage component with streaming support
+  - [ ] Integrate into Editor with toggle button
+- [ ] Environment & Deployment
+  - [ ] Add API_KEY_ENCRYPTION_KEY to dev environment
+  - [ ] Add encryption key secret to CDK/Secrets Manager
 
 ---
 
