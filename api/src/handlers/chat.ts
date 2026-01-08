@@ -148,9 +148,9 @@ export async function handleChat(
 		return context.json({ error: `Document too large (max ${MAX_DOCUMENT_LENGTH} characters)` }, 400);
 	}
 
-	// Validate conversation history
-	if (rawHistory.length > MAX_HISTORY_LENGTH) {
-		return context.json({ error: `Conversation history too long (max ${MAX_HISTORY_LENGTH} messages)` }, 400);
+	// Validate conversation history (leave room for current message)
+	if (rawHistory.length >= MAX_HISTORY_LENGTH) {
+		return context.json({ error: `Conversation history too long (max ${MAX_HISTORY_LENGTH - 1} messages)` }, 400);
 	}
 
 	const conversation_history: ChatMessage[] = [];
@@ -162,6 +162,7 @@ export async function handleChat(
 	}
 
 	// Build messages array for Claude
+	// conversation_history contains previous exchanges; current message is appended
 	const systemPrompt = buildSystemPrompt(document_path, document_content);
 	const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
 		...conversation_history,

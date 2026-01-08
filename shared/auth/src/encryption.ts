@@ -42,7 +42,7 @@ export function getEncryptionKey(): Buffer {
 	}
 
 	// Validate hex characters (0-9, a-f, A-F)
-	if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) {
+	if (!/^[0-9a-f]{64}$/i.test(keyHex)) {
 		throw new Error(
 			'API_KEY_ENCRYPTION_KEY must contain only valid hex characters (0-9, a-f)'
 		);

@@ -151,9 +151,7 @@ export function ApiKeys(): JSX.Element {
 				api_key: newApiKey.trim(),
 			});
 			setApiKeys([key, ...apiKeys.filter(k => k.provider !== 'anthropic')]);
-			setShowAddDialog(false);
-			setNewKeyName('');
-			setNewApiKey('');
+			closeDialog();
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : 'Failed to add API key';
 			setAddError(message);
@@ -164,15 +162,15 @@ export function ApiKeys(): JSX.Element {
 
 	// Handle validate key
 	const handleValidate = async (): Promise<void> => {
-		if (!newApiKey.trim()) return;
+		if (!newKeyName.trim() || !newApiKey.trim()) return;
 
 		setAddError(null);
 		setValidating(true);
 		try {
-			// First add the key temporarily, then validate
+			// First add the key, then validate it
 			await fetchClient.post<ApiKey>('/api/users/me/api-keys', {
 				provider: 'anthropic',
-				key_name: newKeyName.trim() || 'Anthropic API Key',
+				key_name: newKeyName.trim(),
 				api_key: newApiKey.trim(),
 			});
 
@@ -185,12 +183,10 @@ export function ApiKeys(): JSX.Element {
 				// Remove the invalid key
 				await fetchClient.delete('/api/users/me/api-keys/anthropic');
 			} else {
-				// Reload to get the new key
+				// Reload to get the new key and close dialog with focus restoration
 				const keys = await fetchClient.get<ApiKey[]>('/api/users/me/api-keys');
 				setApiKeys(keys);
-				setShowAddDialog(false);
-				setNewKeyName('');
-				setNewApiKey('');
+				closeDialog();
 			}
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : 'Failed to validate API key';
@@ -386,7 +382,7 @@ export function ApiKeys(): JSX.Element {
 							<Button
 								onClick={handleValidate}
 								class={styles.ghostButton}
-								disabled={!newApiKey.trim() || adding || validating}
+								disabled={!newKeyName.trim() || !newApiKey.trim() || adding || validating}
 							>
 								{validating ? 'Validating...' : 'Validate & Add'}
 							</Button>

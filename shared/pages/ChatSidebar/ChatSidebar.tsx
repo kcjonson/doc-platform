@@ -1,4 +1,4 @@
-/* global TextDecoder */
+/* global TextDecoder, DOMException */
 import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Icon } from '@doc-platform/ui';
@@ -34,7 +34,7 @@ export function ChatSidebar({
 
 	// Refs for throttled streaming updates
 	const pendingContentRef = useRef('');
-	const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const flushTimeoutRef = useRef<number | null>(null);
 	const currentAssistantIdRef = useRef<string | null>(null);
 
 	// AbortController for cancelling ongoing requests
@@ -203,7 +203,10 @@ export function ChatSidebar({
 			flushPendingContent();
 		} catch (err) {
 			// Don't show error if request was aborted (user navigated away)
-			if (err instanceof Error && err.name === 'AbortError') {
+			if (
+				(err instanceof Error && err.name === 'AbortError') ||
+				(typeof DOMException !== 'undefined' && err instanceof DOMException && err.code === 20)
+			) {
 				return;
 			}
 
@@ -299,7 +302,7 @@ export function ChatSidebar({
 			</div>
 
 			{error && (
-				<div class={styles.error} role="alert">
+				<div id="chat-error" class={styles.error} role="alert">
 					{error}
 					<button
 						class={styles.dismissError}
@@ -320,7 +323,7 @@ export function ChatSidebar({
 					onInput={(e) => setInput((e.target as HTMLTextAreaElement).value)}
 					onKeyDown={handleKeyDown}
 					disabled={isStreaming}
-					rows={1}
+					rows={2}
 					aria-describedby={error ? 'chat-error' : undefined}
 					aria-invalid={!!error}
 				/>

@@ -57,6 +57,7 @@ services:
     environment:
       # Local dev encryption key for user API keys (AI chat feature)
       # Generate a real key with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+      # WARNING: Replace with your own cryptographically secure 64-hex-character key. Do NOT use this example value.
       API_KEY_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ```
 

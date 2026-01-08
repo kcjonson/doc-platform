@@ -277,9 +277,9 @@ export const RATE_LIMIT_CONFIGS = {
 		message: 'Too many authorization attempts, please try again in 15 minutes',
 	} satisfies RateLimitConfig,
 
-	/** AI Chat: 20 per minute (protect user's API credits and server resources) */
+	/** AI Chat: 40 per minute (protect user's API credits and server resources) */
 	chat: {
-		maxRequests: 20,
+		maxRequests: 40,
 		windowSeconds: 60,
 		message: 'Too many chat requests, please slow down',
 	} satisfies RateLimitConfig,
