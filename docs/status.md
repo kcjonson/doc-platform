@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2026-01-06 (Added document-epic linking feature)
+Last Updated: 2026-01-06 (Implemented page comments feature)
 
 ## Epic/Story/Task Template
 
@@ -148,13 +148,14 @@ Use this template for all work items:
 - [ ] Raw mode rendering
   - [ ] Markdown syntax highlighting
   - [ ] Cursor position preservation
-- [ ] Serialization
-  - [ ] Markdown → Slate (remark-slate)
-  - [ ] Slate → Markdown
+- [x] Serialization
+  - [x] Markdown → Slate (remark-slate)
+  - [x] Slate → Markdown
 - [x] Comment system (inline comments)
   - [x] Comment marks on text with highlighting
   - [x] Inline comments UI (Google Docs-style margin comments)
-  - [ ] Comment storage in markdown
+  - [x] Comment storage in markdown (hidden appendix format)
+  - [x] Add/reply/resolve comments UI
 
 ---
 

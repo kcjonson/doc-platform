@@ -4,16 +4,18 @@ import { navigate, type RouteProps } from '@doc-platform/router';
 import { Page, Icon } from '@doc-platform/ui';
 import {
 	DocumentModel,
+	UserModel,
 	useModel,
 	saveToLocalStorage,
 	loadFromLocalStorage,
 	hasPersistedContent,
 	clearLocalStorage,
+	type DocumentComment,
 } from '@doc-platform/models';
 import { fetchClient } from '@doc-platform/fetch';
 import { captureError } from '@doc-platform/telemetry';
 import { FileBrowser } from '../FileBrowser/FileBrowser';
-import { MarkdownEditor, mockComments, fromMarkdown, toMarkdown } from '../MarkdownEditor';
+import { MarkdownEditor, fromMarkdown, toMarkdown } from '../MarkdownEditor';
 import { EditorHeader } from './EditorHeader';
 import { RecoveryDialog } from './RecoveryDialog';
 import styles from './Editor.module.css';
@@ -79,8 +81,14 @@ export function Editor(props: RouteProps): JSX.Element {
 	// Document model - source of truth for editor content
 	const documentModel = useMemo(() => new DocumentModel(), []);
 
-	// Subscribe to model changes
+	// Current user model - for comment author info
+	// SyncModel auto-fetches from /api/users/me when given id='me'.
+	// If not authenticated, fetch fails and we fall back to "Anonymous" in getCommentAuthor.
+	const currentUser = useMemo(() => new UserModel({ id: 'me' }), []);
+
+	// Subscribe to model changes - this re-renders when user data loads
 	useModel(documentModel);
+	useModel(currentUser);
 
 	// Track previous content for debounced localStorage save
 	const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -139,8 +147,8 @@ export function Editor(props: RouteProps): JSX.Element {
 			const response = await fetchClient.get<{ content: string }>(
 				`/api/projects/${projectId}/files?path=${encodeURIComponent(path)}`
 			);
-			const slateContent = fromMarkdown(response.content);
-			documentModel.loadDocument(projectId, path, slateContent);
+			const { content: slateContent, comments } = fromMarkdown(response.content);
+			documentModel.loadDocument(projectId, path, slateContent, { comments });
 			saveSelectedFile(projectId, path);
 			// Check if this document has a linked epic
 			checkLinkedEpic(path);
@@ -187,7 +195,10 @@ export function Editor(props: RouteProps): JSX.Element {
 
 		const cached = loadFromLocalStorage(projectId, pendingRecovery);
 		if (cached) {
-			documentModel.loadDocument(projectId, pendingRecovery, cached, { dirty: true });
+			documentModel.loadDocument(projectId, pendingRecovery, cached.content, {
+				dirty: true,
+				comments: cached.comments,
+			});
 			saveSelectedFile(projectId, pendingRecovery);
 			// Check if this document has a linked epic
 			checkLinkedEpic(pendingRecovery);
@@ -253,6 +264,65 @@ export function Editor(props: RouteProps): JSX.Element {
 		}
 	}, [projectId, linkedEpicId]);
 
+	// ─────────────────────────────────────────────────────────────────────────────
+	// Comment handlers
+	// ─────────────────────────────────────────────────────────────────────────────
+
+	// Get current user info for comments
+	const getCommentAuthor = useCallback((): { name: string; email: string } => {
+		if (currentUser.first_name && currentUser.last_name) {
+			return {
+				name: `${currentUser.first_name} ${currentUser.last_name}`,
+				email: currentUser.email || '',
+			};
+		}
+		if (currentUser.username) {
+			return {
+				name: currentUser.username,
+				email: currentUser.email || '',
+			};
+		}
+		return {
+			name: 'Anonymous',
+			email: '',
+		};
+	}, [currentUser.first_name, currentUser.last_name, currentUser.username, currentUser.email]);
+
+	// Handle adding a new comment
+	const handleAddComment = useCallback((commentId: string, commentText: string, _anchorText: string) => {
+		const author = getCommentAuthor();
+		const newComment: DocumentComment = {
+			id: commentId, // Use the ID from MarkdownEditor that was applied to the text
+			text: commentText,
+			author: author.name,
+			authorEmail: author.email,
+			timestamp: new Date().toISOString(),
+			resolved: false,
+			replies: [],
+		};
+		documentModel.addComment(newComment);
+	}, [documentModel, getCommentAuthor]);
+
+	// Handle adding a reply to a comment
+	const handleReplyToComment = useCallback((commentId: string, replyText: string) => {
+		const author = getCommentAuthor();
+		const reply: DocumentComment = {
+			id: `reply-${Date.now()}-${crypto.randomUUID()}`,
+			text: replyText,
+			author: author.name,
+			authorEmail: author.email,
+			timestamp: new Date().toISOString(),
+			resolved: false,
+			replies: [],
+		};
+		documentModel.addReply(commentId, reply);
+	}, [documentModel, getCommentAuthor]);
+
+	// Handle toggling a comment's resolved status
+	const handleToggleResolved = useCallback((commentId: string) => {
+		documentModel.toggleResolved(commentId);
+	}, [documentModel]);
+
 	// Restore previously selected file on mount
 	useEffect(() => {
 		if (restoredRef.current) return;
@@ -272,7 +342,8 @@ export function Editor(props: RouteProps): JSX.Element {
 		const { projectId: pid, filePath: fpath } = documentModel;
 		documentModel.saving = true;
 		try {
-			const markdown = toMarkdown(documentModel.content);
+			// Include comments in the markdown output
+			const markdown = toMarkdown(documentModel.content, documentModel.comments);
 			await fetchClient.put(
 				`/api/projects/${pid}/files?path=${encodeURIComponent(fpath)}`,
 				{ content: markdown }
@@ -293,7 +364,7 @@ export function Editor(props: RouteProps): JSX.Element {
 
 	// Debounced localStorage persistence on content change
 	useEffect(() => {
-		const { filePath, projectId: pid, content } = documentModel;
+		const { filePath, projectId: pid, content, comments } = documentModel;
 		if (!filePath || !pid) return;
 		if (!documentModel.isDirty) return;
 
@@ -305,7 +376,7 @@ export function Editor(props: RouteProps): JSX.Element {
 		// Save to localStorage after 1 second of inactivity
 		// Capture values before setTimeout to avoid stale references
 		saveTimerRef.current = setTimeout(() => {
-			saveToLocalStorage(pid, filePath, content);
+			saveToLocalStorage(pid, filePath, content, comments);
 		}, 1000);
 
 		return () => {
@@ -313,7 +384,7 @@ export function Editor(props: RouteProps): JSX.Element {
 				clearTimeout(saveTimerRef.current);
 			}
 		};
-	}, [documentModel.content, documentModel.filePath, documentModel.projectId, documentModel.isDirty]);
+	}, [documentModel.content, documentModel.comments, documentModel.filePath, documentModel.projectId, documentModel.isDirty]);
 
 	// Keyboard shortcut for save (Ctrl/Cmd+S)
 	useEffect(() => {
@@ -462,8 +533,11 @@ export function Editor(props: RouteProps): JSX.Element {
 							<div class={styles.editorArea}>
 								<MarkdownEditor
 									model={documentModel}
-									comments={mockComments}
+									comments={documentModel.comments}
 									placeholder="Start writing..."
+									onAddComment={handleAddComment}
+									onReply={handleReplyToComment}
+									onToggleResolved={handleToggleResolved}
 								/>
 							</div>
 						</>

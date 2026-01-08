@@ -1,13 +1,13 @@
 import { useMemo, useCallback, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
-import { createEditor, Descendant, Editor, Element as SlateElement, Transforms } from 'slate';
-import { Slate, Editable, withReact, RenderElementProps, RenderLeafProps } from 'slate-react';
+import { createEditor, Descendant, Editor, Element as SlateElement, Transforms, Range } from 'slate';
+import { Slate, Editable, withReact, RenderElementProps, RenderLeafProps, ReactEditor } from 'slate-react';
 import { withHistory } from 'slate-history';
 import isHotkey from 'is-hotkey';
 import { useModel, DocumentModel } from '@doc-platform/models';
 import type { MarkType, CustomElement, CustomText, Comment } from './types';
 import { Toolbar } from './Toolbar';
-import { CommentsMargin } from './CommentsMargin';
+import { CommentsMargin, PendingComment } from './CommentsMargin';
 import styles from './MarkdownEditor.module.css';
 
 // Import types to augment Slate
@@ -22,6 +22,12 @@ export interface MarkdownEditorProps {
 	placeholder?: string;
 	/** Read-only mode */
 	readOnly?: boolean;
+	/** Called when a new comment is added. Receives the generated commentId that was applied to text. */
+	onAddComment?: (commentId: string, commentText: string, anchorText: string) => void;
+	/** Called when a reply is added to a comment */
+	onReply?: (commentId: string, replyText: string) => void;
+	/** Called when a comment's resolved status is toggled */
+	onToggleResolved?: (commentId: string) => void;
 }
 
 // Hotkey mappings
@@ -236,6 +242,9 @@ export function MarkdownEditor({
 	comments = [],
 	placeholder = 'Start typing...',
 	readOnly = false,
+	onAddComment,
+	onReply,
+	onToggleResolved,
 }: MarkdownEditorProps): JSX.Element {
 	// Subscribe to model changes - this triggers re-renders when model updates
 	useModel(model);
@@ -246,15 +255,110 @@ export function MarkdownEditor({
 	// Currently active/selected comment
 	const [activeCommentId, setActiveCommentId] = useState<string | undefined>();
 
+	// Pending comment state (when user initiates add comment)
+	const [pendingComment, setPendingComment] = useState<PendingComment | undefined>();
+
+	// Store the selection when initiating a new comment
+	const pendingSelectionRef = useRef<Range | null>(null);
+
 	// Create editor instance with plugins
 	const editor = useMemo(
 		() => withHistory(withReact(createEditor())),
 		[]
 	);
 
+	// Check if there's a non-collapsed text selection
+	const hasTextSelection = useCallback((): boolean => {
+		const { selection } = editor;
+		if (!selection || Range.isCollapsed(selection)) {
+			return false;
+		}
+		// Check that the selection contains actual text
+		const text = Editor.string(editor, selection);
+		return text.length > 0;
+	}, [editor]);
+
+	// Get the top position for a new comment based on current selection
+	const getSelectionTop = useCallback((): number => {
+		try {
+			const { selection } = editor;
+			if (!selection) return 0;
+
+			const domRange = ReactEditor.toDOMRange(editor, selection);
+			const rect = domRange.getBoundingClientRect();
+			const containerRect = editableRef.current?.getBoundingClientRect();
+
+			if (containerRect) {
+				return rect.top - containerRect.top;
+			}
+			return rect.top;
+		} catch {
+			return 0;
+		}
+	}, [editor]);
+
+	// Initiate adding a new comment
+	const handleInitiateAddComment = useCallback(() => {
+		if (!hasTextSelection()) return;
+
+		// Store the current selection
+		pendingSelectionRef.current = editor.selection ? { ...editor.selection } : null;
+
+		// Show the comment input form
+		setPendingComment({
+			top: getSelectionTop(),
+		});
+	}, [editor, hasTextSelection, getSelectionTop]);
+
+	// Submit a new comment
+	const handleSubmitNewComment = useCallback((commentText: string) => {
+		const selection = pendingSelectionRef.current;
+		if (!selection || !onAddComment) {
+			setPendingComment(undefined);
+			pendingSelectionRef.current = null;
+			return;
+		}
+
+		// Get the selected text
+		const anchorText = Editor.string(editor, selection);
+
+		// Generate a unique comment ID
+		const commentId = `comment-${Date.now()}-${crypto.randomUUID()}`;
+
+		// Apply the commentId mark to the selected text
+		Transforms.select(editor, selection);
+		Editor.addMark(editor, 'commentId', commentId);
+
+		// Call the callback to add the comment to the model (pass commentId so it matches the mark)
+		onAddComment(commentId, commentText, anchorText);
+
+		// Clear pending state
+		setPendingComment(undefined);
+		pendingSelectionRef.current = null;
+
+		// Focus the editor
+		ReactEditor.focus(editor);
+	}, [editor, onAddComment]);
+
+	// Cancel adding a new comment
+	const handleCancelNewComment = useCallback(() => {
+		setPendingComment(undefined);
+		pendingSelectionRef.current = null;
+		ReactEditor.focus(editor);
+	}, [editor]);
+
 	// Handle keyboard shortcuts
 	const handleKeyDown = useCallback(
 		(event: KeyboardEvent) => {
+			// Check for comment shortcut (Cmd/Ctrl+Shift+M)
+			if (isHotkey('mod+shift+m', event)) {
+				event.preventDefault();
+				if (onAddComment && hasTextSelection()) {
+					handleInitiateAddComment();
+				}
+				return;
+			}
+
 			for (const hotkey in HOTKEYS) {
 				if (isHotkey(hotkey, event)) {
 					event.preventDefault();
@@ -263,7 +367,7 @@ export function MarkdownEditor({
 				}
 			}
 		},
-		[editor]
+		[editor, onAddComment, hasTextSelection, handleInitiateAddComment]
 	);
 
 	// Handle value changes - update the model
@@ -298,7 +402,8 @@ export function MarkdownEditor({
 		[]
 	);
 
-	const hasComments = comments.length > 0;
+	// Show comments margin if there are comments or if we can add comments
+	const showCommentsMargin = comments.length > 0 || pendingComment || onAddComment;
 
 	return (
 		<div class={styles.container}>
@@ -311,6 +416,8 @@ export function MarkdownEditor({
 						isBlockActive={(block) => isBlockActive(editor, block)}
 						toggleMark={(mark) => toggleMark(editor, mark)}
 						toggleBlock={(block) => toggleBlock(editor, block as CustomElement['type'])}
+						onAddComment={onAddComment ? handleInitiateAddComment : undefined}
+						canAddComment={hasTextSelection()}
 					/>
 				)}
 				<div class={styles.editorWithComments}>
@@ -326,12 +433,17 @@ export function MarkdownEditor({
 							autoFocus
 						/>
 					</div>
-					{hasComments && (
+					{showCommentsMargin && (
 						<CommentsMargin
 							comments={comments}
 							editorRef={editableRef}
 							activeCommentId={activeCommentId}
 							onCommentClick={setActiveCommentId}
+							onReply={onReply}
+							onToggleResolved={onToggleResolved}
+							pendingComment={pendingComment}
+							onSubmitNewComment={handleSubmitNewComment}
+							onCancelNewComment={handleCancelNewComment}
 						/>
 					)}
 				</div>
