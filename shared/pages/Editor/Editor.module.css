@@ -9,12 +9,14 @@
 	flex: 1;
 	display: flex;
 	min-height: 0;
+	overflow: hidden;
 }
 
 .sidebar {
 	width: 240px;
 	flex-shrink: 0;
-	align-self: stretch;
+	overflow-y: auto;
+	overflow-x: hidden;
 }
 
 .main {
@@ -24,12 +26,21 @@
 	overflow: hidden;
 }
 
+.mainContent {
+	flex: 1;
+	display: flex;
+	min-height: 0;
+	overflow: hidden;
+}
+
 .editorArea {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
 	padding: var(--space-4);
-	overflow: hidden;
+	overflow-y: auto;
+	overflow-x: hidden;
+	min-width: 0;
 }
 
 .emptyState {
