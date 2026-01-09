@@ -1,3 +1,4 @@
+/* global TextDecoder */
 /**
  * Google Gemini provider implementation
  *

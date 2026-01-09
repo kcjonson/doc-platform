@@ -1,4 +1,4 @@
-/* global TextDecoder, DOMException */
+/* global TextDecoder, DOMException, localStorage */
 import { useState, useRef, useEffect, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Icon } from '@doc-platform/ui';
