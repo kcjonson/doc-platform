@@ -74,7 +74,7 @@ export class GeminiProvider implements ChatProvider {
 		try {
 			// Make a minimal request to check if the key is valid
 			const response = await fetch(
-				`${GEMINI_API_URL}/models/gemini-2.0-flash-lite:generateContent`,
+				`${GEMINI_API_URL}/models/gemini-2.5-flash:generateContent`,
 				{
 					method: 'POST',
 					headers: {
