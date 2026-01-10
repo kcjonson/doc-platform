@@ -98,11 +98,23 @@ export async function handleCommit(context: Context, redis: Redis): Promise<Resp
 
 		// Get current status to check for changes and generate message
 		const status = await provider.status();
-		const allChanges = [
-			...status.staged,
-			...status.unstaged,
-			...status.untracked.map((p) => ({ path: p, status: 'added' as const })),
-		];
+
+		// Dedupe by path - a file may appear in both staged and unstaged
+		const changesMap = new Map<string, { path: string; status: string }>();
+		for (const file of status.staged) {
+			changesMap.set(file.path, file);
+		}
+		for (const file of status.unstaged) {
+			if (!changesMap.has(file.path)) {
+				changesMap.set(file.path, file);
+			}
+		}
+		for (const path of status.untracked) {
+			if (!changesMap.has(path)) {
+				changesMap.set(path, { path, status: 'added' });
+			}
+		}
+		const allChanges = Array.from(changesMap.values());
 
 		if (allChanges.length === 0) {
 			return context.json({ error: 'No changes to commit' }, 400);
@@ -250,6 +262,11 @@ function generateCommitMessage(changes: Array<{ path: string; status: string }>)
 		.slice(0, 3)
 		.map((c) => c.path.split('/').pop())
 		.filter(Boolean);
+
+	// Fallback if no file names could be extracted
+	if (fileNames.length === 0) {
+		return `Update ${changes.length} file${changes.length === 1 ? '' : 's'}`;
+	}
 
 	const extra = changes.length > 3 ? ` (+${changes.length - 3} more)` : '';
 	return `Update: ${fileNames.join(', ')}${extra}`;

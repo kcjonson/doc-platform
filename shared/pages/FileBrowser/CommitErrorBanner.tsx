@@ -1,5 +1,5 @@
 import type { JSX } from 'preact';
-import { Button, Notice } from '@doc-platform/ui';
+import { Button, Icon, Notice } from '@doc-platform/ui';
 import type { CommitError } from '@doc-platform/models';
 import styles from './CommitErrorBanner.module.css';
 
@@ -66,7 +66,7 @@ export function CommitErrorBanner({
 					</Button>
 				)}
 				<Button onClick={onDismiss} class="icon" aria-label="Dismiss">
-					×
+					<Icon name="x" class="size-sm" />
 				</Button>
 			</div>
 		</Notice>

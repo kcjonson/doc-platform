@@ -128,10 +128,18 @@ export class LocalStorageProvider implements StorageProvider {
 	}
 
 	async rename(oldPath: string, newPath: string): Promise<void> {
-		// Use git mv to properly track renames in git (shows as rename, not delete+add)
+		const absoluteOldPath = await validatePath(this.repoPath, oldPath);
+		const absoluteNewPath = await validatePath(this.repoPath, newPath);
 		const gitOldPath = oldPath.replace(/^\//, '');
 		const gitNewPath = newPath.replace(/^\//, '');
-		await execGit(this.repoPath, ['mv', gitOldPath, gitNewPath]);
+
+		// Try git mv first (for tracked files), fall back to fs.rename (for untracked)
+		try {
+			await execGit(this.repoPath, ['mv', gitOldPath, gitNewPath]);
+		} catch {
+			// File is untracked, use filesystem rename
+			await fs.rename(absoluteOldPath, absoluteNewPath);
+		}
 	}
 
 	async exists(relativePath: string): Promise<boolean> {
@@ -337,6 +345,8 @@ export class LocalStorageProvider implements StorageProvider {
 	}
 
 	async restore(relativePath: string): Promise<void> {
+		// Validate path to prevent directory traversal attacks
+		await validatePath(this.repoPath, relativePath);
 		// Remove leading slash for git command
 		const gitPath = relativePath.replace(/^\//, '');
 		await execGit(this.repoPath, ['checkout', 'HEAD', '--', gitPath]);

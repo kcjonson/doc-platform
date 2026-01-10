@@ -1,6 +1,6 @@
 import type { JSX, RefObject } from 'preact';
 import { Icon } from '@doc-platform/ui';
-import { FileStatus, type ChangeStatus } from './FileStatus';
+import { FileStatus, type FileChangeStatus } from './FileStatus';
 import styles from './FileBrowser.module.css';
 
 export interface FileItemProps {
@@ -19,7 +19,7 @@ export interface FileItemProps {
 	/** Ref for rename input */
 	renameInputRef: RefObject<HTMLInputElement>;
 	/** Git change status */
-	changeStatus?: ChangeStatus;
+	changeStatus?: FileChangeStatus;
 	/** Whether file is deleted in git */
 	isDeleted: boolean;
 	/** Called when file is clicked */
