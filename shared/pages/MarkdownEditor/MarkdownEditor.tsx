@@ -371,15 +371,24 @@ export function MarkdownEditor({
 		setPendingComment(undefined);
 		pendingSelectionRef.current = null;
 
-		// Focus the editor
-		ReactEditor.focus(editor);
+		// Focus the editor (can throw if editor is unmounted)
+		try {
+			ReactEditor.focus(editor);
+		} catch {
+			// Editor may have been unmounted
+		}
 	}, [editor, onAddComment]);
 
 	// Cancel adding a new comment
 	const handleCancelNewComment = useCallback(() => {
 		setPendingComment(undefined);
 		pendingSelectionRef.current = null;
-		ReactEditor.focus(editor);
+		// Focus the editor (can throw if editor is unmounted)
+		try {
+			ReactEditor.focus(editor);
+		} catch {
+			// Editor may have been unmounted
+		}
 	}, [editor]);
 
 	// Handle keyboard shortcuts

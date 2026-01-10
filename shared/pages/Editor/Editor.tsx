@@ -1,7 +1,7 @@
 import { useMemo, useEffect, useCallback, useRef, useState } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { navigate, type RouteProps } from '@doc-platform/router';
-import { Page, Icon } from '@doc-platform/ui';
+import { Page, Icon, ErrorBoundary } from '@doc-platform/ui';
 import {
 	DocumentModel,
 	UserModel,
@@ -421,27 +421,6 @@ export function Editor(props: RouteProps): JSX.Element {
 		startNewFileRef.current = startNewFile;
 	}, []);
 
-	// Handle "New Page" button click from EditorHeader
-	const handleNewPage = useCallback(() => {
-		if (!startNewFileRef.current) return;
-
-		// Determine target directory:
-		// - If a file is open, use its directory
-		// - Otherwise, FileBrowser will use first rootPath
-		let targetDir: string | undefined;
-
-		if (documentModel.filePath) {
-			// Extract directory from current file path
-			const lastSlash = documentModel.filePath.lastIndexOf('/');
-			if (lastSlash > 0) {
-				targetDir = documentModel.filePath.substring(0, lastSlash);
-			}
-		}
-
-		startNewFileRef.current(targetDir);
-		setIsCreatingFile(true);
-	}, [documentModel.filePath]);
-
 	// Handle file created callback from FileBrowser
 	const handleFileCreated = useCallback(async (path: string) => {
 		setIsCreatingFile(false);
@@ -495,6 +474,12 @@ export function Editor(props: RouteProps): JSX.Element {
 		// Update comments in the model (these aren't in Slate)
 		documentModel.set({ comments, dirty: true });
 	}, [documentModel]);
+
+	// Memoize document content for chat to avoid recomputing on every render
+	const documentContentForChat = useMemo(
+		() => toMarkdown(documentModel.content, documentModel.comments),
+		[documentModel.content, documentModel.comments]
+	);
 
 	return (
 		<Page projectId={projectId} activeTab="Pages">
@@ -571,11 +556,13 @@ export function Editor(props: RouteProps): JSX.Element {
 										editorRef={editorRef}
 									/>
 								</div>
-								<ChatSidebar
-									documentContent={toMarkdown(documentModel.content, documentModel.comments)}
-									documentPath={documentModel.filePath}
-									onApplyEdit={handleApplyEdit}
-								/>
+								<ErrorBoundary>
+									<ChatSidebar
+										documentContent={documentContentForChat}
+										documentPath={documentModel.filePath}
+										onApplyEdit={handleApplyEdit}
+									/>
+								</ErrorBoundary>
 							</div>
 						</>
 					) : (
