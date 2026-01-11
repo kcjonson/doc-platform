@@ -23,7 +23,7 @@ RUN wget -O /app/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/glob
 # Source code is mounted at runtime via docker-compose volumes
 EXPOSE 3002
 
-CMD ["node", "--experimental-transform-types", "--watch", "mcp/src/index.ts"]
+CMD ["node", "--watch", "mcp/src/index.ts"]
 
 # ===== PRODUCTION STAGE =====
 # Node 25 runs TypeScript natively, no build step needed
@@ -56,4 +56,4 @@ EXPOSE 3002
 
 ENV PORT=3002
 
-CMD ["node", "--experimental-transform-types", "mcp/src/index.ts"]
+CMD ["node", "mcp/src/index.ts"]

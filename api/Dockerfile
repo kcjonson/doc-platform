@@ -26,7 +26,7 @@ RUN wget -O /app/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/glob
 # Source code is mounted at runtime via docker-compose volumes
 EXPOSE 3001
 
-CMD ["node", "--experimental-transform-types", "--watch", "api/src/index.ts"]
+CMD ["node", "--watch", "api/src/index.ts"]
 
 # ===== PRODUCTION BUILD STAGE =====
 FROM node:25-alpine AS builder

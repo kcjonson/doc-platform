@@ -13,4 +13,4 @@ fi
 echo "Starting dev servers..."
 pnpm --filter @doc-platform/web dev --host 0.0.0.0 &
 pnpm --filter @doc-platform/ssg dev &
-node --experimental-transform-types --watch frontend/src/index.ts
+node --watch frontend/src/index.ts
