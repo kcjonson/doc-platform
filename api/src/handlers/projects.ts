@@ -100,7 +100,7 @@ export async function handleCreateProject(context: Context, redis: Redis): Promi
 
 	try {
 		const body = await context.req.json();
-		const { name, description } = body;
+		const { name, description, repository } = body;
 
 		if (!name || typeof name !== 'string') {
 			return context.json({ error: 'Name is required' }, 400);
@@ -120,9 +120,32 @@ export async function handleCreateProject(context: Context, redis: Redis): Promi
 			);
 		}
 
+		// Validate repository config if provided
+		let validatedRepository: { provider: 'github'; owner: string; repo: string; branch: string; url: string } | undefined;
+		if (repository) {
+			if (
+				typeof repository !== 'object' ||
+				repository.provider !== 'github' ||
+				typeof repository.owner !== 'string' ||
+				typeof repository.repo !== 'string' ||
+				typeof repository.branch !== 'string' ||
+				typeof repository.url !== 'string'
+			) {
+				return context.json({ error: 'Invalid repository configuration' }, 400);
+			}
+			validatedRepository = {
+				provider: 'github',
+				owner: repository.owner,
+				repo: repository.repo,
+				branch: repository.branch,
+				url: repository.url,
+			};
+		}
+
 		const project = await createProject(userId, {
 			name,
 			description: description || undefined,
+			repository: validatedRepository,
 		});
 
 		return context.json(projectResponseToApi(project), 201);

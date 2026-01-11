@@ -1,8 +1,32 @@
 import { useState, useEffect } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Dialog, Button } from '@doc-platform/ui';
+import { fetchClient } from '@doc-platform/fetch';
 import type { Project } from '../ProjectCard/ProjectCard';
 import styles from './ProjectDialog.module.css';
+
+interface GitHubRepo {
+	id: number;
+	fullName: string;
+	name: string;
+	owner: string;
+	private: boolean;
+	defaultBranch: string;
+	url: string;
+}
+
+interface GitHubBranch {
+	name: string;
+	protected: boolean;
+}
+
+interface RepositoryConfig {
+	provider: 'github';
+	owner: string;
+	repo: string;
+	branch: string;
+	url: string;
+}
 
 export interface ProjectDialogProps {
 	/** Project to edit (null for create mode) */
@@ -10,7 +34,7 @@ export interface ProjectDialogProps {
 	/** Called when dialog should close */
 	onClose: () => void;
 	/** Called when project is saved (created or updated) */
-	onSave: (data: { name: string; description?: string }) => Promise<void>;
+	onSave: (data: { name: string; description?: string; repository?: RepositoryConfig }) => Promise<void>;
 	/** Called when project is deleted (only available in edit mode) */
 	onDelete?: () => Promise<void>;
 }
@@ -29,13 +53,90 @@ export function ProjectDialog({
 	const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
+	// GitHub connection state
+	const [githubConnected, setGithubConnected] = useState<boolean | null>(null);
+	const [githubLoading, setGithubLoading] = useState(true);
+
+	// Repository selection state
+	const [repos, setRepos] = useState<GitHubRepo[]>([]);
+	const [reposLoading, setReposLoading] = useState(false);
+	const [selectedRepo, setSelectedRepo] = useState<string>('');
+	const [branches, setBranches] = useState<GitHubBranch[]>([]);
+	const [branchesLoading, setBranchesLoading] = useState(false);
+	const [selectedBranch, setSelectedBranch] = useState<string>('');
+
 	// Reset form when project changes
 	useEffect(() => {
 		setName(project?.name ?? '');
 		setDescription(project?.description ?? '');
 		setShowDeleteConfirm(false);
 		setError(null);
+		setSelectedRepo('');
+		setSelectedBranch('');
+		setBranches([]);
 	}, [project]);
+
+	// Check GitHub connection on mount
+	useEffect(() => {
+		async function checkGitHubConnection(): Promise<void> {
+			setGithubLoading(true);
+			try {
+				const data = await fetchClient.get<{ connected: boolean }>('/api/github/connection');
+				setGithubConnected(data.connected);
+
+				// If connected, load repos
+				if (data.connected) {
+					setReposLoading(true);
+					try {
+						const reposData = await fetchClient.get<GitHubRepo[]>('/api/github/repos');
+						setRepos(reposData);
+					} catch {
+						// Repos fetch failed - not critical
+					} finally {
+						setReposLoading(false);
+					}
+				}
+			} catch {
+				setGithubConnected(false);
+			} finally {
+				setGithubLoading(false);
+			}
+		}
+		checkGitHubConnection();
+	}, []);
+
+	// Load branches when repo is selected
+	useEffect(() => {
+		if (!selectedRepo) {
+			setBranches([]);
+			setSelectedBranch('');
+			return;
+		}
+
+		const repo = repos.find(r => r.fullName === selectedRepo);
+		if (!repo) return;
+
+		async function loadBranches(): Promise<void> {
+			setBranchesLoading(true);
+			try {
+				const branchesData = await fetchClient.get<GitHubBranch[]>(
+					`/api/github/repos/${repo!.owner}/${repo!.name}/branches`
+				);
+				setBranches(branchesData);
+
+				// Auto-select default branch
+				if (branchesData.length > 0) {
+					const defaultBranch = branchesData.find(b => b.name === repo!.defaultBranch);
+					setSelectedBranch(defaultBranch?.name || branchesData[0].name);
+				}
+			} catch {
+				setBranches([]);
+			} finally {
+				setBranchesLoading(false);
+			}
+		}
+		loadBranches();
+	}, [selectedRepo, repos]);
 
 	async function handleSubmit(e: Event): Promise<void> {
 		e.preventDefault();
@@ -44,10 +145,27 @@ export function ProjectDialog({
 		try {
 			setSaving(true);
 			setError(null);
-			await onSave({
+
+			const data: { name: string; description?: string; repository?: RepositoryConfig } = {
 				name: name.trim(),
 				description: description.trim() || undefined,
-			});
+			};
+
+			// Include repository config if selected
+			if (selectedRepo && selectedBranch) {
+				const repo = repos.find(r => r.fullName === selectedRepo);
+				if (repo) {
+					data.repository = {
+						provider: 'github',
+						owner: repo.owner,
+						repo: repo.name,
+						branch: selectedBranch,
+						url: repo.url,
+					};
+				}
+			}
+
+			await onSave(data);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to save project');
 		} finally {
@@ -139,6 +257,73 @@ export function ProjectDialog({
 						/>
 					</label>
 				</div>
+
+				{/* Repository section - only for new projects or projects without repo */}
+				{!isEditMode && (
+					<div class={styles.repositorySection}>
+						<div class={styles.sectionHeader}>
+							<span class={styles.labelText}>Repository (optional)</span>
+							<span class={styles.hint}>Connect a GitHub repository to store documents</span>
+						</div>
+
+						{githubLoading ? (
+							<div class={styles.loadingText}>Checking GitHub connection...</div>
+						) : !githubConnected ? (
+							<div class={styles.notConnected}>
+								<p>Connect your GitHub account in Settings to link repositories.</p>
+								<a href="/settings" class={styles.settingsLink}>Go to Settings</a>
+							</div>
+						) : reposLoading ? (
+							<div class={styles.loadingText}>Loading repositories...</div>
+						) : repos.length === 0 ? (
+							<div class={styles.noRepos}>No repositories found. Make sure you have access to at least one repository.</div>
+						) : (
+							<>
+								<div class={styles.field}>
+									<label class={styles.label}>
+										<span class={styles.labelText}>Repository</span>
+										<select
+											class={styles.select}
+											value={selectedRepo}
+											onChange={(e) => setSelectedRepo((e.target as HTMLSelectElement).value)}
+										>
+											<option value="">Select a repository...</option>
+											{repos.map(repo => (
+												<option key={repo.id} value={repo.fullName}>
+													{repo.fullName} {repo.private ? '(private)' : ''}
+												</option>
+											))}
+										</select>
+									</label>
+								</div>
+
+								{selectedRepo && (
+									<div class={styles.field}>
+										<label class={styles.label}>
+											<span class={styles.labelText}>Branch</span>
+											{branchesLoading ? (
+												<div class={styles.loadingText}>Loading branches...</div>
+											) : (
+												<select
+													class={styles.select}
+													value={selectedBranch}
+													onChange={(e) => setSelectedBranch((e.target as HTMLSelectElement).value)}
+												>
+													{branches.map(branch => (
+														<option key={branch.name} value={branch.name}>
+															{branch.name} {branch.protected ? '(protected)' : ''}
+														</option>
+													))}
+												</select>
+											)}
+										</label>
+									</div>
+								)}
+							</>
+						)}
+					</div>
+				)}
+
 				<div class={styles.footer}>
 					{isEditMode && onDelete && (
 						<Button
