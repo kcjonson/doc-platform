@@ -91,24 +91,16 @@ COPY shared/planning ./shared/planning
 COPY shared/pages ./shared/pages
 COPY shared/styles ./shared/styles
 
-# Build shared packages first, then frontend server, then SPA, then SSG
-# Order matters: core first, then packages that depend on it
+# Build client-side bundles only (Vite handles TypeScript)
 # SSG must run after web build to read CSS manifest
-RUN pnpm --filter @doc-platform/core build && \
-    pnpm --filter @doc-platform/db build && \
-    pnpm --filter @doc-platform/auth build && \
-    pnpm --filter @doc-platform/fetch build && \
-    pnpm --filter @doc-platform/router build && \
-    pnpm --filter @doc-platform/models build && \
-    pnpm --filter @doc-platform/telemetry build && \
-    pnpm --filter @doc-platform/frontend build && \
-    pnpm --filter @doc-platform/web build && \
+RUN pnpm --filter @doc-platform/web build && \
     pnpm --filter @doc-platform/ssg build
 
 # Create version.txt with git SHA
 RUN echo "${GIT_SHA}" > /app/web/dist/version.txt
 
 # ===== PRODUCTION RUN STAGE =====
+# Node 25 runs TypeScript directly, no build step needed for server
 FROM node:25-alpine AS runner
 
 RUN npm install -g pnpm@9.15.1
@@ -118,24 +110,30 @@ WORKDIR /app
 # Download AWS RDS CA bundle for SSL certificate verification
 RUN wget -O /app/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 
-# Copy workspace config
+# Copy workspace config and package files
 COPY frontend/pnpm-workspace.docker.yaml ./pnpm-workspace.yaml
 COPY package.json pnpm-lock.yaml ./
+COPY shared/core/package.json ./shared/core/
+COPY shared/db/package.json ./shared/db/
+COPY shared/auth/package.json ./shared/auth/
 COPY frontend/package.json ./frontend/
 
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy built frontend (workspace packages are bundled in)
-COPY --from=builder /app/frontend/dist ./frontend/dist
+# Copy source code for server (Node 25 runs TypeScript directly)
+COPY tsconfig.json ./
+COPY shared/core ./shared/core
+COPY shared/db ./shared/db
+COPY shared/auth ./shared/auth
+COPY frontend ./frontend
 
-# Copy built SPA to static directory
+# Copy built client-side bundles from builder
 COPY --from=builder /app/web/dist ./frontend/static
-# Copy SSG pages to static/ssg directory
 COPY --from=builder /app/ssg/dist ./frontend/static/ssg
 
 WORKDIR /app/frontend
 
 EXPOSE 3000
 
-CMD ["node", "dist/index.js"]
+CMD ["node", "src/index.ts"]
