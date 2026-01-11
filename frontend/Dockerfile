@@ -121,18 +121,12 @@ RUN wget -O /app/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/glob
 # Copy workspace config
 COPY frontend/pnpm-workspace.docker.yaml ./pnpm-workspace.yaml
 COPY package.json pnpm-lock.yaml ./
-COPY shared/core/package.json ./shared/core/
-COPY shared/db/package.json ./shared/db/
-COPY shared/auth/package.json ./shared/auth/
 COPY frontend/package.json ./frontend/
 
 # Install production dependencies only
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy built output
-COPY --from=builder /app/shared/core/dist ./shared/core/dist
-COPY --from=builder /app/shared/db/dist ./shared/db/dist
-COPY --from=builder /app/shared/auth/dist ./shared/auth/dist
+# Copy built frontend (workspace packages are bundled in)
 COPY --from=builder /app/frontend/dist ./frontend/dist
 
 # Copy built SPA to static directory
