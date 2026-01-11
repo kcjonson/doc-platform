@@ -102,6 +102,14 @@ import {
 	handleValidateApiKey,
 } from './handlers/api-keys.ts';
 import { handleChat } from './handlers/chat.ts';
+import {
+	handleGitHubAuthStart,
+	handleGitHubAuthCallback,
+	handleGetGitHubConnection,
+	handleGitHubDisconnect,
+	handleListGitHubRepos,
+	handleListGitHubBranches,
+} from './handlers/github.ts';
 import { handleGetChatModels, handleGetChatProviders } from './handlers/chat-models.ts';
 
 // Install global error handlers for uncaught exceptions
@@ -212,6 +220,7 @@ app.use(
 			'/api/auth/resend-verification',
 			'/api/auth/forgot-password',
 			'/api/auth/reset-password',
+			'/api/auth/github/callback', // GitHub OAuth callback (comes from redirect)
 			'/api/metrics',
 			'/oauth/token',
 			'/oauth/revoke',
@@ -313,6 +322,14 @@ app.post('/api/auth/resend-verification', handleResendVerification);
 app.post('/api/auth/forgot-password', handleForgotPassword);
 app.post('/api/auth/reset-password', (context) => handleResetPassword(context, redis));
 app.put('/api/auth/change-password', (context) => handleChangePassword(context, redis));
+
+// GitHub OAuth routes
+app.get('/api/auth/github', (context) => handleGitHubAuthStart(context, redis));
+app.get('/api/auth/github/callback', (context) => handleGitHubAuthCallback(context, redis));
+app.delete('/api/auth/github', (context) => handleGitHubDisconnect(context, redis));
+app.get('/api/github/connection', (context) => handleGetGitHubConnection(context, redis));
+app.get('/api/github/repos', (context) => handleListGitHubRepos(context, redis));
+app.get('/api/github/repos/:owner/:repo/branches', (context) => handleListGitHubBranches(context, redis));
 
 // OAuth 2.1 routes (MCP authentication)
 app.get('/.well-known/oauth-authorization-server', handleOAuthMetadata);

@@ -119,15 +119,48 @@ export async function getProject(
 /**
  * Create a new project
  */
+export interface RepositoryConfigInput {
+	provider: 'github';
+	owner: string;
+	repo: string;
+	branch: string;
+	url: string;
+}
+
 export interface CreateProjectInput {
 	name: string;
 	description?: string;
+	repository?: RepositoryConfigInput;
 }
 
 export async function createProject(
 	userId: string,
 	data: CreateProjectInput
 ): Promise<ProjectResponse> {
+	// If repository is provided, set up cloud mode
+	if (data.repository) {
+		const repoConfig = {
+			type: 'cloud' as const,
+			remote: {
+				provider: data.repository.provider,
+				owner: data.repository.owner,
+				repo: data.repository.repo,
+				url: data.repository.url,
+			},
+			branch: data.repository.branch,
+		};
+
+		const result = await query<Project>(
+			`INSERT INTO projects (name, description, owner_id, storage_mode, repository, root_paths)
+			 VALUES ($1, $2, $3, 'cloud', $4, $5)
+			 RETURNING *`,
+			[data.name, data.description || null, userId, JSON.stringify(repoConfig), JSON.stringify(['/'])]
+		);
+
+		return transformProject(result.rows[0]!);
+	}
+
+	// No repository - create with default storage_mode 'none'
 	const result = await query<Project>(
 		`INSERT INTO projects (name, description, owner_id)
 		 VALUES ($1, $2, $3)
