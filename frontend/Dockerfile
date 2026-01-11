@@ -1,11 +1,48 @@
-# Build stage
-FROM node:20-alpine AS builder
+# ===== DEV TARGET =====
+# Used by docker-compose for local development with hot reloading
+FROM node:25-alpine AS dev
+
+RUN npm install -g pnpm@9.15.1
+
+WORKDIR /app
+
+# Copy workspace config and package files
+COPY frontend/pnpm-workspace.docker.yaml ./pnpm-workspace.yaml
+COPY package.json pnpm-lock.yaml ./
+COPY shared/core/package.json ./shared/core/
+COPY shared/db/package.json ./shared/db/
+COPY shared/auth/package.json ./shared/auth/
+COPY shared/ui/package.json ./shared/ui/
+COPY shared/models/package.json ./shared/models/
+COPY shared/router/package.json ./shared/router/
+COPY shared/fetch/package.json ./shared/fetch/
+COPY shared/telemetry/package.json ./shared/telemetry/
+COPY shared/pages/package.json ./shared/pages/
+COPY frontend/package.json ./frontend/
+COPY web/package.json ./web/
+COPY ssg/package.json ./ssg/
+COPY tsconfig.json ./
+
+# Install all dependencies (including devDependencies)
+RUN pnpm install --frozen-lockfile
+
+# Download AWS RDS CA bundle for SSL certificate verification
+RUN wget -O /app/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+
+# Source code is mounted at runtime via docker-compose volumes
+EXPOSE 3000 5173
+
+# Start both Vite dev server (HMR) and Hono frontend server
+CMD ["sh", "-c", "pnpm --filter @doc-platform/web dev --host 0.0.0.0 & node --experimental-transform-types --watch frontend/src/index.ts"]
+
+# ===== PRODUCTION BUILD STAGE =====
+FROM node:25-alpine AS builder
 
 # Build arg for git SHA (passed at build time)
 ARG GIT_SHA=unknown
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@9.15.1 --activate
+RUN npm install -g pnpm@9.15.1
 
 WORKDIR /app
 
@@ -67,10 +104,10 @@ RUN pnpm --filter @doc-platform/core build && \
 # Create version.txt with git SHA
 RUN echo "${GIT_SHA}" > /app/web/dist/version.txt
 
-# Production stage
-FROM node:20-alpine AS runner
+# ===== PRODUCTION RUN STAGE =====
+FROM node:25-alpine AS runner
 
-RUN corepack enable && corepack prepare pnpm@9.15.1 --activate
+RUN npm install -g pnpm@9.15.1
 
 WORKDIR /app
 
