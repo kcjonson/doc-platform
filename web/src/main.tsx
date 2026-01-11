@@ -56,7 +56,7 @@ function RootRedirect(_props: RouteProps): JSX.Element | null {
 					navigate('/projects');
 				} else if (projects.length === 1) {
 					// Single project - go directly there
-					const project = projects[0];
+					const project = projects[0]!;
 					setCookie('lastProjectId', project.id, 30);
 					setCookie('lastProjectName', project.name, 30);
 					navigate(`/projects/${project.id}/planning`);

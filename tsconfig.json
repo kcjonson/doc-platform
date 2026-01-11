@@ -29,6 +29,7 @@
 			"@doc-platform/router": ["./shared/router/src"],
 			"@doc-platform/fetch": ["./shared/fetch/src"],
 			"@shared/planning": ["./shared/planning"],
+			"@shared/projects": ["./shared/projects"],
 			"@doc-platform/pages": ["./shared/pages"]
 		}
 	},
