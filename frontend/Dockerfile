@@ -32,8 +32,19 @@ RUN wget -O /app/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/glob
 # Source code is mounted at runtime via docker-compose volumes
 EXPOSE 3000 5173
 
-# Start both Vite dev server (HMR) and Hono frontend server
-CMD ["sh", "-c", "pnpm --filter @doc-platform/web dev --host 0.0.0.0 & node --experimental-transform-types --watch frontend/src/index.ts"]
+# Build SSG pages if missing (requires web build first for manifest), then start dev servers
+# - Vite dev server with HMR for SPA
+# - Hono frontend server with watch mode
+# - SSG build in watch mode (rebuilds when ssg/src changes)
+CMD ["sh", "-c", "\
+  if [ ! -f ssg/dist/login.html ]; then \
+    echo 'Building SSG pages (first run)...' && \
+    pnpm --filter @doc-platform/web build && \
+    pnpm --filter @doc-platform/ssg build; \
+  fi && \
+  pnpm --filter @doc-platform/web dev --host 0.0.0.0 & \
+  node --experimental-transform-types --watch frontend/src/index.ts & \
+  pnpm --filter @doc-platform/ssg dev"]
 
 # ===== PRODUCTION BUILD STAGE =====
 FROM node:25-alpine AS builder
@@ -86,6 +97,7 @@ COPY web ./web
 COPY ssg ./ssg
 COPY shared/planning ./shared/planning
 COPY shared/pages ./shared/pages
+COPY shared/styles ./shared/styles
 
 # Build shared packages first, then frontend server, then SPA, then SSG
 # Order matters: core first, then packages that depend on it
