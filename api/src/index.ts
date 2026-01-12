@@ -195,6 +195,7 @@ app.use(
 			{ path: '/api/auth/signup', config: RATE_LIMIT_CONFIGS.signup },
 			{ path: '/api/auth/forgot-password', config: RATE_LIMIT_CONFIGS.forgot },
 			{ path: '/api/auth/resend-verification', config: RATE_LIMIT_CONFIGS.resendVerification },
+			{ path: '/api/auth/github', config: RATE_LIMIT_CONFIGS.login }, // OAuth start - same limit as login
 			{ path: '/oauth/token', config: RATE_LIMIT_CONFIGS.oauthToken },
 			{ path: '/oauth/authorize', config: RATE_LIMIT_CONFIGS.oauthAuthorize },
 			{ path: '/api/chat', config: RATE_LIMIT_CONFIGS.chat },

@@ -65,14 +65,16 @@ export function GitHubConnection(): JSX.Element {
 			</p>
 
 			{error && (
-				<div class={styles.error}>
+				<div class={styles.error} role="alert">
 					{error}
-					<Button
-						onClick={() => setCallbackError(null)}
-						class={styles.dismissButton}
-					>
-						Dismiss
-					</Button>
+					{callbackError && (
+						<Button
+							onClick={() => setCallbackError(null)}
+							class={styles.dismissButton}
+						>
+							Dismiss
+						</Button>
+					)}
 				</div>
 			)}
 

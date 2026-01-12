@@ -82,9 +82,18 @@ export function ProjectDialog({
 
 	useModel(branchesCollection);
 
+	// Track branches loading state separately to avoid unstable dependency
+	const branchesWorking = branchesCollection?.$meta.working ?? false;
+	const branchesLength = branchesCollection?.length ?? 0;
+
 	// Auto-select default branch when branches load
 	useEffect(() => {
-		if (!branchesCollection || branchesCollection.$meta.working || branchesCollection.length === 0) {
+		if (!branchesCollection || branchesWorking || branchesLength === 0) {
+			return;
+		}
+
+		// If a branch is already selected and exists in the collection, keep it
+		if (selectedBranch && branchesCollection.find(b => b.name === selectedBranch)) {
 			return;
 		}
 
@@ -93,7 +102,7 @@ export function ProjectDialog({
 
 		const defaultBranch = branchesCollection.find(b => b.name === repo.defaultBranch);
 		setSelectedBranch(defaultBranch?.name || branchesCollection[0]?.name || '');
-	}, [branchesCollection, branchesCollection?.$meta.working, selectedRepo, githubRepos]);
+	}, [branchesCollection, branchesWorking, branchesLength, selectedBranch, selectedRepo, githubRepos]);
 
 	// Reset form when project changes
 	useEffect(() => {
@@ -262,6 +271,7 @@ export function ProjectDialog({
 										<select
 											class={styles.select}
 											value={selectedRepo}
+											aria-label="Select GitHub repository"
 											onChange={(e) => {
 												setSelectedRepo((e.target as HTMLSelectElement).value);
 												setSelectedBranch('');
@@ -287,6 +297,7 @@ export function ProjectDialog({
 												<select
 													class={styles.select}
 													value={selectedBranch}
+													aria-label="Select branch"
 													onChange={(e) => setSelectedBranch((e.target as HTMLSelectElement).value)}
 												>
 													{branchesCollection.map(branch => (

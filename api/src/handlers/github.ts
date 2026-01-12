@@ -25,8 +25,14 @@ const STATE_TTL_SECONDS = 600;
 const REPOS_CACHE_TTL_SECONDS = 300;
 const BRANCHES_CACHE_TTL_SECONDS = 300;
 
-// GitHub naming validation (alphanumeric, hyphens, underscores, dots)
-const GITHUB_NAME_REGEX = /^[a-zA-Z0-9._-]{1,100}$/;
+// GitHub naming validation:
+// - 1 to 100 characters
+// - may contain alphanumerics, dots, underscores, and hyphens
+// - must start and end with an alphanumeric character (no leading/trailing dots)
+const GITHUB_NAME_REGEX = /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,98}[a-zA-Z0-9])?$/;
+
+// Cache key prefix for versioning (bump if response format changes)
+const CACHE_VERSION = 'v1';
 
 /**
  * Generate a secure random state token
@@ -200,13 +206,20 @@ export async function handleGitHubAuthCallback(
 			throw new Error('Failed to fetch GitHub user');
 		}
 
-		const userData = await userResponse.json() as {
-			id: number;
-			login: string;
-		};
+		const userData: unknown = await userResponse.json();
 
-		githubUserId = String(userData.id);
-		githubUsername = userData.login;
+		// Validate response structure
+		if (
+			!userData ||
+			typeof userData !== 'object' ||
+			typeof (userData as { id?: unknown }).id !== 'number' ||
+			typeof (userData as { login?: unknown }).login !== 'string'
+		) {
+			throw new Error('Invalid response from GitHub');
+		}
+
+		githubUserId = String((userData as { id: number }).id);
+		githubUsername = (userData as { login: string }).login;
 	} catch (err) {
 		const message = err instanceof Error ? err.message : 'Failed to fetch user info';
 		return context.redirect(`/settings?github_error=${encodeURIComponent(message)}`);
@@ -238,6 +251,25 @@ export async function handleGitHubAuthCallback(
 			]
 		);
 	} catch (err) {
+		// Check for unique constraint violation (same GitHub account connected to another user)
+		const isUniqueViolation =
+			err &&
+			typeof err === 'object' &&
+			'code' in err &&
+			String((err as { code: unknown }).code) === '23505';
+
+		if (isUniqueViolation) {
+			log({
+				type: 'auth',
+				level: 'warn',
+				event: 'github_connect_failed',
+				userId,
+				reason: 'github_account_already_linked',
+				githubUsername,
+			});
+			return context.redirect('/settings?github_error=This+GitHub+account+is+already+connected+to+another+user');
+		}
+
 		log({
 			type: 'auth',
 			level: 'error',
@@ -328,6 +360,15 @@ export async function handleGitHubDisconnect(
 		[session.userId]
 	);
 
+	// Clear cached GitHub data for this user
+	const reposCacheKey = `github_repos:${CACHE_VERSION}:${session.userId}`;
+	await redis.del(reposCacheKey);
+	// Note: Branch cache keys include owner/repo, so we use pattern matching
+	const branchKeys = await redis.keys(`github_branches:${CACHE_VERSION}:${session.userId}:*`);
+	if (branchKeys.length > 0) {
+		await redis.del(...branchKeys);
+	}
+
 	log({
 		type: 'auth',
 		level: 'info',
@@ -385,8 +426,8 @@ export async function handleListGitHubRepos(
 		return context.json({ error: 'GitHub connection corrupted. Please reconnect.' }, 500);
 	}
 
-	// Check Redis cache first
-	const cacheKey = `github_repos:${session.userId}`;
+	// Check Redis cache first (versioned to handle format changes)
+	const cacheKey = `github_repos:${CACHE_VERSION}:${session.userId}`;
 	const cached = await redis.get(cacheKey);
 	if (cached) {
 		try {
@@ -448,8 +489,16 @@ export async function handleListGitHubRepos(
 
 			page++;
 
-			// Safety limit
+			// Safety limit - log warning if we hit it
 			if (page > 10) {
+				log({
+					type: 'github',
+					level: 'warn',
+					event: 'github_repo_pagination_limit_reached',
+					userId: session.userId,
+					endpoint: 'repos',
+					details: { totalFetched: repos.length, maxPages: 10 },
+				});
 				break;
 			}
 		}
@@ -540,8 +589,8 @@ export async function handleListGitHubBranches(
 		return context.json({ error: 'GitHub connection corrupted. Please reconnect.' }, 500);
 	}
 
-	// Check Redis cache first (include user ID to prevent cross-user cache sharing)
-	const cacheKey = `github_branches:${session.userId}:${owner}:${repo}`;
+	// Check Redis cache first (versioned, includes user ID to prevent cross-user cache sharing)
+	const cacheKey = `github_branches:${CACHE_VERSION}:${session.userId}:${owner}:${repo}`;
 	const cached = await redis.get(cacheKey);
 	if (cached) {
 		try {

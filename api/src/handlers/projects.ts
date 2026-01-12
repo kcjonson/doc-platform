@@ -135,9 +135,13 @@ export async function handleCreateProject(context: Context, redis: Redis): Promi
 				return context.json({ error: 'Invalid repository configuration' }, 400);
 			}
 
-			// Validate GitHub naming conventions (alphanumeric, hyphens, underscores, dots)
-			const GITHUB_NAME_REGEX = /^[a-zA-Z0-9._-]{1,100}$/;
-			const BRANCH_REGEX = /^[a-zA-Z0-9_./-]{1,255}$/;
+			// Validate GitHub naming conventions:
+			// - 1 to 100 characters
+			// - may contain alphanumerics, dots, underscores, and hyphens
+			// - must start and end with an alphanumeric character (no leading/trailing dots)
+			const GITHUB_NAME_REGEX = /^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,98}[a-zA-Z0-9])?$/;
+			// Branch names must start with alphanumeric
+			const BRANCH_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_./-]{0,254}$/;
 
 			if (!GITHUB_NAME_REGEX.test(repository.owner)) {
 				return context.json({ error: 'Invalid repository owner format' }, 400);
@@ -149,11 +153,16 @@ export async function handleCreateProject(context: Context, redis: Redis): Promi
 				return context.json({ error: 'Invalid branch name format' }, 400);
 			}
 
-			// Validate URL is a GitHub URL
+			// Validate URL is a GitHub URL with correct path format
 			try {
 				const url = new URL(repository.url);
 				if (url.hostname !== 'github.com') {
 					return context.json({ error: 'Repository URL must be a GitHub URL' }, 400);
+				}
+				// Validate path format: must be /{owner}/{repo}[.git][/]
+				const pathParts = url.pathname.replace(/\.git\/?$/, '').replace(/\/+$/, '').split('/').filter(Boolean);
+				if (pathParts.length !== 2) {
+					return context.json({ error: 'Repository URL must be in format https://github.com/{owner}/{repo}' }, 400);
 				}
 			} catch {
 				return context.json({ error: 'Invalid repository URL' }, 400);
