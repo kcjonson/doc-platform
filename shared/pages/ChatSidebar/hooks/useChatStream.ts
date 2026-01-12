@@ -200,7 +200,7 @@ export function useChatStream({
 
 								// Schedule flush if not already scheduled
 								if (!flushTimeoutRef.current) {
-									flushTimeoutRef.current = setTimeout(
+									flushTimeoutRef.current = window.setTimeout(
 										flushPendingContent,
 										STREAMING_THROTTLE_MS
 									) as unknown as number;

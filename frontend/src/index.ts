@@ -142,7 +142,7 @@ const apiUrl = process.env.API_URL || 'http://localhost:3001';
 // =============================================================================
 // In production/docker-compose: nginx routes /oauth/* directly to API service
 // In local development: these proxy routes forward OAuth requests to the API
-// This allows running `pnpm dev` without needing the full docker-compose stack
+// This allows running `npm run dev` without needing the full docker-compose stack
 // =============================================================================
 
 // Proxy OAuth authorize POST to API (form submission)

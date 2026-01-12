@@ -1,38 +1,11 @@
-import { defineConfig, Plugin } from 'vite';
+import { defineConfig } from 'vite';
 import preact from '@preact/preset-vite';
 import { resolve } from 'path';
 
-/**
- * Force preact JSX runtime resolution to web/node_modules.
- * This fixes resolution for files in ../shared/ that get JSX imports
- * injected by @preact/preset-vite's Babel transform.
- */
-function forcePreactResolution(): Plugin {
-	const jsxRuntimePath = resolve(__dirname, 'node_modules/preact/jsx-runtime/dist/jsxRuntime.mjs');
-	return {
-		name: 'force-preact-resolution',
-		// No enforce - runs in normal phase, after pre-phase JSX transform
-		transform(code) {
-			// Only process files that might have JSX runtime imports
-			if (!code.includes('preact/jsx-dev-runtime') && !code.includes('preact/jsx-runtime')) {
-				return null;
-			}
-			// Rewrite bare specifiers to absolute paths
-			const newCode = code
-				.replace(/from ["']preact\/jsx-dev-runtime["']/g, `from "${jsxRuntimePath}"`)
-				.replace(/from ["']preact\/jsx-runtime["']/g, `from "${jsxRuntimePath}"`);
-			if (newCode !== code) {
-				// Return empty mappings to indicate transform doesn't affect source positions
-				return { code: newCode, map: { mappings: '' } };
-			}
-			return null;
-		},
-	};
-}
-
 export default defineConfig({
+	// Keep Vite cache out of node_modules to avoid polluting workspace
+	cacheDir: '.vite',
 	plugins: [
-		forcePreactResolution(),
 		preact({
 			babel: {
 				plugins: [
@@ -104,17 +77,10 @@ export default defineConfig({
 			'@doc-platform/fetch': resolve(__dirname, '../shared/fetch/src'),
 			'@doc-platform/core': resolve(__dirname, '../shared/core/src'),
 			'@doc-platform/telemetry': resolve(__dirname, '../shared/telemetry/src'),
-			// Preact core aliases (jsx-runtime handled by forcePreactResolution plugin)
-			'preact': resolve(__dirname, 'node_modules/preact'),
-			'preact/hooks': resolve(__dirname, 'node_modules/preact/hooks'),
 			// Alias React to Preact for slate-react compatibility
-			'react': resolve(__dirname, 'node_modules/preact/compat'),
-			'react-dom': resolve(__dirname, 'node_modules/preact/compat'),
-			// Ensure slate packages resolve from web's node_modules
-			'slate': resolve(__dirname, 'node_modules/slate'),
-			'slate-react': resolve(__dirname, 'node_modules/slate-react'),
-			'slate-history': resolve(__dirname, 'node_modules/slate-history'),
-			'is-hotkey': resolve(__dirname, 'node_modules/is-hotkey'),
+			// (Vite doesn't respect npm overrides in dev mode)
+			'react': resolve(__dirname, '../node_modules/preact/compat'),
+			'react-dom': resolve(__dirname, '../node_modules/preact/compat'),
 		},
 		dedupe: ['preact', 'preact/hooks', 'preact/jsx-runtime', 'preact/jsx-dev-runtime', 'slate', 'slate-react', 'slate-history'],
 	},

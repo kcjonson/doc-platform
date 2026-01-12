@@ -42,14 +42,17 @@ services:
       context: .
       dockerfile: api/Dockerfile
       target: dev
-    command: sh -c "pnpm install && node --watch api/src/index.ts"
+    command: sh -c "npm install && node --watch api/src/index.ts"
     ports:
       - "3001:3001"
     # Anonymous /app/node_modules volume prevents host node_modules from
     # overriding container's installed dependencies.
+    # npm_cache volume persists npm cache across container rebuilds.
     volumes:
       - .:/app:cached
+      - ${HOST_PROJECT_PATH:-.}:/host/doc-platform
       - /app/node_modules
+      - npm_cache:/root/.npm
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://dev:dev@db:5432/doc_platform
@@ -68,13 +71,14 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
       target: dev
-    command: sh -c "pnpm install && cd web && ../node_modules/.bin/vite build && cd .. && node_modules/.bin/tsx --tsconfig ssg/tsconfig.json ssg/src/build.ts && (cd web && ../node_modules/.bin/vite --host 0.0.0.0 --port 5173 &) && node --watch frontend/src/index.ts"
+    command: sh -c "npm install && cd web && ../node_modules/.bin/vite build && cd .. && node_modules/.bin/tsx --tsconfig ssg/tsconfig.json ssg/src/build.ts && (cd web && ../node_modules/.bin/vite --host 0.0.0.0 --port 5173 &) && node --watch frontend/src/index.ts"
     ports:
       - "3000:3000"
       - "5173:5173"
     volumes:
       - .:/app:cached
       - /app/node_modules
+      - npm_cache:/root/.npm
     environment:
       PORT: 3000
       REDIS_URL: redis://redis:6379
@@ -95,12 +99,13 @@ services:
       context: .
       dockerfile: mcp/Dockerfile
       target: dev
-    command: sh -c "pnpm install && node --watch mcp/src/index.ts"
+    command: sh -c "npm install && node --watch mcp/src/index.ts"
     ports:
       - "3002:3002"
     volumes:
       - .:/app:cached
       - /app/node_modules
+      - npm_cache:/root/.npm
     environment:
       PORT: 3002
       DATABASE_URL: postgresql://dev:dev@db:5432/doc_platform
@@ -112,3 +117,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  npm_cache:
