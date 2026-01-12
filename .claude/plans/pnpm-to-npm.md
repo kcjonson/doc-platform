@@ -1,3 +1,5 @@
+# COMPLETE - 2026-01-11
+
 # Switch from pnpm to npm Workspaces
 
 ## Problem
