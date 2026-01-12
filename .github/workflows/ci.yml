@@ -70,9 +70,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build frontend
-        run: pnpm --filter @doc-platform/web build && pnpm --filter @doc-platform/ssg build
-
       - name: Test
         run: pnpm test
 
