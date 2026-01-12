@@ -45,10 +45,14 @@ services:
     command: sh -c "npm install && node --watch api/src/index.ts"
     ports:
       - "3001:3001"
+    # Anonymous /app/node_modules volume prevents host node_modules from
+    # overriding container's installed dependencies.
+    # npm_cache volume persists npm cache across container rebuilds.
     volumes:
       - .:/app:cached
       - ${HOST_PROJECT_PATH:-.}:/host/doc-platform
       - /app/node_modules
+      - npm_cache:/root/.npm
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://dev:dev@db:5432/doc_platform
@@ -74,6 +78,7 @@ services:
     volumes:
       - .:/app:cached
       - /app/node_modules
+      - npm_cache:/root/.npm
     environment:
       PORT: 3000
       REDIS_URL: redis://redis:6379
@@ -100,6 +105,7 @@ services:
     volumes:
       - .:/app:cached
       - /app/node_modules
+      - npm_cache:/root/.npm
     environment:
       PORT: 3002
       DATABASE_URL: postgresql://dev:dev@db:5432/doc_platform
@@ -111,3 +117,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  npm_cache:

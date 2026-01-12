@@ -203,7 +203,7 @@ export function useChatStream({
 									flushTimeoutRef.current = window.setTimeout(
 										flushPendingContent,
 										STREAMING_THROTTLE_MS
-									);
+									) as unknown as number;
 								}
 							} else if ('error' in parsed) {
 								// Error event

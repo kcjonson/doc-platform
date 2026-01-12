@@ -45,7 +45,12 @@ async function proxyToVite(c: Context, path: string): Promise<Response> {
 		});
 	} catch (error) {
 		console.error('Vite proxy error:', error);
-		throw error;
+		// Return a helpful error page instead of crashing
+		const message = error instanceof Error ? error.message : 'Unknown error';
+		return new Response(
+			`<html><body><h1>Vite Dev Server Unavailable</h1><p>${message}</p><p>Ensure Vite is running on ${VITE_DEV_SERVER}</p></body></html>`,
+			{ status: 502, headers: { 'Content-Type': 'text/html' } }
+		);
 	}
 }
 
@@ -137,7 +142,7 @@ const apiUrl = process.env.API_URL || 'http://localhost:3001';
 // =============================================================================
 // In production/docker-compose: nginx routes /oauth/* directly to API service
 // In local development: these proxy routes forward OAuth requests to the API
-// This allows running `pnpm dev` without needing the full docker-compose stack
+// This allows running `npm run dev` without needing the full docker-compose stack
 // =============================================================================
 
 // Proxy OAuth authorize POST to API (form submission)

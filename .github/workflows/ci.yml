@@ -14,20 +14,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: 'pnpm'
+          node-version: 25
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Lint
-        run: pnpm lint
+        run: npm run lint
 
   typecheck:
     name: Typecheck
@@ -36,20 +33,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: 'pnpm'
+          node-version: 25
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: npm run typecheck
 
   test:
     name: Test
@@ -58,23 +52,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: 'pnpm'
+          node-version: 25
+          cache: 'npm'
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build
-        run: pnpm build
+        run: npm ci
 
       - name: Test
-        run: pnpm test
+        run: npm test
 
   build-images:
     name: Build Images

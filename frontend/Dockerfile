@@ -8,6 +8,8 @@ WORKDIR /app
 # Download AWS RDS CA bundle for SSL certificate verification
 RUN wget -O /app/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
 
+# Port 3000: Frontend server (serves SPA and SSG pages)
+# Port 5173: Vite dev server (HMR WebSocket and source files)
 EXPOSE 3000 5173
 
 CMD ["node", "--watch", "frontend/src/index.ts"]
