@@ -86,6 +86,18 @@ Affected files (~20 package.json files with workspace deps).
 ### 7. Revert `web/vite.config.ts`
 Keep the `../node_modules/` paths since with npm workspaces everything is at root.
 
+### 8. Add npm cache volume to docker-compose.yml
+Add a named volume for npm cache to speed up installs across container rebuilds:
+```yaml
+volumes:
+  - npm_cache:/root/.npm
+
+volumes:
+  npm_cache:
+```
+
+This persists the npm cache in a Docker-managed volume (stored outside the repo).
+
 ---
 
 ## Verification
@@ -94,3 +106,21 @@ Keep the `../node_modules/` paths since with npm workspaces everything is at roo
 2. Run `npm install` in container
 3. Check `git clean -fdxn` shows only the 3 local config files
 4. Verify app works: login page loads, can authenticate
+
+---
+
+## Follow-up: Simplify vite.config.ts resolvers
+
+After verifying the migration works, simplify `web/vite.config.ts`:
+
+**Keep:**
+- `@doc-platform/*` aliases → needed for HMR on shared packages
+- `react`/`react-dom` → preact/compat (Vite doesn't respect npm `overrides` in dev)
+- `dedupe` array → prevents duplicate copies during bundling
+
+**Try removing:**
+- Explicit `preact`, `preact/hooks` paths → should resolve to root naturally
+- Explicit `slate`, `slate-react`, `slate-history`, `is-hotkey` paths → hoisted to root
+- `forcePreactResolution` plugin → was fixing resolution from `../shared/`, hoisting may fix this
+
+Test after removal to see what's actually needed.
