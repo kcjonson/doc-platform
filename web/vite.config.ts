@@ -31,6 +31,8 @@ function forcePreactResolution(): Plugin {
 }
 
 export default defineConfig({
+	// Keep Vite cache out of node_modules to avoid polluting workspace
+	cacheDir: '.vite',
 	plugins: [
 		forcePreactResolution(),
 		preact({
