@@ -72,7 +72,7 @@ jobs:
     uses: ./.github/workflows/_run-ecs-task.yml
     with:
       task_name: migrate
-      command: '["node", "shared/db/dist/migrate.js"]'
+      command: '["node", "shared/db/src/migrate.ts"]'
     secrets: inherit
 
   seed:
