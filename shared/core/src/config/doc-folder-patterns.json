@@ -1,0 +1,49 @@
+{
+  "$schema": "./doc-folder-patterns.schema.json",
+  "description": "Configuration for automatic document folder detection and selection",
+
+  "preselect": {
+    "description": "Folders that are automatically selected if they exist and contain markdown files",
+    "patterns": [
+      "/docs",
+      "/doc",
+      "/documentation",
+      "/wiki",
+      "/guides",
+      "/content"
+    ]
+  },
+
+  "suggest": {
+    "description": "Folders that are highlighted but not pre-selected if they contain markdown files",
+    "patterns": [
+      "/manual",
+      "/manuals",
+      "/help",
+      "/reference",
+      "/specs",
+      "/specifications",
+      "/api-docs",
+      "/api-reference"
+    ]
+  },
+
+  "ignore": {
+    "description": "Folders that are never shown in the folder picker (typically generated or dependency folders)",
+    "patterns": [
+      "/node_modules",
+      "/.git",
+      "/dist",
+      "/build",
+      "/out",
+      "/.next",
+      "/.nuxt",
+      "/coverage",
+      "/__pycache__",
+      "/venv",
+      "/.venv",
+      "/target",
+      "/vendor"
+    ]
+  }
+}

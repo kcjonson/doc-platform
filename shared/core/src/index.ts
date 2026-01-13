@@ -11,6 +11,14 @@ export { reportError, captureException, installErrorHandlers, type ErrorReport }
 // Logging
 export { log, logRequest, type LogLevel } from './logging.ts';
 
+// Document folder patterns
+export {
+	docFolderPatterns,
+	matchesPattern,
+	categorizeFolderPath,
+	type DocFolderPatterns,
+} from './config/doc-folder-patterns.ts';
+
 // Planning types
 export type Status = 'ready' | 'in_progress' | 'done';
 

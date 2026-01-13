@@ -34,6 +34,7 @@
 		"vitest": "^2.1.8"
 	},
 	"dependencies": {
+		"ignore": "^7.0.5",
 		"polyfill-symbol-metadata": "^0.0.2"
 	},
 	"overrides": {
