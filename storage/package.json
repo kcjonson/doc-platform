@@ -1,0 +1,23 @@
+{
+	"name": "@doc-platform/storage",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"lint": "eslint src",
+		"lint:fix": "eslint src --fix"
+	},
+	"dependencies": {
+		"@aws-sdk/client-s3": "^3.699.0",
+		"@hono/node-server": "^1.19.7",
+		"hono": "^4.11.1",
+		"pg": "^8.13.1"
+	},
+	"devDependencies": {
+		"@types/node": "^22.10.2",
+		"@types/pg": "^8.11.10",
+		"tsx": "^4.19.2",
+		"typescript": "^5.7.2"
+	}
+}
