@@ -136,11 +136,11 @@ filesRoutes.delete('/:projectId/*', async (c) => {
 		return c.json({ error: 'Invalid path' }, 400);
 	}
 
-	// Delete from S3
-	await deleteFileContent(projectId, validPath);
-
-	// Delete from database
+	// Delete from database first to avoid orphaned metadata if S3 delete fails
 	await deleteProjectDocument(projectId, validPath);
+
+	// Then delete from S3
+	await deleteFileContent(projectId, validPath);
 
 	return c.json({ deleted: true });
 });

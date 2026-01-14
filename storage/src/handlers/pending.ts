@@ -149,14 +149,16 @@ pendingRoutes.delete('/:projectId/:userId/*', async (c) => {
 		// Delete all pending changes for this user in this project
 		const changes = await listPendingChanges(projectId, userId);
 
-		// Delete S3 content for large files
+		// Delete from database first to avoid orphaned metadata
+		await deleteAllPendingChanges(projectId, userId);
+
+		// Then delete S3 content for large files
 		for (const change of changes) {
 			if (change.s3Key) {
 				await deletePendingContent(projectId, userId, change.path);
 			}
 		}
 
-		await deleteAllPendingChanges(projectId, userId);
 		return c.json({ deleted: true, count: changes.length });
 	}
 
@@ -167,11 +169,15 @@ pendingRoutes.delete('/:projectId/:userId/*', async (c) => {
 
 	// Check if change exists and has S3 content
 	const change = await getPendingChange(projectId, userId, validPath);
-	if (change?.s3Key) {
+	const hadS3Content = change?.s3Key;
+
+	// Delete from database first to avoid orphaned metadata
+	await deletePendingChange(projectId, userId, validPath);
+
+	// Then delete S3 content if it existed
+	if (hadS3Content) {
 		await deletePendingContent(projectId, userId, validPath);
 	}
-
-	await deletePendingChange(projectId, userId, validPath);
 
 	return c.json({ deleted: true });
 });

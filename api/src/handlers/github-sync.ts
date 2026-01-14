@@ -254,7 +254,7 @@ export async function handleGitHubSync(
 
 /**
  * Commit pending changes to GitHub repository.
- * POST /api/projects/:id/commit
+ * POST /api/projects/:id/github/commit
  *
  * Uses GitHub Git Data API to create commits without cloning:
  * 1. Get pending changes from storage service

@@ -193,7 +193,7 @@ export class StorageClient {
 		projectId: string,
 		userId: string
 	): Promise<{ deleted: boolean; count: number }> {
-		return this.request('DELETE', `/pending/${projectId}/${userId}/`);
+		return this.request('DELETE', `/pending/${projectId}/${userId}`);
 	}
 }
 

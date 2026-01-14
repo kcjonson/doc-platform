@@ -33,11 +33,13 @@ async function ensureBucket(): Promise<void> {
 		await s3.send(new CreateBucketCommand({ Bucket: BUCKET }));
 		console.log(`Created S3 bucket: ${BUCKET}`);
 	} catch (error: unknown) {
+		const errorName = (error as { name?: string }).name;
 		// Ignore if bucket already exists
-		if ((error as { name?: string }).name !== 'BucketAlreadyOwnedByYou' &&
-			(error as { name?: string }).name !== 'BucketAlreadyExists') {
-			console.log('Bucket already exists or creation skipped');
+		if (errorName === 'BucketAlreadyOwnedByYou' || errorName === 'BucketAlreadyExists') {
+			console.log('Bucket already exists');
+			return;
 		}
+		throw error;
 	}
 }
 

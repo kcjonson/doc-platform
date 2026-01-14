@@ -4,8 +4,25 @@
  */
 
 import type { Context, Next } from 'hono';
+import crypto from 'crypto';
 
 const STORAGE_API_KEY = process.env.STORAGE_API_KEY;
+
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+	const bufA = Buffer.from(a);
+	const bufB = Buffer.from(b);
+
+	// If lengths differ, compare against itself to maintain constant time
+	if (bufA.length !== bufB.length) {
+		crypto.timingSafeEqual(bufA, bufA);
+		return false;
+	}
+
+	return crypto.timingSafeEqual(bufA, bufB);
+}
 
 export async function apiKeyAuth(c: Context, next: Next): Promise<Response | void> {
 	// Skip auth for health check
@@ -20,7 +37,7 @@ export async function apiKeyAuth(c: Context, next: Next): Promise<Response | voi
 		return c.json({ error: 'Service misconfigured' }, 500);
 	}
 
-	if (!apiKey || apiKey !== STORAGE_API_KEY) {
+	if (!apiKey || !timingSafeEqual(apiKey, STORAGE_API_KEY)) {
 		return c.json({ error: 'Unauthorized' }, 401);
 	}
 
