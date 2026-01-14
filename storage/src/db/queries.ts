@@ -57,9 +57,9 @@ export async function getProjectDocument(
 		[projectId, path]
 	);
 
-	if (result.rows.length === 0) return null;
-
 	const row = result.rows[0];
+	if (!row) return null;
+
 	return {
 		id: row.id,
 		projectId: row.project_id,
@@ -160,9 +160,9 @@ export async function getPendingChange(
 		[projectId, userId, path]
 	);
 
-	if (result.rows.length === 0) return null;
-
 	const row = result.rows[0];
+	if (!row) return null;
+
 	return {
 		id: row.id,
 		projectId: row.project_id,
