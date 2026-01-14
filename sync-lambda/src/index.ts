@@ -147,7 +147,7 @@ export async function handler(event: SyncEvent): Promise<SyncResponse> {
 		try {
 			const encrypted: EncryptedData = JSON.parse(event.encryptedToken);
 			token = decrypt(encrypted);
-		} catch (err) {
+		} catch {
 			throw new Error('Failed to decrypt GitHub token');
 		}
 
