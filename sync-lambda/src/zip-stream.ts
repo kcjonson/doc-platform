@@ -6,12 +6,9 @@
 
 import { Readable } from 'stream';
 import unzipper from 'unzipper';
-import { isTextFile, stripRootFolder } from './file-filter.ts';
+import { shouldSkipDirectory, shouldSyncFile, stripRootFolder, MAX_FILE_SIZE_BYTES } from './file-filter.ts';
 
 const GITHUB_API_URL = 'https://api.github.com';
-
-// Maximum file size to sync (1MB) - larger files are skipped
-const MAX_FILE_SIZE = 1024 * 1024;
 
 export interface StreamResult {
 	synced: number;
@@ -107,17 +104,16 @@ export async function streamGitHubZipToStorage(
 					return;
 				}
 
-				// Skip non-text files
-				if (!isTextFile(path)) {
+				// Skip files in ignored directories (early check before reading)
+				if (shouldSkipDirectory(path)) {
 					result.skipped++;
 					entry.autodrain();
 					return;
 				}
 
-				// Skip files that look too large (compressed > 500KB likely means > 1MB uncompressed)
-				if (estimatedSize > MAX_FILE_SIZE / 2) {
+				// Skip files that look too large based on compressed size estimate
+				if (estimatedSize > MAX_FILE_SIZE_BYTES / 2) {
 					result.skipped++;
-					result.errors.push(`Skipped ${path}: file too large (estimated ${estimatedSize} bytes compressed)`);
 					entry.autodrain();
 					return;
 				}
@@ -130,10 +126,9 @@ export async function streamGitHubZipToStorage(
 					}
 					const buffer = Buffer.concat(chunks);
 
-					// Check actual size after reading
-					if (buffer.length > MAX_FILE_SIZE) {
+					// Check if file should be synced (size + binary detection)
+					if (!(await shouldSyncFile(path, buffer))) {
 						result.skipped++;
-						result.errors.push(`Skipped ${path}: file too large (${buffer.length} bytes)`);
 						return;
 					}
 

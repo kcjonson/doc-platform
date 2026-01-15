@@ -3,7 +3,7 @@
  * Much faster than full sync when only a few files have changed.
  */
 
-import { isTextFile } from './file-filter.ts';
+import { shouldSkipDirectory, shouldSyncFile } from './file-filter.ts';
 import { updateSyncStatus } from './shared/db-utils.ts';
 import { createStorageClient } from './shared/storage-client.ts';
 
@@ -103,14 +103,14 @@ async function getChangedFiles(
 }
 
 /**
- * Fetch a blob's content from GitHub.
+ * Fetch a blob's content from GitHub as a Buffer.
  */
-async function fetchBlob(
+async function fetchBlobBuffer(
 	owner: string,
 	repo: string,
 	sha: string,
 	token: string
-): Promise<string> {
+): Promise<Buffer> {
 	const response = await fetch(
 		`${GITHUB_API_URL}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/blobs/${sha}`,
 		{
@@ -133,12 +133,12 @@ async function fetchBlob(
 
 	const blob: GitHubBlob = await response.json();
 
-	// Decode content
+	// Decode content to Buffer
 	if (blob.encoding === 'base64') {
-		return Buffer.from(blob.content, 'base64').toString('utf-8');
+		return Buffer.from(blob.content, 'base64');
 	}
 
-	return blob.content;
+	return Buffer.from(blob.content, 'utf-8');
 }
 
 /**
@@ -203,23 +203,26 @@ export async function performIncrementalSync(
 		// Create storage client
 		const storageClient = createStorageClient(storageServiceUrl, storageApiKey);
 
+		// Pre-filter files by directory (early skip, no content fetch needed)
+		const notInSkipDir = (f: GitHubCompareFile): boolean => !shouldSkipDirectory(f.filename);
+
 		// Separate files by action
 		const toSync = files.filter(
 			(f) =>
 				(f.status === 'added' || f.status === 'modified') &&
-				isTextFile(f.filename)
+				notInSkipDir(f)
 		);
 
 		const toRemove = files.filter(
-			(f) => f.status === 'removed' && isTextFile(f.filename)
+			(f) => f.status === 'removed' && notInSkipDir(f)
 		);
 
 		// Handle renamed files: remove old, add new
 		const renamed = files.filter(
-			(f) => f.status === 'renamed' && isTextFile(f.filename)
+			(f) => f.status === 'renamed' && notInSkipDir(f)
 		);
 		for (const file of renamed) {
-			if (file.previous_filename) {
+			if (file.previous_filename && !shouldSkipDirectory(file.previous_filename)) {
 				toRemove.push({
 					...file,
 					filename: file.previous_filename,
@@ -233,9 +236,17 @@ export async function performIncrementalSync(
 		let removed = 0;
 
 		// Sync added/modified files in batches
+		// Fetch content, check size + binary, then upload if valid
 		await processBatches(toSync, BATCH_SIZE, BATCH_DELAY_MS, async (file) => {
 			try {
-				const content = await fetchBlob(owner, repo, file.sha, token);
+				const buffer = await fetchBlobBuffer(owner, repo, file.sha, token);
+
+				// Check if file should be synced (size + binary detection)
+				if (!(await shouldSyncFile(file.filename, buffer))) {
+					return;
+				}
+
+				const content = buffer.toString('utf-8');
 				await storageClient.putFile(projectId, file.filename, content);
 				synced++;
 			} catch (err) {

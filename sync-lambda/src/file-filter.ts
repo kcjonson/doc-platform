@@ -1,132 +1,12 @@
 /**
- * File type detection for GitHub sync.
- * Determines which files to sync (text/source) and which to skip (binary).
+ * File filtering for GitHub sync.
+ * Determines which files to sync based on directory, size, and content.
  */
 
-// Text file extensions that should be synced
-const TEXT_EXTENSIONS = new Set([
-	// Documentation
-	'md',
-	'mdx',
-	'txt',
-	'rst',
-	'adoc',
-	// Config
-	'json',
-	'yaml',
-	'yml',
-	'toml',
-	'xml',
-	'ini',
-	'env',
-	'env.example',
-	'env.local',
-	// JavaScript/TypeScript
-	'js',
-	'jsx',
-	'ts',
-	'tsx',
-	'mjs',
-	'cjs',
-	// Other languages
-	'py',
-	'rb',
-	'go',
-	'rs',
-	'java',
-	'kt',
-	'scala',
-	'c',
-	'cpp',
-	'h',
-	'hpp',
-	'cs',
-	'php',
-	'swift',
-	'sh',
-	'bash',
-	'zsh',
-	'sql',
-	'graphql',
-	'prisma',
-	// Web
-	'html',
-	'htm',
-	'css',
-	'scss',
-	'sass',
-	'less',
-	'vue',
-	'svelte',
-	// Special files (no extension or special names)
-	'gitignore',
-	'gitattributes',
-	'editorconfig',
-	'dockerignore',
-	'eslintignore',
-	'prettierignore',
-]);
+import { isBinaryFile } from 'isbinaryfile';
 
-// Binary file extensions that should be skipped
-const BINARY_EXTENSIONS = new Set([
-	// Images
-	'png',
-	'jpg',
-	'jpeg',
-	'gif',
-	'webp',
-	'svg',
-	'ico',
-	'bmp',
-	'tiff',
-	'psd',
-	// Media
-	'mp3',
-	'mp4',
-	'wav',
-	'avi',
-	'mov',
-	'webm',
-	'ogg',
-	'flac',
-	// Archives
-	'zip',
-	'tar',
-	'gz',
-	'rar',
-	'7z',
-	'bz2',
-	// Fonts
-	'woff',
-	'woff2',
-	'ttf',
-	'otf',
-	'eot',
-	// Binaries
-	'exe',
-	'dll',
-	'so',
-	'dylib',
-	'o',
-	'a',
-	'class',
-	'pyc',
-	'pyo',
-	// Documents (often binary)
-	'pdf',
-	'doc',
-	'docx',
-	'xls',
-	'xlsx',
-	'ppt',
-	'pptx',
-	// Data
-	'db',
-	'sqlite',
-	'sqlite3',
-	// Lock files (can be very large, often auto-generated)
-	'lock',
-]);
+// Maximum file size to sync (500KB)
+export const MAX_FILE_SIZE_BYTES = 500 * 1024;
 
 // Directories to always skip
 const SKIP_DIRECTORIES = [
@@ -150,48 +30,6 @@ const SKIP_DIRECTORIES = [
 	'.vscode/',
 ];
 
-// Special filenames that are text files (no extension)
-const SPECIAL_TEXT_FILES = new Set([
-	'Dockerfile',
-	'Makefile',
-	'Rakefile',
-	'Gemfile',
-	'Procfile',
-	'LICENSE',
-	'LICENCE',
-	'README',
-	'CHANGELOG',
-	'CONTRIBUTING',
-	'AUTHORS',
-	'CODEOWNERS',
-]);
-
-/**
- * Get the extension from a file path.
- */
-function getExtension(path: string): string {
-	const filename = path.split('/').pop() || '';
-	const lastDot = filename.lastIndexOf('.');
-
-	// No dot or dot at start (hidden file like .gitignore)
-	if (lastDot <= 0) {
-		// Check if it's a dotfile like .gitignore
-		if (filename.startsWith('.')) {
-			return filename.substring(1).toLowerCase();
-		}
-		return '';
-	}
-
-	return filename.substring(lastDot + 1).toLowerCase();
-}
-
-/**
- * Get the filename without path.
- */
-function getFilename(path: string): string {
-	return path.split('/').pop() || '';
-}
-
 /**
  * Check if a path should be skipped because it's in a skip directory.
  */
@@ -208,36 +46,36 @@ export function shouldSkipDirectory(path: string): boolean {
 }
 
 /**
- * Check if a file is a text file that should be synced.
- * Uses extension-based detection with special case handling.
+ * Check if content is binary using isbinaryfile.
  */
-export function isTextFile(path: string): boolean {
+export async function isBinary(buffer: Buffer): Promise<boolean> {
+	return isBinaryFile(buffer);
+}
+
+/**
+ * Check if a file should be synced based on path, size, and content.
+ * Returns true if the file should be synced.
+ */
+export async function shouldSyncFile(
+	path: string,
+	buffer: Buffer
+): Promise<boolean> {
 	// Skip files in ignored directories
 	if (shouldSkipDirectory(path)) {
 		return false;
 	}
 
-	const filename = getFilename(path);
-	const ext = getExtension(path);
-
-	// Check special text filenames (no extension)
-	if (!ext && SPECIAL_TEXT_FILES.has(filename)) {
-		return true;
-	}
-
-	// Check if it's a known binary extension
-	if (BINARY_EXTENSIONS.has(ext)) {
+	// Skip files over size limit
+	if (buffer.length > MAX_FILE_SIZE_BYTES) {
 		return false;
 	}
 
-	// Check if it's a known text extension
-	if (TEXT_EXTENSIONS.has(ext)) {
-		return true;
+	// Skip binary files
+	if (await isBinaryFile(buffer)) {
+		return false;
 	}
 
-	// For unknown extensions, default to skipping
-	// This is safer than accidentally syncing binary files
-	return false;
+	return true;
 }
 
 /**
@@ -245,7 +83,10 @@ export function isTextFile(path: string): boolean {
  * Only markdown files are editable; other text files are read-only for AI reference.
  */
 export function isEditableFile(path: string): boolean {
-	const ext = getExtension(path);
+	const filename = path.split('/').pop() || '';
+	const lastDot = filename.lastIndexOf('.');
+	if (lastDot <= 0) return false;
+	const ext = filename.substring(lastDot + 1).toLowerCase();
 	return ext === 'md' || ext === 'mdx';
 }
 
@@ -261,27 +102,4 @@ export function stripRootFolder(zipPath: string): string {
 		return '';
 	}
 	return zipPath.substring(firstSlash + 1);
-}
-
-/**
- * Get file type category for logging/metrics.
- */
-export function getFileCategory(
-	path: string
-): 'text' | 'binary' | 'skipped-dir' | 'unknown' {
-	if (shouldSkipDirectory(path)) {
-		return 'skipped-dir';
-	}
-
-	const ext = getExtension(path);
-
-	if (BINARY_EXTENSIONS.has(ext)) {
-		return 'binary';
-	}
-
-	if (TEXT_EXTENSIONS.has(ext) || SPECIAL_TEXT_FILES.has(getFilename(path))) {
-		return 'text';
-	}
-
-	return 'unknown';
 }
