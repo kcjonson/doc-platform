@@ -8,6 +8,11 @@ on:
         required: false
         type: string
         default: 'deploy'
+      bootstrap:
+        description: 'Bootstrap mode - create services with desiredCount=0'
+        required: false
+        type: boolean
+        default: false
 
 env:
   AWS_REGION: us-west-2
@@ -52,7 +57,11 @@ jobs:
               npx cdk diff
               ;;
             deploy)
-              npx cdk deploy --require-approval never
+              BOOTSTRAP_FLAG=""
+              if [ "${{ inputs.bootstrap }}" = "true" ]; then
+                BOOTSTRAP_FLAG="--context bootstrap=true"
+              fi
+              npx cdk deploy --require-approval never $BOOTSTRAP_FLAG
               ;;
             destroy)
               npx cdk destroy --force
