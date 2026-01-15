@@ -233,7 +233,7 @@ export class DocPlatformStack extends cdk.Stack {
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
 			securityGroups: [storageDbSecurityGroup],
 			credentials: rds.Credentials.fromSecret(storageDbCredentials),
-			databaseName: 'storage',
+			databaseName: 'storagedb',
 			allocatedStorage: 20,
 			maxAllocatedStorage: 100,
 			multiAz: false,
@@ -716,7 +716,7 @@ export class DocPlatformStack extends cdk.Stack {
 				// Storage database connection
 				DB_HOST: storageDatabase.instanceEndpoint.hostname,
 				DB_PORT: storageDatabase.instanceEndpoint.port.toString(),
-				DB_NAME: 'storage',
+				DB_NAME: 'storagedb',
 				DB_USER: 'postgres',
 				// S3 bucket for file content
 				S3_BUCKET: storageBucket.bucketName,
