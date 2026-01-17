@@ -9,10 +9,6 @@ const { Pool } = pg;
 // AWS RDS CA bundle path (downloaded in Dockerfile)
 const RDS_CA_BUNDLE_PATH = '/app/rds-ca-bundle.pem';
 
-// Lazy-initialized pool - created on first use
-// This allows Lambda to set env vars from Secrets Manager before connection
-let _pool: pg.Pool | null = null;
-
 // Build DATABASE_URL from individual vars if not provided
 function getDatabaseUrl(): string {
 	if (process.env.DATABASE_URL) {
@@ -34,6 +30,8 @@ function getDatabaseUrl(): string {
 	);
 }
 
+const connectionString = getDatabaseUrl();
+
 // Build SSL config for production
 // Uses AWS RDS CA bundle for proper certificate verification
 function getSslConfig(): pg.PoolConfig['ssl'] {
@@ -54,30 +52,20 @@ function getSslConfig(): pg.PoolConfig['ssl'] {
 	return { rejectUnauthorized: false };
 }
 
-/**
- * Database pool accessor object with lazy initialization.
- * Access via `pool.instance` - creates the connection on first use.
- * This allows Lambda to set env vars from Secrets Manager before the first DB call.
- */
-export const pool = {
-	get instance(): pg.Pool {
-		if (!_pool) {
-			_pool = new Pool({
-				connectionString: getDatabaseUrl(),
-				max: 20,
-				idleTimeoutMillis: 30000,
-				connectionTimeoutMillis: 2000,
-				ssl: getSslConfig(),
-			});
+// Connection pool - reused across requests
+// SSL is required for AWS RDS PostgreSQL (pg_hba.conf rejects unencrypted connections)
+const pool = new Pool({
+	connectionString,
+	max: 20,
+	idleTimeoutMillis: 30000,
+	connectionTimeoutMillis: 2000,
+	ssl: getSslConfig(),
+});
 
-			// Log connection errors (don't crash the server)
-			_pool.on('error', (err) => {
-				console.error('Unexpected database error:', err);
-			});
-		}
-		return _pool;
-	},
-};
+// Log connection errors (don't crash the server)
+pool.on('error', (err) => {
+	console.error('Unexpected database error:', err);
+});
 
 /**
  * Execute a query with parameters
@@ -87,7 +75,7 @@ export async function query<T extends pg.QueryResultRow>(
 	params?: unknown[]
 ): Promise<pg.QueryResult<T>> {
 	const start = Date.now();
-	const result = await pool.instance.query<T>(text, params);
+	const result = await pool.query<T>(text, params);
 	const duration = Date.now() - start;
 
 	if (process.env.NODE_ENV === 'development') {
@@ -101,7 +89,7 @@ export async function query<T extends pg.QueryResultRow>(
  * Get a client from the pool for transactions
  */
 export async function getClient(): Promise<pg.PoolClient> {
-	return pool.instance.connect();
+	return pool.connect();
 }
 
 /**
@@ -110,7 +98,7 @@ export async function getClient(): Promise<pg.PoolClient> {
 export async function transaction<T>(
 	fn: (client: pg.PoolClient) => Promise<T>
 ): Promise<T> {
-	const client = await pool.instance.connect();
+	const client = await pool.connect();
 	try {
 		await client.query('BEGIN');
 		const result = await fn(client);
@@ -128,8 +116,7 @@ export async function transaction<T>(
  * Close all connections (for graceful shutdown)
  */
 export async function close(): Promise<void> {
-	if (_pool) {
-		await _pool.end();
-		_pool = null;
-	}
+	await pool.end();
 }
+
+export { pool };
