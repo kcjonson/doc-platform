@@ -4,8 +4,14 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// Use vi.hoisted to ensure mock functions are available when vi.mock runs
+// Use vi.hoisted to set env vars and mock functions before module import
 const { mockQuery, mockConnect, mockEnd, mockOn, mockPoolInstance, MockPool } = vi.hoisted(() => {
+	// Set env vars before module loads (required for getDatabaseUrl())
+	process.env.DB_HOST = 'localhost';
+	process.env.DB_NAME = 'testdb';
+	process.env.DB_USER = 'testuser';
+	process.env.DB_PASSWORD = 'testpass';
+
 	const mockQuery = vi.fn();
 	const mockConnect = vi.fn();
 	const mockEnd = vi.fn();
