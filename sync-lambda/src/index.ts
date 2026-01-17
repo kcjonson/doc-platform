@@ -9,7 +9,7 @@ import {
 	SecretsManagerClient,
 	GetSecretValueCommand,
 } from '@aws-sdk/client-secrets-manager';
-import { decrypt, type EncryptedData } from '@doc-platform/auth';
+import { decrypt, type EncryptedData } from '@doc-platform/auth/encryption';
 import { performInitialSync, type InitialSyncResult } from './initial-sync.ts';
 import {
 	performIncrementalSync,
