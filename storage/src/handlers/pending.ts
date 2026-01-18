@@ -170,36 +170,42 @@ pendingRoutes.put('/:projectId/:userId/:path{.+}', async (c) => {
 });
 
 /**
- * Delete pending change.
+ * Delete all pending changes for a user.
+ * DELETE /pending/:projectId/:userId
+ */
+pendingRoutes.delete('/:projectId/:userId', async (c) => {
+	const projectId = c.req.param('projectId');
+	const userId = c.req.param('userId');
+
+	auditLog('delete-all', projectId, userId);
+	const changes = await listPendingChanges(projectId, userId);
+
+	// Delete from database first to avoid orphaned metadata
+	await deleteAllPendingChanges(projectId, userId);
+
+	// Best-effort S3 cleanup - failures here don't affect the already-deleted DB records
+	for (const change of changes) {
+		if (change.s3Key) {
+			try {
+				await deletePendingContent(projectId, userId, change.path);
+			} catch {
+				// Log but continue - DB records are already deleted
+				console.warn(`Failed to delete S3 content for ${change.path}`);
+			}
+		}
+	}
+
+	return c.json({ deleted: true, count: changes.length });
+});
+
+/**
+ * Delete a specific pending change.
  * DELETE /pending/:projectId/:userId/:path
  */
 pendingRoutes.delete('/:projectId/:userId/:path{.+}', async (c) => {
 	const projectId = c.req.param('projectId');
 	const userId = c.req.param('userId');
 	const path = c.req.param('path');
-
-	if (!path || path.length === 0) {
-		// Delete all pending changes for this user in this project
-		auditLog('delete-all', projectId, userId);
-		const changes = await listPendingChanges(projectId, userId);
-
-		// Delete from database first to avoid orphaned metadata
-		await deleteAllPendingChanges(projectId, userId);
-
-		// Best-effort S3 cleanup - failures here don't affect the already-deleted DB records
-		for (const change of changes) {
-			if (change.s3Key) {
-				try {
-					await deletePendingContent(projectId, userId, change.path);
-				} catch {
-					// Log but continue - DB records are already deleted
-					console.warn(`Failed to delete S3 content for ${change.path}`);
-				}
-			}
-		}
-
-		return c.json({ deleted: true, count: changes.length });
-	}
 
 	const validPath = validatePath(path);
 	if (!validPath) {

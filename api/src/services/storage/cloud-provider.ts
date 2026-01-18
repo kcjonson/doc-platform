@@ -61,7 +61,15 @@ export class CloudStorageProvider implements StorageProvider {
 		const files = await this.client.listFiles(this.projectId);
 
 		// Build a virtual directory listing from flat file list
-		const prefix = relativePath === '' || relativePath === '.' ? '' : `${relativePath}/`;
+		// Storage paths don't have leading slashes, but API paths do (e.g., "/docs/file.md")
+		// Normalize the input path to match storage format (no leading slash)
+		let normalizedPath = relativePath;
+		if (normalizedPath.startsWith('/')) {
+			normalizedPath = normalizedPath.slice(1);
+		}
+
+		// For root directory or empty path, use empty prefix; otherwise add trailing slash
+		const prefix = normalizedPath === '' || normalizedPath === '.' ? '' : `${normalizedPath}/`;
 		const entries = new Map<string, FileEntry>();
 
 		for (const file of files) {
@@ -85,9 +93,10 @@ export class CloudStorageProvider implements StorageProvider {
 					if (!options.extensions.includes(ext)) continue;
 				}
 
+				// Return paths with leading slash to match API convention
 				entries.set(name, {
 					name,
-					path: file.path,
+					path: '/' + file.path,
 					type: 'file',
 					size: file.sizeBytes,
 					modifiedAt: new Date(file.syncedAt),
@@ -99,9 +108,10 @@ export class CloudStorageProvider implements StorageProvider {
 				if (!options?.showHidden && dirName.startsWith('.')) continue;
 
 				if (!entries.has(dirName)) {
+					// Return paths with leading slash to match API convention
 					entries.set(dirName, {
 						name: dirName,
-						path: prefix + dirName,
+						path: '/' + prefix + dirName,
 						type: 'directory',
 					});
 				}
@@ -118,11 +128,14 @@ export class CloudStorageProvider implements StorageProvider {
 	}
 
 	async readFile(relativePath: string): Promise<string> {
+		// Normalize path: API uses leading slash, storage doesn't
+		const storagePath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
+
 		// Check for pending changes first
 		const pending = await this.client.getPendingChange(
 			this.projectId,
 			this.userId,
-			relativePath
+			storagePath
 		);
 
 		if (pending && pending.action !== 'deleted' && pending.content !== null) {
@@ -130,7 +143,7 @@ export class CloudStorageProvider implements StorageProvider {
 		}
 
 		// Read from committed files
-		const file = await this.client.getFile(this.projectId, relativePath);
+		const file = await this.client.getFile(this.projectId, storagePath);
 		if (!file) {
 			throw new Error(`File not found: ${relativePath}`);
 		}
@@ -139,22 +152,28 @@ export class CloudStorageProvider implements StorageProvider {
 	}
 
 	async writeFile(relativePath: string, content: string): Promise<void> {
+		// Normalize path: API uses leading slash, storage doesn't
+		const storagePath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
+
 		// Store as pending change (autosave)
 		await this.client.putPendingChange(
 			this.projectId,
 			this.userId,
-			relativePath,
+			storagePath,
 			content,
 			'modified'
 		);
 	}
 
 	async deleteFile(relativePath: string): Promise<void> {
+		// Normalize path: API uses leading slash, storage doesn't
+		const storagePath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
+
 		// Store as pending deletion
 		await this.client.putPendingChange(
 			this.projectId,
 			this.userId,
-			relativePath,
+			storagePath,
 			null,
 			'deleted'
 		);
@@ -166,30 +185,37 @@ export class CloudStorageProvider implements StorageProvider {
 	}
 
 	async rename(oldPath: string, newPath: string): Promise<void> {
+		// Normalize paths: API uses leading slash, storage doesn't
+		const storageOldPath = oldPath.startsWith('/') ? oldPath.slice(1) : oldPath;
+		const storageNewPath = newPath.startsWith('/') ? newPath.slice(1) : newPath;
+
 		// Read old file, write to new path, delete old
 		const content = await this.readFile(oldPath);
 		await this.client.putPendingChange(
 			this.projectId,
 			this.userId,
-			newPath,
+			storageNewPath,
 			content,
 			'created'
 		);
 		await this.client.putPendingChange(
 			this.projectId,
 			this.userId,
-			oldPath,
+			storageOldPath,
 			null,
 			'deleted'
 		);
 	}
 
 	async exists(relativePath: string): Promise<boolean> {
+		// Normalize path: API uses leading slash, storage doesn't
+		const storagePath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
+
 		// Check pending changes first
 		const pending = await this.client.getPendingChange(
 			this.projectId,
 			this.userId,
-			relativePath
+			storagePath
 		);
 
 		if (pending) {
@@ -197,7 +223,7 @@ export class CloudStorageProvider implements StorageProvider {
 		}
 
 		// Check committed files
-		const file = await this.client.getFile(this.projectId, relativePath);
+		const file = await this.client.getFile(this.projectId, storagePath);
 		return file !== null;
 	}
 
@@ -221,8 +247,9 @@ export class CloudStorageProvider implements StorageProvider {
 						? 'deleted'
 						: 'modified';
 
+			// Return paths with leading slash to match API convention
 			unstaged.push({
-				path: change.path,
+				path: '/' + change.path,
 				status,
 			});
 		}
@@ -277,8 +304,11 @@ export class CloudStorageProvider implements StorageProvider {
 	}
 
 	async restore(relativePath: string): Promise<void> {
+		// Normalize path: API uses leading slash, storage doesn't
+		const storagePath = relativePath.startsWith('/') ? relativePath.slice(1) : relativePath;
+
 		// Remove pending deletion to restore from committed version
-		await this.client.deletePendingChange(this.projectId, this.userId, relativePath);
+		await this.client.deletePendingChange(this.projectId, this.userId, storagePath);
 	}
 
 	async getCurrentBranch(): Promise<string> {
