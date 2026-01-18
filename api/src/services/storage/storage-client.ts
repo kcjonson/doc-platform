@@ -210,6 +210,33 @@ export class StorageClient {
 	): Promise<{ deleted: boolean; count: number }> {
 		return this.request('DELETE', `/pending/${projectId}/${userId}`);
 	}
+
+	/**
+	 * List pending changes with their content.
+	 * Used for committing changes to GitHub.
+	 */
+	async listPendingChangesWithContent(
+		projectId: string,
+		userId: string
+	): Promise<PendingChangeContent[]> {
+		// Get the list of pending changes
+		const changes = await this.listPendingChanges(projectId, userId);
+
+		// Fetch content for each change in parallel
+		const changesWithContent = await Promise.all(
+			changes.map(async (change) => {
+				const content = await this.getPendingChange(projectId, userId, change.path);
+				return {
+					path: change.path,
+					content: content?.content ?? null,
+					action: change.action,
+					updatedAt: change.updatedAt,
+				};
+			})
+		);
+
+		return changesWithContent;
+	}
 }
 
 // Singleton instance
