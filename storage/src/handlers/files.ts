@@ -1,6 +1,6 @@
 /**
  * File storage handlers.
- * GET/PUT/DELETE /files/:projectId/*path
+ * GET/PUT/DELETE /files/:projectId/:path
  */
 
 import { Hono } from 'hono';
@@ -64,11 +64,11 @@ filesRoutes.get('/:projectId', async (c) => {
 
 /**
  * Get file content.
- * GET /files/:projectId/*path
+ * GET /files/:projectId/:path
  */
-filesRoutes.get('/:projectId/*', async (c) => {
+filesRoutes.get('/:projectId/:path{.+}', async (c) => {
 	const projectId = c.req.param('projectId');
-	const path = c.req.param('*');
+	const path = c.req.param('path');
 
 	if (!path || path.length === 0) {
 		return c.json({ error: 'Path required' }, 400);
@@ -104,11 +104,11 @@ filesRoutes.get('/:projectId/*', async (c) => {
 
 /**
  * Store file content.
- * PUT /files/:projectId/*path
+ * PUT /files/:projectId/:path
  */
-filesRoutes.put('/:projectId/*', async (c) => {
+filesRoutes.put('/:projectId/:path{.+}', async (c) => {
 	const projectId = c.req.param('projectId');
-	const path = c.req.param('*');
+	const path = c.req.param('path');
 
 	if (!path || path.length === 0) {
 		return c.json({ error: 'Path required' }, 400);
@@ -157,11 +157,11 @@ filesRoutes.put('/:projectId/*', async (c) => {
 
 /**
  * Delete file.
- * DELETE /files/:projectId/*path
+ * DELETE /files/:projectId/:path
  */
-filesRoutes.delete('/:projectId/*', async (c) => {
+filesRoutes.delete('/:projectId/:path{.+}', async (c) => {
 	const projectId = c.req.param('projectId');
-	const path = c.req.param('*');
+	const path = c.req.param('path');
 
 	if (!path || path.length === 0) {
 		return c.json({ error: 'Path required' }, 400);
