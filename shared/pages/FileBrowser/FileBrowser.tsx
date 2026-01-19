@@ -94,10 +94,10 @@ export function FileBrowser({
 	// Local state for delete confirmation dialog
 	const [deleteTarget, setDeleteTarget] = useState<{ path: string; type: 'file' | 'directory'; isUntracked: boolean } | null>(null);
 
-	// Initialize model when projectId changes
+	// Initialize model when projectId changes, expand to selected file
 	useEffect(() => {
-		model.initialize(projectId);
-	}, [model, projectId]);
+		model.initialize(projectId, selectedPath);
+	}, [model, projectId, selectedPath]);
 
 	// Expose startNewFile function to parent
 	// If no parentPath provided, uses first rootPath
