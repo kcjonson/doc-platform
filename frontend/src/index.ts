@@ -388,8 +388,9 @@ app.get('/api/auth/me', async (c) => {
 
 // Serve SSG assets (CSS for login, signup, home, 404) without auth
 // These must be accessible for unauthenticated pages to render correctly
+// CSS paths are /assets/styles/common-HASH.css and /assets/styles/ssg/NAME-HASH.css
 app.use(
-	'/assets/ssg/*',
+	'/assets/styles/*',
 	serveStatic({
 		root: './static',
 	})
