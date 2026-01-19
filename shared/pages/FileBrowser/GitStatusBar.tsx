@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Badge, Button, Icon, Notice } from '@doc-platform/ui';
 import type { GitStatusModel } from '@doc-platform/models';
@@ -12,21 +12,27 @@ export interface GitStatusBarProps {
 
 export function GitStatusBar({ gitStatus }: GitStatusBarProps): JSX.Element {
 	const [showCommitDialog, setShowCommitDialog] = useState(false);
+	// Track last commit message for retry scenarios
+	const lastCommitMessageRef = useRef<string>('');
 
 	const handlePull = async (): Promise<void> => {
 		await gitStatus.pull();
 	};
 
 	const handleCommit = async (message?: string): Promise<void> => {
+		// Store the message for potential retry
+		lastCommitMessageRef.current = message || '';
 		await gitStatus.commit(message);
 
-		// Close dialog on success
+		// Close dialog and clear stored message on success
 		if (!gitStatus.commitError) {
 			setShowCommitDialog(false);
+			lastCommitMessageRef.current = '';
 		}
 	};
 
 	const handleRetry = (): void => {
+		// Open dialog - it will use initialMessage prop to restore previous message
 		setShowCommitDialog(true);
 	};
 
@@ -98,6 +104,7 @@ export function GitStatusBar({ gitStatus }: GitStatusBarProps): JSX.Element {
 				gitStatus={gitStatus}
 				onClose={() => setShowCommitDialog(false)}
 				onCommit={handleCommit}
+				initialMessage={lastCommitMessageRef.current}
 			/>
 		</div>
 	);

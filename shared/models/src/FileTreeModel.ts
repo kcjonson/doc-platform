@@ -307,9 +307,10 @@ export class FileTreeModel extends Model {
 			}
 		}
 
-		// Save and reload
-		saveExpandedTreeToStorage(this.projectId, newExpanded);
-		await this.loadTree();
+		// Update local state and reload with the new expanded tree
+		// Pass directly to loadTree to avoid storage round-trip race condition
+		this.expanded = newExpanded;
+		await this.loadTree(undefined, newExpanded);
 	}
 
 	/**
@@ -501,13 +502,13 @@ export class FileTreeModel extends Model {
 	// Private methods
 	// ─────────────────────────────────────────────────────────────────────────
 
-	private async loadTree(currentFilePath?: string): Promise<void> {
+	private async loadTree(currentFilePath?: string, providedExpandedTree?: ExpandedTree): Promise<void> {
 		this.loading = true;
 		this.error = null;
 
 		try {
-			// Get saved expanded tree from localStorage
-			let expandedTree = loadExpandedTreeFromStorage(this.projectId);
+			// Use provided expanded tree, or load from localStorage
+			let expandedTree = providedExpandedTree ?? loadExpandedTreeFromStorage(this.projectId);
 
 			// If there's a current file, expand to show it
 			if (currentFilePath) {

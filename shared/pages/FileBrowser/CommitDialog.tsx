@@ -1,4 +1,4 @@
-import { useState } from 'preact/hooks';
+import { useState, useEffect } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Button, Dialog, Icon } from '@doc-platform/ui';
 import type { IconName } from '@doc-platform/ui';
@@ -10,6 +10,8 @@ export interface CommitDialogProps {
 	gitStatus: GitStatusModel;
 	onClose: () => void;
 	onCommit: (message?: string) => Promise<void>;
+	/** Initial message to pre-fill (e.g., for retry after failure) */
+	initialMessage?: string;
 }
 
 function getStatusIcon(status: ChangedFile['status']): IconName {
@@ -47,8 +49,16 @@ export function CommitDialog({
 	gitStatus,
 	onClose,
 	onCommit,
+	initialMessage = '',
 }: CommitDialogProps): JSX.Element | null {
 	const [commitMessage, setCommitMessage] = useState('');
+
+	// Reset commit message when dialog opens (use initialMessage for retries)
+	useEffect(() => {
+		if (open) {
+			setCommitMessage(initialMessage);
+		}
+	}, [open, initialMessage]);
 
 	if (!open) return null;
 
@@ -57,11 +67,11 @@ export function CommitDialog({
 		await onCommit(commitMessage.trim() || undefined);
 	};
 
-	const handleKeyDown = (e: KeyboardEvent): void => {
+	const handleKeyDown = async (e: KeyboardEvent): Promise<void> => {
 		// Submit on Cmd/Ctrl + Enter
 		if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault();
-			onCommit(commitMessage.trim() || undefined);
+			await onCommit(commitMessage.trim() || undefined);
 		}
 	};
 
@@ -69,7 +79,7 @@ export function CommitDialog({
 
 	return (
 		<Dialog
-			open={true}
+			open={open}
 			onClose={onClose}
 			title="Commit Changes"
 			maxWidth="md"
@@ -98,21 +108,22 @@ export function CommitDialog({
 				</div>
 
 				<div class={styles.field}>
-					<label class={styles.label}>
+					<label class={styles.label} htmlFor="commit-message">
 						<span class={styles.labelText}>Commit message (optional)</span>
-						<textarea
-							class={styles.textarea}
-							value={commitMessage}
-							onInput={(e) => setCommitMessage((e.target as HTMLTextAreaElement).value)}
-							onKeyDown={handleKeyDown}
-							placeholder="Describe your changes..."
-							rows={3}
-							autoFocus
-						/>
-						<span class={styles.hint}>
-							Press {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to commit
-						</span>
 					</label>
+					<textarea
+						id="commit-message"
+						class={styles.textarea}
+						value={commitMessage}
+						onInput={(e) => setCommitMessage((e.target as HTMLTextAreaElement).value)}
+						onKeyDown={handleKeyDown}
+						placeholder="Describe your changes..."
+						rows={3}
+						autoFocus
+					/>
+					<span class={styles.hint}>
+						Press {navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Enter to commit
+					</span>
 				</div>
 
 				<div class={styles.actions}>
