@@ -535,10 +535,27 @@ export async function handleGitHubCommit(
 
 	// Get pending changes with content
 	const storageClient = getStorageClient();
-	const pendingChanges = await storageClient.listPendingChangesWithContent(
-		projectId,
-		session.userId
-	);
+	let pendingChanges;
+	try {
+		pendingChanges = await storageClient.listPendingChangesWithContent(
+			projectId,
+			session.userId
+		);
+	} catch (err) {
+		log({
+			type: 'storage',
+			level: 'error',
+			event: 'list_pending_changes_failed',
+			userId: session.userId,
+			projectId,
+			error: err instanceof Error ? err.message : String(err),
+		});
+		const commitError = {
+			stage: 'commit' as const,
+			message: 'Failed to load pending changes. Please try again.',
+		};
+		return context.json({ success: false, error: commitError }, 500);
+	}
 
 	if (pendingChanges.length === 0) {
 		return context.json({ error: 'No changes to commit' }, 400);

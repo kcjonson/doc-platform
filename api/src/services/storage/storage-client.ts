@@ -25,7 +25,7 @@ interface PendingChange {
 	updatedAt: string;
 }
 
-interface PendingChangeContent {
+export interface PendingChangeContent {
 	path: string;
 	content: string | null;
 	action: 'modified' | 'created' | 'deleted';

@@ -85,15 +85,26 @@ export async function handleCommit(context: Context, redis: Redis): Promise<Resp
 		return context.json({ error: 'Invalid project ID format' }, 400);
 	}
 
-	// Check if this is a cloud-mode project - delegate to GitHub commit handler
-	const project = await getProject(projectId, userId);
-	if (project) {
-		const repo = project.repository as RepositoryConfig | Record<string, never>;
-		if (isCloudRepository(repo)) {
-			return handleGitHubCommit(context, redis);
-		}
+	// Check project mode - must be either cloud or local, never ambiguous
+	let project;
+	try {
+		project = await getProject(projectId, userId);
+	} catch (error) {
+		console.error('Failed to get project:', error);
+		return context.json({ error: 'Failed to load project' }, 500);
 	}
 
+	if (!project) {
+		return context.json({ error: 'Project not found' }, 404);
+	}
+
+	// Route based on project storage mode
+	const repo = project.repository as RepositoryConfig | Record<string, never>;
+	if (isCloudRepository(repo)) {
+		return handleGitHubCommit(context, redis);
+	}
+
+	// Local storage mode - get storage provider
 	const provider = await getStorageProvider(projectId, userId);
 	if (!provider) {
 		return context.json({ error: 'No repository configured' }, 404);

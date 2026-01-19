@@ -147,41 +147,64 @@ export async function createGitHubCommit(params: {
 		.map((c) => ({ path: c.path }));
 
 	// 3. Execute GraphQL mutation
-	const response = await fetch('https://api.github.com/graphql', {
-		method: 'POST',
-		headers: {
-			Authorization: `Bearer ${token}`,
-			'Content-Type': 'application/json',
-		},
-		body: JSON.stringify({
-			query: `
-				mutation CreateCommit($input: CreateCommitOnBranchInput!) {
-					createCommitOnBranch(input: $input) {
-						commit {
-							oid
-							url
+	let response: Response;
+	try {
+		response = await fetch('https://api.github.com/graphql', {
+			method: 'POST',
+			headers: {
+				Authorization: `Bearer ${token}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				query: `
+					mutation CreateCommit($input: CreateCommitOnBranchInput!) {
+						createCommitOnBranch(input: $input) {
+							commit {
+								oid
+								url
+							}
 						}
 					}
-				}
-			`,
-			variables: {
-				input: {
-					branch: {
-						repositoryNameWithOwner: `${owner}/${repo}`,
-						branchName: branch,
-					},
-					message: { headline: message },
-					expectedHeadOid: headSha,
-					fileChanges: {
-						additions: additions.length > 0 ? additions : undefined,
-						deletions: deletions.length > 0 ? deletions : undefined,
+				`,
+				variables: {
+					input: {
+						branch: {
+							repositoryNameWithOwner: `${owner}/${repo}`,
+							branchName: branch,
+						},
+						message: { headline: message },
+						expectedHeadOid: headSha,
+						fileChanges: {
+							additions: additions.length > 0 ? additions : undefined,
+							deletions: deletions.length > 0 ? deletions : undefined,
+						},
 					},
 				},
-			},
-		}),
-	});
+			}),
+		});
+	} catch (err) {
+		return {
+			success: false,
+			error: err instanceof Error ? `Network error: ${err.message}` : 'Network error contacting GitHub',
+		};
+	}
 
-	const result = (await response.json()) as CreateCommitResponse;
+	if (!response.ok) {
+		return {
+			success: false,
+			error: `GitHub API error: ${response.status} ${response.statusText}`,
+		};
+	}
+
+	let result: CreateCommitResponse;
+	try {
+		result = (await response.json()) as CreateCommitResponse;
+	} catch {
+		return {
+			success: false,
+			error: 'Failed to parse GitHub API response',
+		};
+	}
 
 	// 4. Handle errors (including conflicts)
 	const firstError = result.errors?.[0];

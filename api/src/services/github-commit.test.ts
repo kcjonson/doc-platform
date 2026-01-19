@@ -142,11 +142,11 @@ describe('github-commit', () => {
 
 			// Verify the GraphQL call
 			expect(mockFetch).toHaveBeenCalledTimes(2);
-			const graphqlCall = mockFetch.mock.calls[1];
+			const graphqlCall = mockFetch.mock.calls[1] as [string, RequestInit];
 			expect(graphqlCall[0]).toBe('https://api.github.com/graphql');
 			expect(graphqlCall[1].method).toBe('POST');
 
-			const body = JSON.parse(graphqlCall[1].body);
+			const body = JSON.parse(graphqlCall[1].body as string);
 			expect(body.variables.input.expectedHeadOid).toBe('abc123');
 			expect(body.variables.input.message.headline).toBe('Test commit');
 		});
@@ -210,8 +210,8 @@ describe('github-commit', () => {
 			expect(result.success).toBe(true);
 
 			// Verify deletions are in the request
-			const graphqlCall = mockFetch.mock.calls[1];
-			const body = JSON.parse(graphqlCall[1].body);
+			const graphqlCall = mockFetch.mock.calls[1] as [string, RequestInit];
+			const body = JSON.parse(graphqlCall[1].body as string);
 			expect(body.variables.input.fileChanges.deletions).toEqual([
 				{ path: 'deleted.md' },
 			]);
@@ -255,8 +255,8 @@ describe('github-commit', () => {
 			expect(result.filesCommitted).toBe(3);
 
 			// Verify the request structure
-			const graphqlCall = mockFetch.mock.calls[1];
-			const body = JSON.parse(graphqlCall[1].body);
+			const graphqlCall = mockFetch.mock.calls[1] as [string, RequestInit];
+			const body = JSON.parse(graphqlCall[1].body as string);
 
 			expect(body.variables.input.fileChanges.additions).toHaveLength(2);
 			expect(body.variables.input.fileChanges.deletions).toHaveLength(1);
