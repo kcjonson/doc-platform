@@ -214,6 +214,10 @@ export class StorageClient {
 	/**
 	 * List pending changes with their content.
 	 * Used for committing changes to GitHub.
+	 *
+	 * Note: Fetches content in parallel using Promise.all. For typical documentation
+	 * commits (< 50 files), this is efficient. If we ever need to handle very large
+	 * changesets, consider implementing batching to avoid overwhelming the storage service.
 	 */
 	async listPendingChangesWithContent(
 		projectId: string,

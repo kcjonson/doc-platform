@@ -303,5 +303,60 @@ describe('github-commit', () => {
 			expect(result.success).toBe(false);
 			expect(result.error).toBe('Unexpected response from GitHub API');
 		});
+
+		it('should handle network error during GraphQL call', async () => {
+			// Mock GET branch HEAD - success
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ object: { sha: 'abc123' } }),
+			});
+
+			// Mock GraphQL mutation - network error
+			mockFetch.mockRejectedValueOnce(new Error('Network connection failed'));
+
+			const result = await createGitHubCommit(baseParams);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('Network error: Network connection failed');
+		});
+
+		it('should handle HTTP error from GraphQL endpoint', async () => {
+			// Mock GET branch HEAD - success
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ object: { sha: 'abc123' } }),
+			});
+
+			// Mock GraphQL mutation - HTTP error
+			mockFetch.mockResolvedValueOnce({
+				ok: false,
+				status: 503,
+				statusText: 'Service Unavailable',
+			});
+
+			const result = await createGitHubCommit(baseParams);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('GitHub API error: 503 Service Unavailable');
+		});
+
+		it('should handle JSON parsing error from GraphQL response', async () => {
+			// Mock GET branch HEAD - success
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.resolve({ object: { sha: 'abc123' } }),
+			});
+
+			// Mock GraphQL mutation - invalid JSON
+			mockFetch.mockResolvedValueOnce({
+				ok: true,
+				json: () => Promise.reject(new Error('Invalid JSON')),
+			});
+
+			const result = await createGitHubCommit(baseParams);
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('Failed to parse GitHub API response');
+		});
 	});
 });
