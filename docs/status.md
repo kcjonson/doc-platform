@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2026-01-18 (Completed GitHub Commit for Cloud Projects implementation)
+Last Updated: 2026-01-19 (Added Better Error Handling & Notifications epic)
 
 ## Epic/Story/Task Template
 
@@ -357,6 +357,35 @@ Use this template for all work items:
   - [ ] electron-builder config
   - [ ] macOS build
   - [ ] Auto-update (future)
+
+---
+
+### Better Error Handling & Notifications
+**Spec/Documentation:** (needs spec)
+**Dependencies:** None
+**Status:** needs spec
+
+**Goal:** Create a universal toast/notification system and ensure consistent error handling across all features.
+
+**Tasks:**
+- [ ] Audit existing error handling
+  - [ ] Review all API endpoints for error response consistency
+  - [ ] Review all frontend features for error display patterns
+  - [ ] Document current error handling patterns and gaps
+- [ ] Design universal toast system
+  - [ ] Toast component design (success, error, warning, info variants)
+  - [ ] Toast positioning and stacking behavior
+  - [ ] Auto-dismiss timing and manual dismiss
+  - [ ] Accessibility (screen readers, focus management)
+- [ ] Implement toast system
+  - [ ] Toast component in @doc-platform/ui
+  - [ ] ToastProvider context for app-wide notifications
+  - [ ] useToast hook for triggering toasts
+- [ ] Migrate existing features
+  - [ ] Git commit success/error notifications
+  - [ ] File save confirmations
+  - [ ] Sync status notifications
+  - [ ] API error handling standardization
 
 ---
 
