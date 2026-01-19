@@ -22,7 +22,7 @@ docker compose up
 open http://localhost
 ```
 
-### After Code Changes (when not in watch mode)
+### After Code Changes, Without Watch Mode
 
 ```bash
 # Rebuild and restart
