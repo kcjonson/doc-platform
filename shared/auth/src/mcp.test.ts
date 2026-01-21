@@ -75,6 +75,27 @@ describe('MCP auth middleware', () => {
 			expect(wwwAuth).toBe('Bearer resource_metadata="https://staging.specboard.io/.well-known/oauth-protected-resource"');
 		});
 
+		it('should reject malicious host headers (host header injection protection)', async () => {
+			const app = new Hono<{ Variables: McpAuthVariables }>();
+			app.use('/mcp', mcpAuthMiddleware());
+			app.post('/mcp', (c) => c.json({ success: true }));
+
+			// Attacker tries to inject their own domain via host header
+			const res = await app.request('http://localhost/mcp', {
+				method: 'POST',
+				headers: {
+					host: 'evil-attacker.com',
+					'x-forwarded-proto': 'https',
+				},
+			});
+
+			const wwwAuth = res.headers.get('www-authenticate');
+			// Should NOT contain the attacker's domain
+			expect(wwwAuth).not.toContain('evil-attacker.com');
+			// Should fall back to safe default
+			expect(wwwAuth).toBe('Bearer resource_metadata="https://specboard.io/.well-known/oauth-protected-resource"');
+		});
+
 		it('should return 401 when Authorization header is not Bearer', async () => {
 			const app = new Hono<{ Variables: McpAuthVariables }>();
 			app.use('/mcp', mcpAuthMiddleware());
@@ -470,21 +491,22 @@ describe('MCP auth middleware', () => {
 			}
 		});
 
-		it('should point to correct protected resource metadata URL', async () => {
+		it('should point to correct protected resource metadata URL for allowed hosts', async () => {
 			const app = new Hono<{ Variables: McpAuthVariables }>();
 			app.use('/mcp', mcpAuthMiddleware());
 			app.post('/mcp', (c) => c.json({ success: true }));
 
+			// Use an allowed host (staging.specboard.io)
 			const res = await app.request('http://localhost/mcp', {
 				method: 'POST',
 				headers: {
-					host: 'api.example.com',
+					host: 'staging.specboard.io',
 					'x-forwarded-proto': 'https',
 				},
 			});
 
 			const wwwAuth = res.headers.get('www-authenticate');
-			expect(wwwAuth).toContain('https://api.example.com/.well-known/oauth-protected-resource');
+			expect(wwwAuth).toContain('https://staging.specboard.io/.well-known/oauth-protected-resource');
 		});
 	});
 

@@ -16,6 +16,7 @@ import {
 	completeTask as completeTaskService,
 	blockTask as blockTaskService,
 	unblockTask as unblockTaskService,
+	verifyProjectAccess,
 } from '@doc-platform/db';
 
 export const taskTools: Tool[] = [
@@ -193,12 +194,22 @@ type ToolResult = { content: Array<{ type: string; text: string }>; isError?: bo
 
 export async function handleTaskTool(
 	name: string,
-	args: Record<string, unknown> | undefined
+	args: Record<string, unknown> | undefined,
+	userId: string
 ): Promise<ToolResult> {
 	const projectId = args?.project_id as string;
 	if (!projectId) {
 		return {
 			content: [{ type: 'text', text: 'project_id is required' }],
+			isError: true,
+		};
+	}
+
+	// Security: Verify the user has access to this project
+	const hasAccess = await verifyProjectAccess(projectId, userId);
+	if (!hasAccess) {
+		return {
+			content: [{ type: 'text', text: 'Access denied: You do not have permission to access this project' }],
 			isError: true,
 		};
 	}
