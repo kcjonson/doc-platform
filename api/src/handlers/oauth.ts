@@ -20,6 +20,29 @@ const ALLOWED_CLIENTS = new Set(['claude-code', 'doc-platform-cli']);
 // Valid scopes
 const VALID_SCOPES = new Set(['docs:read', 'docs:write', 'tasks:read', 'tasks:write']);
 
+// Allowed redirect URIs for Claude Code (exact match required)
+const ALLOWED_REDIRECT_URIS = new Set([
+	'https://claude.ai/api/mcp/auth_callback',
+	'https://claude.com/api/mcp/auth_callback',
+]);
+
+/**
+ * Validate a redirect URI
+ * Returns true if valid, false otherwise
+ */
+function isValidRedirectUri(redirectUri: string): boolean {
+	try {
+		const url = new URL(redirectUri);
+		// Allow localhost with http (for local CLI tools)
+		const isLocalhost = ['127.0.0.1', 'localhost'].includes(url.hostname) && url.protocol === 'http:';
+		// Allow exact match against pre-approved URIs (Claude Code callbacks)
+		const isAllowedCallback = ALLOWED_REDIRECT_URIS.has(redirectUri);
+		return isLocalhost || isAllowedCallback;
+	} catch {
+		return false;
+	}
+}
+
 // Scope descriptions for consent screen
 export const SCOPE_DESCRIPTIONS: Record<string, string> = {
 	'docs:read': 'Read your documents',
@@ -182,21 +205,8 @@ export async function handleAuthorizeGet(
 	}
 
 	// Validate redirect_uri
-	// Allow: localhost (for CLI tools) or Claude Code's callback URLs
-	const ALLOWED_REDIRECT_URIS = [
-		'https://claude.ai/api/mcp/auth_callback',
-		'https://claude.com/api/mcp/auth_callback',
-	];
-	try {
-		const redirectUrl = new URL(redirectUri);
-		const isLocalhost = ['127.0.0.1', 'localhost'].includes(redirectUrl.hostname) && redirectUrl.protocol === 'http:';
-		const isAllowedCallback = ALLOWED_REDIRECT_URIS.includes(redirectUri);
-
-		if (!isLocalhost && !isAllowedCallback) {
-			return context.json({ error: 'invalid_request', error_description: 'redirect_uri not allowed' }, 400);
-		}
-	} catch {
-		return context.json({ error: 'invalid_request', error_description: 'Invalid redirect_uri' }, 400);
+	if (!isValidRedirectUri(redirectUri)) {
+		return context.json({ error: 'invalid_request', error_description: 'redirect_uri not allowed' }, 400);
 	}
 
 	if (!codeChallenge || codeChallengeMethod !== 'S256') {
@@ -284,7 +294,12 @@ export async function handleAuthorizePost(
 
 	const { client_id, redirect_uri, scope, state, code_challenge, code_challenge_method, device_name, action } = body;
 
-	// Build redirect URL
+	// Validate redirect_uri BEFORE using it (security: prevent open redirect)
+	if (!redirect_uri || !isValidRedirectUri(redirect_uri)) {
+		return context.json({ error: 'invalid_request', error_description: 'redirect_uri not allowed' }, 400);
+	}
+
+	// Build redirect URL (safe now that we've validated)
 	const redirectUrl = new URL(redirect_uri);
 
 	// If denied, redirect with error

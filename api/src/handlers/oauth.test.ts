@@ -8,6 +8,7 @@ import {
 	handleOAuthMetadata,
 	handleProtectedResourceMetadata,
 	handleAuthorizeGet,
+	handleAuthorizePost,
 	handleToken,
 	handleRevoke,
 } from './oauth.ts';
@@ -289,7 +290,7 @@ describe('oauth handlers', () => {
 
 			expect(res.status).toBe(400);
 			const data = await res.json();
-			expect(data.error_description).toBe('Invalid redirect_uri');
+			expect(data.error_description).toBe('redirect_uri not allowed');
 		});
 
 		it('should require PKCE with S256', async () => {
@@ -528,6 +529,39 @@ describe('oauth handlers', () => {
 			});
 
 			expect(res.status).toBe(400);
+		});
+
+		it('should validate redirect_uri in POST handler (prevent bypass)', async () => {
+			// This test ensures the POST handler also validates redirect_uri
+			// An attacker could try to bypass GET validation by directly POSTing
+			vi.mocked(getSession).mockResolvedValue(createMockSession('user-123'));
+
+			const app = new Hono();
+			app.post('/oauth/authorize', (c) => handleAuthorizePost(c, mockRedis));
+
+			// Attempt to POST with a malicious redirect_uri
+			const res = await app.request('http://localhost/oauth/authorize', {
+				method: 'POST',
+				headers: {
+					cookie: 'session=valid-session-id',
+					'content-type': 'application/json',
+				},
+				body: JSON.stringify({
+					client_id: 'claude-code',
+					redirect_uri: 'https://attacker.com/steal-code', // Malicious!
+					scope: 'docs:read',
+					state: 'test-state',
+					code_challenge: 'test-challenge',
+					code_challenge_method: 'S256',
+					device_name: 'Test Device',
+					action: 'approve',
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_request');
+			expect(data.error_description).toBe('redirect_uri not allowed');
 		});
 	});
 
