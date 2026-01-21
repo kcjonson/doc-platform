@@ -22,6 +22,7 @@ import { ProjectsList, type Project } from '@shared/projects';
 import { UserSettings } from './routes/settings/UserSettings';
 import { UIDemo } from './routes/ui-demo/UIDemo';
 import { OAuthConsent } from './routes/oauth/OAuthConsent';
+import { OAuthSuccess } from './routes/oauth/OAuthSuccess';
 import { Admin } from './routes/admin/Admin';
 import { AdminUsers } from './routes/admin/AdminUsers';
 
@@ -108,6 +109,7 @@ const routes = [
 	// App routes (not project-scoped)
 	{ route: '/settings', entry: UserSettings },
 	{ route: '/oauth/consent', entry: OAuthConsent },
+	{ route: '/oauth/success', entry: OAuthSuccess },
 
 	// Admin routes
 	{ route: '/admin', entry: Admin },

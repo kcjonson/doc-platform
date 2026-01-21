@@ -108,9 +108,10 @@ export function OAuthConsent(_props: RouteProps): JSX.Element {
 			// Parse JSON response
 			const data = await response.json();
 
-			// Handle success - server returns redirect_url in JSON body
+			// Handle success - redirect through success page for better UX
 			if (response.ok && data.redirect_url) {
-				window.location.href = data.redirect_url;
+				const successUrl = `/oauth/success?redirect_to=${encodeURIComponent(data.redirect_url)}`;
+				window.location.href = successUrl;
 				return;
 			}
 

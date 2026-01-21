@@ -954,12 +954,12 @@ export class DocPlatformStack extends cdk.Stack {
 			],
 		});
 
-		// OAuth consent page -> Frontend (SPA)
-		httpsListener.addTargetGroups('OAuthConsentRoute', {
+		// OAuth frontend pages -> Frontend (SPA)
+		httpsListener.addTargetGroups('OAuthFrontendRoutes', {
 			targetGroups: [frontendTargetGroup],
 			priority: 15,
 			conditions: [
-				elbv2.ListenerCondition.pathPatterns(['/oauth/consent']),
+				elbv2.ListenerCondition.pathPatterns(['/oauth/consent', '/oauth/success']),
 			],
 		});
 
