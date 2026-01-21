@@ -174,6 +174,7 @@ app.use('*', cors({
 	credentials: true,
 	allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 	allowHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+	exposeHeaders: ['Location'], // Allow browser to read Location header for OAuth redirects
 }));
 
 // Request logging middleware with error capture
