@@ -23,6 +23,7 @@ RUN wget -O /app/rds-ca-bundle.pem https://truststore.pki.rds.amazonaws.com/glob
 
 # Copy workspace config
 COPY package.json package-lock.json ./
+COPY shared/auth/package.json ./shared/auth/
 COPY shared/core/package.json ./shared/core/
 COPY shared/db/package.json ./shared/db/
 COPY mcp/package.json ./mcp/
@@ -32,6 +33,7 @@ RUN npm ci --omit=dev
 
 # Copy source code (Node 25 runs TypeScript directly)
 COPY tsconfig.json ./
+COPY shared/auth ./shared/auth
 COPY shared/core ./shared/core
 COPY shared/db ./shared/db
 COPY mcp ./mcp
