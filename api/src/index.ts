@@ -40,6 +40,7 @@ import {
 } from './handlers/users.ts';
 import {
 	handleOAuthMetadata,
+	handleProtectedResourceMetadata,
 	handleAuthorizeGet,
 	handleAuthorizePost,
 	handleToken,
@@ -340,6 +341,7 @@ app.get('/api/github/repos/:owner/:repo/branches', (context) => handleListGitHub
 
 // OAuth 2.1 routes (MCP authentication)
 app.get('/.well-known/oauth-authorization-server', handleOAuthMetadata);
+app.get('/.well-known/oauth-protected-resource', handleProtectedResourceMetadata);
 app.get('/oauth/authorize', (context) => handleAuthorizeGet(context, redis));
 app.post('/oauth/authorize', (context) => handleAuthorizePost(context, redis));
 app.post('/oauth/token', handleToken);

@@ -81,6 +81,22 @@ export async function handleOAuthMetadata(context: Context): Promise<Response> {
 }
 
 /**
+ * OAuth 2.0 Protected Resource Metadata (RFC 9728)
+ * GET /.well-known/oauth-protected-resource
+ *
+ * Tells MCP clients which authorization server to use for this resource.
+ */
+export async function handleProtectedResourceMetadata(context: Context): Promise<Response> {
+	const baseUrl = getBaseUrl(context);
+
+	return context.json({
+		resource: `${baseUrl}/mcp`,
+		authorization_servers: [baseUrl],
+		scopes_supported: Array.from(VALID_SCOPES),
+	});
+}
+
+/**
  * Get base URL from request
  */
 function getBaseUrl(context: Context): string {
@@ -165,14 +181,19 @@ export async function handleAuthorizeGet(
 		return context.json({ error: 'invalid_request', error_description: 'redirect_uri required' }, 400);
 	}
 
-	// Validate redirect_uri (must be http://localhost for public clients)
+	// Validate redirect_uri
+	// Allow: localhost (for CLI tools) or Claude Code's callback URLs
+	const ALLOWED_REDIRECT_URIS = [
+		'https://claude.ai/api/mcp/auth_callback',
+		'https://claude.com/api/mcp/auth_callback',
+	];
 	try {
 		const redirectUrl = new URL(redirectUri);
-		if (!['127.0.0.1', 'localhost'].includes(redirectUrl.hostname)) {
-			return context.json({ error: 'invalid_request', error_description: 'redirect_uri must be localhost' }, 400);
-		}
-		if (redirectUrl.protocol !== 'http:') {
-			return context.json({ error: 'invalid_request', error_description: 'redirect_uri must use http protocol' }, 400);
+		const isLocalhost = ['127.0.0.1', 'localhost'].includes(redirectUrl.hostname) && redirectUrl.protocol === 'http:';
+		const isAllowedCallback = ALLOWED_REDIRECT_URIS.includes(redirectUri);
+
+		if (!isLocalhost && !isAllowedCallback) {
+			return context.json({ error: 'invalid_request', error_description: 'redirect_uri not allowed' }, 400);
 		}
 	} catch {
 		return context.json({ error: 'invalid_request', error_description: 'Invalid redirect_uri' }, 400);

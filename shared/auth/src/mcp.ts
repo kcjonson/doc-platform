@@ -37,14 +37,14 @@ function extractBearerToken(authHeader: string | undefined): string | null {
 
 /**
  * Build the WWW-Authenticate header value for 401 responses
- * Per MCP OAuth spec, this tells the client where to find OAuth discovery
+ * Per MCP OAuth spec (RFC 9728), this tells the client where to find
+ * the protected resource metadata for OAuth discovery.
  */
 function buildWwwAuthenticateHeader(c: Context): string {
-	// Build the resource URL from the request
 	const proto = c.req.header('x-forwarded-proto') || 'https';
 	const host = c.req.header('host') || 'localhost';
-	const resourceUrl = `${proto}://${host}/mcp`;
-	return `Bearer resource="${resourceUrl}"`;
+	const baseUrl = `${proto}://${host}`;
+	return `Bearer resource_metadata="${baseUrl}/.well-known/oauth-protected-resource"`;
 }
 
 /**
