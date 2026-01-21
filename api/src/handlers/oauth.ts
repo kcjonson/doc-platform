@@ -194,7 +194,8 @@ export async function handleClientRegistration(context: Context): Promise<Respon
 		}, 400);
 	}
 
-	// Validate client_name type and length
+	// Validate client_name type, length, and non-empty
+	let clientName: string | null = null;
 	if (body.client_name !== undefined) {
 		if (typeof body.client_name !== 'string') {
 			return context.json({
@@ -202,12 +203,20 @@ export async function handleClientRegistration(context: Context): Promise<Respon
 				error_description: 'client_name must be a string',
 			}, 400);
 		}
-		if (body.client_name.length > 255) {
+		const trimmedClientName = body.client_name.trim();
+		if (trimmedClientName.length === 0) {
+			return context.json({
+				error: 'invalid_client_metadata',
+				error_description: 'client_name must not be empty or whitespace',
+			}, 400);
+		}
+		if (trimmedClientName.length > 255) {
 			return context.json({
 				error: 'invalid_client_metadata',
 				error_description: 'client_name too long (max 255 characters)',
 			}, 400);
 		}
+		clientName = trimmedClientName;
 	}
 
 	// Validate redirect_uris (required)
@@ -231,7 +240,7 @@ export async function handleClientRegistration(context: Context): Promise<Respon
 		if (typeof uri !== 'string' || !isValidRedirectUriForRegistration(uri)) {
 			return context.json({
 				error: 'invalid_redirect_uri',
-				error_description: `Invalid redirect_uri: ${uri}. Must be localhost (http) or HTTPS URL.`,
+				error_description: 'One or more redirect_uri values are invalid. Must be localhost (http) or HTTPS URLs.',
 			}, 400);
 		}
 	}
@@ -311,7 +320,7 @@ export async function handleClientRegistration(context: Context): Promise<Respon
 			 VALUES ($1, $2, $3, $4, $5, $6, to_timestamp($7))`,
 			[
 				clientId,
-				body.client_name || null,
+				clientName,
 				uniqueRedirectUris,
 				tokenEndpointAuthMethod,
 				grantTypes,
@@ -330,7 +339,7 @@ export async function handleClientRegistration(context: Context): Promise<Respon
 	// Return client registration response (RFC 7591)
 	return context.json({
 		client_id: clientId,
-		client_name: body.client_name || null,
+		client_name: clientName,
 		redirect_uris: uniqueRedirectUris,
 		token_endpoint_auth_method: tokenEndpointAuthMethod,
 		grant_types: grantTypes,
@@ -417,7 +426,13 @@ export async function handleAuthorizeGet(
 	}
 
 	// Look up client in database
-	const client = await getClient(clientId);
+	let client: OAuthClient | null;
+	try {
+		client = await getClient(clientId);
+	} catch (error) {
+		console.error('Database error looking up OAuth client:', error);
+		return context.json({ error: 'server_error', error_description: 'Internal server error' }, 500);
+	}
 	if (!client) {
 		return context.json({ error: 'invalid_client', error_description: 'Unknown client' }, 400);
 	}
@@ -520,12 +535,10 @@ export async function handleAuthorizePost(
 		};
 	}
 
-	const { client_id, redirect_uri, scope, state, code_challenge, code_challenge_method, device_name, action, csrf_token } = body;
+	const { client_id, redirect_uri, scope, state, code_challenge, code_challenge_method, device_name, action } = body;
 
-	// Validate CSRF token (prevents cross-site request forgery on consent)
-	if (!csrf_token || csrf_token !== session.csrfToken) {
-		return context.json({ error: 'invalid_request', error_description: 'Invalid CSRF token' }, 403);
-	}
+	// Note: CSRF protection is handled by csrfMiddleware which validates the X-CSRF-Token header
+	// No manual validation needed here
 
 	// Validate action field
 	if (action !== 'approve' && action !== 'deny') {
@@ -537,7 +550,13 @@ export async function handleAuthorizePost(
 		return context.json({ error: 'invalid_client', error_description: 'client_id required' }, 400);
 	}
 
-	const client = await getClient(client_id);
+	let client: OAuthClient | null;
+	try {
+		client = await getClient(client_id);
+	} catch (error) {
+		console.error('Database error looking up OAuth client:', error);
+		return context.json({ error: 'server_error', error_description: 'Internal server error' }, 500);
+	}
 	if (!client) {
 		return context.json({ error: 'invalid_client', error_description: 'Unknown client' }, 400);
 	}

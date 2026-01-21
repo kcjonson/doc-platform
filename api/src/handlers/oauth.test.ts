@@ -11,6 +11,7 @@ import {
 	handleAuthorizePost,
 	handleToken,
 	handleRevoke,
+	handleClientRegistration,
 } from './oauth.ts';
 
 // Mock database
@@ -822,6 +823,471 @@ describe('oauth handlers', () => {
 			expect(res.status).toBe(302);
 			const location = res.headers.get('location');
 			expect(location).toContain('scope=docs%3Aread+tasks%3Aread'); // Only valid scopes
+		});
+	});
+
+	/**
+	 * Client Registration Tests (RFC 7591)
+	 * These tests cover the dynamic client registration endpoint
+	 */
+	describe('handleClientRegistration', () => {
+		beforeEach(() => {
+			vi.mocked(query).mockResolvedValue({
+				rows: [],
+				rowCount: 0,
+				command: 'INSERT',
+				oid: 0,
+				fields: [],
+			});
+		});
+
+		it('should successfully register a client with minimal required fields', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:3000/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(201);
+			const data = await res.json();
+			expect(data.client_id).toBeDefined();
+			expect(data.client_id.length).toBe(32); // 16 bytes hex
+			expect(data.redirect_uris).toEqual(['http://localhost:3000/callback']);
+			expect(data.token_endpoint_auth_method).toBe('none');
+			expect(data.grant_types).toEqual(['authorization_code', 'refresh_token']);
+			expect(data.response_types).toEqual(['code']);
+			expect(data.client_id_issued_at).toBeDefined();
+		});
+
+		it('should successfully register a client with all optional fields', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					client_name: 'Test Client',
+					redirect_uris: ['http://localhost:3000/callback', 'https://example.com/callback'],
+					token_endpoint_auth_method: 'none',
+					grant_types: ['authorization_code'],
+					response_types: ['code'],
+				}),
+			});
+
+			expect(res.status).toBe(201);
+			const data = await res.json();
+			expect(data.client_name).toBe('Test Client');
+			expect(data.redirect_uris).toEqual(['http://localhost:3000/callback', 'https://example.com/callback']);
+		});
+
+		it('should reject invalid JSON body', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: 'not valid json',
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_request');
+			expect(data.error_description).toBe('Invalid JSON body');
+		});
+
+		it('should reject missing redirect_uris', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					client_name: 'Test Client',
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_redirect_uri');
+			expect(data.error_description).toContain('redirect_uri is required');
+		});
+
+		it('should reject empty redirect_uris array', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: [],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_redirect_uri');
+		});
+
+		it('should reject non-array redirect_uris', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: 'http://localhost:3000/callback',
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_redirect_uri');
+		});
+
+		it('should reject too many redirect_uris', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: Array(21).fill('http://localhost:3000/callback'),
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toContain('Too many redirect_uris');
+		});
+
+		it('should reject invalid redirect_uri format', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['not-a-valid-url'],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_redirect_uri');
+			// Should NOT include the malicious URI in the error message
+			expect(data.error_description).not.toContain('not-a-valid-url');
+		});
+
+		it('should reject http URLs for non-localhost', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://example.com/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_redirect_uri');
+		});
+
+		it('should allow http for localhost', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:8080/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(201);
+		});
+
+		it('should allow http for 127.0.0.1', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://127.0.0.1:8080/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(201);
+		});
+
+		it('should deduplicate redirect_uris', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: [
+						'http://localhost:3000/callback',
+						'http://localhost:3000/callback',
+						'https://example.com/callback',
+					],
+				}),
+			});
+
+			expect(res.status).toBe(201);
+			const data = await res.json();
+			expect(data.redirect_uris).toEqual([
+				'http://localhost:3000/callback',
+				'https://example.com/callback',
+			]);
+		});
+
+		it('should reject non-string client_name', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					client_name: 123,
+					redirect_uris: ['http://localhost:3000/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toBe('client_name must be a string');
+		});
+
+		it('should reject empty client_name', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					client_name: '',
+					redirect_uris: ['http://localhost:3000/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toBe('client_name must not be empty or whitespace');
+		});
+
+		it('should reject whitespace-only client_name', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					client_name: '   ',
+					redirect_uris: ['http://localhost:3000/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toBe('client_name must not be empty or whitespace');
+		});
+
+		it('should reject client_name that is too long', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					client_name: 'a'.repeat(256),
+					redirect_uris: ['http://localhost:3000/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toContain('too long');
+		});
+
+		it('should trim client_name and store trimmed version', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					client_name: '  Test Client  ',
+					redirect_uris: ['http://localhost:3000/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(201);
+			const data = await res.json();
+			expect(data.client_name).toBe('Test Client');
+		});
+
+		it('should reject non-string token_endpoint_auth_method', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:3000/callback'],
+					token_endpoint_auth_method: 123,
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toBe('token_endpoint_auth_method must be a string');
+		});
+
+		it('should reject unsupported token_endpoint_auth_method', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:3000/callback'],
+					token_endpoint_auth_method: 'client_secret_basic',
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toContain('Only token_endpoint_auth_method "none" is supported');
+		});
+
+		it('should reject non-array grant_types', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:3000/callback'],
+					grant_types: 'authorization_code',
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toBe('grant_types must be an array');
+		});
+
+		it('should reject unsupported grant_types', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:3000/callback'],
+					grant_types: ['password'],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toContain('Unsupported grant_type');
+		});
+
+		it('should reject non-array response_types', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:3000/callback'],
+					response_types: 'code',
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toBe('response_types must be an array');
+		});
+
+		it('should reject unsupported response_types', async () => {
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:3000/callback'],
+					response_types: ['token'],
+				}),
+			});
+
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.error).toBe('invalid_client_metadata');
+			expect(data.error_description).toContain('Only response_type "code" is supported');
+		});
+
+		it('should handle database errors gracefully', async () => {
+			vi.mocked(query).mockRejectedValueOnce(new Error('Database connection failed'));
+
+			const app = new Hono();
+			app.post('/oauth/register', handleClientRegistration);
+
+			const res = await app.request('http://localhost/oauth/register', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					redirect_uris: ['http://localhost:3000/callback'],
+				}),
+			});
+
+			expect(res.status).toBe(500);
+			const data = await res.json();
+			expect(data.error).toBe('server_error');
+			expect(data.error_description).toBe('Failed to register client');
 		});
 	});
 });
