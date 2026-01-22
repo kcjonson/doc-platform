@@ -9,6 +9,7 @@ import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { Redis } from 'ioredis';
 import { authMiddleware, type AuthVariables } from '@doc-platform/auth';
+import { logRequest } from '@doc-platform/core';
 import { pages, spaIndex, type CachedPage } from './static-pages.ts';
 
 // Vite dev server URL for hot reloading (set in docker-compose for dev mode)
@@ -87,6 +88,46 @@ redis.on('error', (err) => {
 
 redis.on('connect', () => {
 	console.log('Connected to Redis');
+});
+
+// Request logging middleware
+// Logs all requests in Combined Log Format style for CloudWatch Logs Insights queries
+app.use('*', async (c, next) => {
+	const start = Date.now();
+
+	// Check for authenticated user (via session cookie)
+	let userId: string | undefined;
+	const cookieHeader = c.req.header('Cookie') || '';
+	const sessionMatch = cookieHeader.match(/session_id=([^;]+)/);
+	const sessionId = sessionMatch?.[1];
+
+	if (sessionId) {
+		const sessionData = await redis.get(`session:${sessionId}`);
+		if (sessionData) {
+			try {
+				const session = JSON.parse(sessionData);
+				userId = session.userId;
+			} catch {
+				// Invalid session data, ignore
+			}
+		}
+	}
+
+	await next();
+
+	const duration = Date.now() - start;
+
+	logRequest({
+		method: c.req.method,
+		path: c.req.path,
+		status: c.res.status,
+		duration,
+		ip: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
+		userAgent: c.req.header('user-agent'),
+		referer: c.req.header('referer'),
+		userId,
+		contentLength: parseInt(c.res.headers.get('content-length') || '0', 10),
+	});
 });
 
 // Health check (no auth required)
