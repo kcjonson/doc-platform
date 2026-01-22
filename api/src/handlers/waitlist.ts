@@ -3,10 +3,10 @@
  */
 
 import type { Context } from 'hono';
-import { getCookie } from 'hono/cookie';
 import type { Redis } from 'ioredis';
-import { getSession, SESSION_COOKIE_NAME } from '@doc-platform/auth';
-import { query, type User } from '@doc-platform/db';
+import { query } from '@doc-platform/db';
+import { isValidEmail } from '../validation.ts';
+import { getCurrentUser, isAdmin } from './auth-utils.ts';
 
 interface WaitlistSignup {
 	id: string;
@@ -15,16 +15,6 @@ interface WaitlistSignup {
 	role: string | null;
 	use_case: string | null;
 	created_at: Date;
-}
-
-/**
- * Validate email format
- */
-function isValidEmail(email: unknown): email is string {
-	if (typeof email !== 'string') return false;
-	// Basic email validation - checks for @ and domain
-	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-	return emailRegex.test(email) && email.length <= 255;
 }
 
 /**
@@ -41,75 +31,46 @@ function sanitizeOptionalString(value: unknown, maxLength: number = 255): string
  * POST /api/waitlist
  */
 export async function handleWaitlistSignup(context: Context): Promise<Response> {
+	// Parse JSON body with explicit error handling
+	let body: {
+		email?: unknown;
+		company?: unknown;
+		role?: unknown;
+		use_case?: unknown;
+	};
 	try {
-		const body = await context.req.json<{
-			email?: unknown;
-			company?: unknown;
-			role?: unknown;
-			use_case?: unknown;
-		}>();
+		body = await context.req.json();
+	} catch {
+		return context.json({ error: 'Invalid JSON' }, 400);
+	}
 
-		// Validate email (required)
-		if (!isValidEmail(body.email)) {
-			return context.json({ error: 'Valid email is required' }, 400);
-		}
+	// Validate email (required) - check type, format, and length
+	const email = typeof body.email === 'string' ? body.email : '';
+	if (!isValidEmail(email) || email.length > 255) {
+		return context.json({ error: 'Valid email is required' }, 400);
+	}
 
-		const email = body.email.toLowerCase().trim();
-		const company = sanitizeOptionalString(body.company);
-		const role = sanitizeOptionalString(body.role);
-		const useCase = sanitizeOptionalString(body.use_case, 2000);
+	const normalizedEmail = email.toLowerCase().trim();
+	const company = sanitizeOptionalString(body.company);
+	const role = sanitizeOptionalString(body.role);
+	const useCase = sanitizeOptionalString(body.use_case, 2000);
 
-		// Check for existing signup
-		const existing = await query<{ id: string }>(
-			'SELECT id FROM waitlist_signups WHERE email = $1',
-			[email]
-		);
-
-		if (existing.rows.length > 0) {
-			// Already signed up - return success anyway (don't leak info)
-			return context.json({ success: true }, 201);
-		}
-
-		// Insert new signup
+	try {
+		// Insert new signup (idempotent: do nothing if email already exists)
+		// This avoids race conditions and handles duplicates atomically
 		await query<WaitlistSignup>(
 			`INSERT INTO waitlist_signups (email, company, role, use_case)
-			 VALUES ($1, $2, $3, $4)`,
-			[email, company, role, useCase]
+			 VALUES ($1, $2, $3, $4)
+			 ON CONFLICT (email) DO NOTHING`,
+			[normalizedEmail, company, role, useCase]
 		);
 
+		// Always return success (don't leak whether email already existed)
 		return context.json({ success: true }, 201);
 	} catch (error) {
 		console.error('Waitlist signup error:', error);
 		return context.json({ error: 'Unable to process signup. Please try again.' }, 500);
 	}
-}
-
-/**
- * Get current user from session
- */
-async function getCurrentUser(context: Context, redis: Redis): Promise<User | null> {
-	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
-	if (!sessionId) return null;
-
-	const session = await getSession(redis, sessionId);
-	if (!session) return null;
-
-	const result = await query<User>(
-		'SELECT * FROM users WHERE id = $1',
-		[session.userId]
-	);
-
-	const user = result.rows[0];
-	if (!user || !user.is_active) return null;
-
-	return user;
-}
-
-/**
- * Check if user has admin role
- */
-function isAdmin(user: User): boolean {
-	return user.roles.includes('admin');
 }
 
 /**

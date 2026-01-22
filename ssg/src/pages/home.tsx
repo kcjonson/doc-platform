@@ -8,7 +8,6 @@ import type { JSX } from 'preact';
  * Client-side scripts for:
  * 1. Session detection (Open App vs Sign In)
  * 2. Early access form submission
- * 3. Smooth scroll for anchor links
  */
 export const homeScript = `
 (function() {

@@ -8,8 +8,5 @@ CREATE TABLE IF NOT EXISTS waitlist_signups (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Index for email lookups
-CREATE INDEX IF NOT EXISTS idx_waitlist_email ON waitlist_signups(email);
-
--- Index for ordering by signup date
+-- Index for ordering by signup date (UNIQUE on email already provides index for email lookups)
 CREATE INDEX IF NOT EXISTS idx_waitlist_created ON waitlist_signups(created_at DESC);
