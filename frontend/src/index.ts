@@ -93,6 +93,7 @@ redis.on('connect', () => {
 
 // Request logging middleware
 // Logs all requests in Combined Log Format style for CloudWatch Logs Insights queries
+// Note: await next() never throws in Hono - errors are caught internally and passed to app.onError()
 app.use('*', async (c, next) => {
 	const start = Date.now();
 
@@ -104,23 +105,21 @@ app.use('*', async (c, next) => {
 		userId = session?.userId;
 	}
 
-	try {
-		await next();
-	} finally {
-		const duration = Date.now() - start;
+	await next();
 
-		logRequest({
-			method: c.req.method,
-			path: c.req.path,
-			status: c.res.status,
-			duration,
-			ip: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
-			userAgent: c.req.header('user-agent'),
-			referer: c.req.header('referer'),
-			userId,
-			contentLength: parseInt(c.res.headers.get('content-length') || '0', 10),
-		});
-	}
+	// Log the request (runs for both success and error responses)
+	const duration = Date.now() - start;
+	logRequest({
+		method: c.req.method,
+		path: c.req.path,
+		status: c.res.status,
+		duration,
+		ip: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
+		userAgent: c.req.header('user-agent'),
+		referer: c.req.header('referer'),
+		userId,
+		contentLength: parseInt(c.res.headers.get('content-length') || '0', 10),
+	});
 });
 
 // Health check (no auth required)

@@ -18,6 +18,12 @@ import {
 import { reportError, installErrorHandlers, logRequest } from '@doc-platform/core';
 import { getCookie } from 'hono/cookie';
 
+// Context variables for request tracking
+type AppVariables = {
+	requestStart: number;
+	userId: string | undefined;
+};
+
 import {
 	handleLogin,
 	handleLogout,
@@ -162,7 +168,7 @@ const getAllowedOrigins = (): string[] => {
 };
 
 // App
-const app = new Hono();
+const app = new Hono<{ Variables: AppVariables }>();
 
 // Middleware - CORS with origin validation
 app.use('*', cors({
@@ -178,11 +184,13 @@ app.use('*', cors({
 	exposeHeaders: ['Location'], // Allow browser to read Location header for OAuth redirects
 }));
 
-// Request logging middleware with error capture
+// Request logging middleware
+// Note: await next() never throws in Hono - errors are caught internally and passed to app.onError()
+// We store userId and start time in context so app.onError() can access them for error reporting
 app.use('*', async (context, next) => {
 	const start = Date.now();
 
-	// Get user ID from session if available
+	// Get user ID from session if available and store in context for error reporting
 	let userId: string | undefined;
 	const sessionId = getCookie(context, SESSION_COOKIE_NAME);
 	if (sessionId) {
@@ -190,45 +198,25 @@ app.use('*', async (context, next) => {
 		userId = session?.userId;
 	}
 
-	try {
-		await next();
-	} catch (error) {
-		// Report errors that occur during request handling
-		const err = error instanceof Error ? error : new Error(String(error));
-		reportError({
-			name: err.name,
-			message: err.message,
-			stack: err.stack,
-			timestamp: Date.now(),
-			url: context.req.url,
-			userAgent: context.req.header('user-agent'),
-			userId,
-			source: 'api',
-			environment: process.env.NODE_ENV,
-			extra: {
-				method: context.req.method,
-				path: context.req.path,
-			},
-		}).catch(() => {
-			// Don't let error reporting failure affect the response
-		});
-		throw error; // Re-throw to let Hono's error handler respond
-	} finally {
-		// Always log the request, even when errors occur
-		const duration = Date.now() - start;
+	// Store in context for access by app.onError()
+	context.set('requestStart', start);
+	context.set('userId', userId);
 
-		logRequest({
-			method: context.req.method,
-			path: context.req.path,
-			status: context.res.status,
-			duration,
-			ip: context.req.header('x-forwarded-for') || context.req.header('x-real-ip'),
-			userAgent: context.req.header('user-agent'),
-			referer: context.req.header('referer'),
-			userId,
-			contentLength: parseInt(context.res.headers.get('content-length') || '0', 10),
-		});
-	}
+	await next();
+
+	// Log the request (runs for both success and error responses)
+	const duration = Date.now() - start;
+	logRequest({
+		method: context.req.method,
+		path: context.req.path,
+		status: context.res.status,
+		duration,
+		ip: context.req.header('x-forwarded-for') || context.req.header('x-real-ip'),
+		userAgent: context.req.header('user-agent'),
+		referer: context.req.header('referer'),
+		userId,
+		contentLength: parseInt(context.res.headers.get('content-length') || '0', 10),
+	});
 });
 
 // Rate limiting middleware (per spec requirements)
@@ -287,6 +275,26 @@ app.notFound((context) => {
 });
 
 app.onError((error, context) => {
+	// Report error to error tracking service (uses context values set by logging middleware)
+	const userId = context.get('userId');
+	reportError({
+		name: error.name,
+		message: error.message,
+		stack: error.stack,
+		timestamp: Date.now(),
+		url: context.req.url,
+		userAgent: context.req.header('user-agent'),
+		userId,
+		source: 'api',
+		environment: process.env.NODE_ENV,
+		extra: {
+			method: context.req.method,
+			path: context.req.path,
+		},
+	}).catch(() => {
+		// Don't let error reporting failure affect the response
+	});
+
 	console.error('Unhandled error:', error);
 	return context.json({ error: 'Internal server error' }, 500);
 });
