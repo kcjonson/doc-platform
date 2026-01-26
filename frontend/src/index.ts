@@ -8,7 +8,9 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { Redis } from 'ioredis';
-import { authMiddleware, type AuthVariables } from '@doc-platform/auth';
+import { authMiddleware, getSession, SESSION_COOKIE_NAME, type AuthVariables } from '@doc-platform/auth';
+import { logRequest } from '@doc-platform/core';
+import { getCookie } from 'hono/cookie';
 import { pages, spaIndex, type CachedPage } from './static-pages.ts';
 
 // Vite dev server URL for hot reloading (set in docker-compose for dev mode)
@@ -87,6 +89,37 @@ redis.on('error', (err) => {
 
 redis.on('connect', () => {
 	console.log('Connected to Redis');
+});
+
+// Request logging middleware
+// Logs all requests in Combined Log Format style for CloudWatch Logs Insights queries
+// Note: await next() never throws in Hono - errors are caught internally and passed to app.onError()
+app.use('*', async (c, next) => {
+	const start = Date.now();
+
+	// Get user ID from session if available (matches API pattern)
+	let userId: string | undefined;
+	const sessionId = getCookie(c, SESSION_COOKIE_NAME);
+	if (sessionId) {
+		const session = await getSession(redis, sessionId);
+		userId = session?.userId;
+	}
+
+	await next();
+
+	// Log the request (runs for both success and error responses)
+	const duration = Date.now() - start;
+	logRequest({
+		method: c.req.method,
+		path: c.req.path,
+		status: c.res.status,
+		duration,
+		ip: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
+		userAgent: c.req.header('user-agent'),
+		referer: c.req.header('referer'),
+		userId,
+		contentLength: parseInt(c.res.headers.get('content-length') || '0', 10),
+	});
 });
 
 // Health check (no auth required)
