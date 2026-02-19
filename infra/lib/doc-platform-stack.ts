@@ -497,7 +497,7 @@ export class DocPlatformStack extends cdk.Stack {
 		});
 
 		apiTaskDefinition.addContainer('api', {
-			image: ecs.ContainerImage.fromEcrRepository(apiRepository, 'latest'),
+			image: ecs.ContainerImage.fromEcrRepository(apiRepository, 'init'),
 			logging: ecs.LogDrivers.awsLogs({
 				logGroup: apiLogGroup,
 				streamPrefix: 'api',
@@ -545,6 +545,10 @@ export class DocPlatformStack extends cdk.Stack {
 			},
 		});
 
+		// Alarm name referenced by deployment alarms below — must match the
+		// Target5xxAlarm construct defined in the CloudWatch section.
+		const TARGET_5XX_ALARM_NAME = 'doc-platform-target-5xx-errors';
+
 		const apiService = new ecs.FargateService(this, 'ApiService', {
 			cluster,
 			taskDefinition: apiTaskDefinition,
@@ -553,6 +557,10 @@ export class DocPlatformStack extends cdk.Stack {
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'api',
 			circuitBreaker: { enable: true, rollback: true },
+			deploymentAlarms: {
+				alarmNames: [TARGET_5XX_ALARM_NAME],
+				behavior: ecs.AlarmBehavior.ROLLBACK_ON_ALARM,
+			},
 			minHealthyPercent: 50,
 			maxHealthyPercent: 200,
 			healthCheckGracePeriod: cdk.Duration.seconds(60),
@@ -592,7 +600,7 @@ export class DocPlatformStack extends cdk.Stack {
 		});
 
 		frontendTaskDefinition.addContainer('frontend', {
-			image: ecs.ContainerImage.fromEcrRepository(frontendRepository, 'latest'),
+			image: ecs.ContainerImage.fromEcrRepository(frontendRepository, 'init'),
 			logging: ecs.LogDrivers.awsLogs({ streamPrefix: 'frontend' }),
 			environment: {
 				PORT: '3000',
@@ -627,6 +635,10 @@ export class DocPlatformStack extends cdk.Stack {
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'frontend',
 			circuitBreaker: { enable: true, rollback: true },
+			deploymentAlarms: {
+				alarmNames: [TARGET_5XX_ALARM_NAME],
+				behavior: ecs.AlarmBehavior.ROLLBACK_ON_ALARM,
+			},
 			minHealthyPercent: 50,
 			maxHealthyPercent: 200,
 			healthCheckGracePeriod: cdk.Duration.seconds(60),
@@ -648,7 +660,7 @@ export class DocPlatformStack extends cdk.Stack {
 		});
 
 		mcpTaskDefinition.addContainer('mcp', {
-			image: ecs.ContainerImage.fromEcrRepository(mcpRepository, 'latest'),
+			image: ecs.ContainerImage.fromEcrRepository(mcpRepository, 'init'),
 			logging: ecs.LogDrivers.awsLogs({
 				logGroup: mcpLogGroup,
 				streamPrefix: 'mcp',
@@ -687,6 +699,10 @@ export class DocPlatformStack extends cdk.Stack {
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
 			serviceName: 'mcp',
 			circuitBreaker: { enable: true, rollback: true },
+			deploymentAlarms: {
+				alarmNames: [TARGET_5XX_ALARM_NAME],
+				behavior: ecs.AlarmBehavior.ROLLBACK_ON_ALARM,
+			},
 			minHealthyPercent: 50,
 			maxHealthyPercent: 200,
 			healthCheckGracePeriod: cdk.Duration.seconds(60),
@@ -710,7 +726,7 @@ export class DocPlatformStack extends cdk.Stack {
 		});
 
 		storageTaskDefinition.addContainer('storage', {
-			image: ecs.ContainerImage.fromEcrRepository(storageRepository, 'latest'),
+			image: ecs.ContainerImage.fromEcrRepository(storageRepository, 'init'),
 			logging: ecs.LogDrivers.awsLogs({
 				logGroup: storageLogGroup,
 				streamPrefix: 'storage',
@@ -908,6 +924,7 @@ export class DocPlatformStack extends cdk.Stack {
 			port: 3001,
 			protocol: elbv2.ApplicationProtocol.HTTP,
 			targetType: elbv2.TargetType.IP,
+			deregistrationDelay: cdk.Duration.seconds(30),
 			healthCheck: {
 				path: '/api/health',
 				interval: cdk.Duration.seconds(30),
@@ -922,6 +939,7 @@ export class DocPlatformStack extends cdk.Stack {
 			port: 3000,
 			protocol: elbv2.ApplicationProtocol.HTTP,
 			targetType: elbv2.TargetType.IP,
+			deregistrationDelay: cdk.Duration.seconds(30),
 			healthCheck: {
 				path: '/health',
 				interval: cdk.Duration.seconds(30),
@@ -936,6 +954,7 @@ export class DocPlatformStack extends cdk.Stack {
 			port: 3002,
 			protocol: elbv2.ApplicationProtocol.HTTP,
 			targetType: elbv2.TargetType.IP,
+			deregistrationDelay: cdk.Duration.seconds(30),
 			healthCheck: {
 				path: '/mcp/health',
 				interval: cdk.Duration.seconds(30),
@@ -1050,29 +1069,32 @@ export class DocPlatformStack extends cdk.Stack {
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 
-		// ALB 5xx Error Alarm
+		// ALB 5xx Error Alarm (ALB-generated errors, not target errors)
 		new cloudwatch.Alarm(this, 'Alb5xxAlarm', {
 			alarmName: 'doc-platform-alb-5xx-errors',
-			alarmDescription: 'ALB 5xx errors exceed 10 in 5 minutes',
+			alarmDescription: 'ALB 5xx errors exceed 10 over two consecutive 5-minute periods',
 			metric: alb.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, {
 				period: cdk.Duration.minutes(5),
 				statistic: 'Sum',
 			}),
 			threshold: 10,
-			evaluationPeriods: 1,
+			evaluationPeriods: 2,
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 
 		// Target 5xx Error Alarm (errors from API/Frontend services)
+		// Used by ECS deployment alarms to auto-rollback on sustained errors.
+		// evaluationPeriods: 2 avoids false positives during normal rolling updates
+		// where brief 502/503s occur during target deregistration.
 		new cloudwatch.Alarm(this, 'Target5xxAlarm', {
-			alarmName: 'doc-platform-target-5xx-errors',
-			alarmDescription: 'Target 5xx errors exceed 10 in 5 minutes',
+			alarmName: TARGET_5XX_ALARM_NAME,
+			alarmDescription: 'Target 5xx errors exceed 10 over two consecutive 5-minute periods',
 			metric: alb.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, {
 				period: cdk.Duration.minutes(5),
 				statistic: 'Sum',
 			}),
 			threshold: 10,
-			evaluationPeriods: 1,
+			evaluationPeriods: 2,
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 

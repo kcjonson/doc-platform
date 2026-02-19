@@ -42,6 +42,13 @@ async function migrate(): Promise<void> {
 	const pool = new Pool({ connectionString: databaseUrl });
 
 	try {
+		// Acquire advisory lock to prevent concurrent migration execution.
+		// If another migration is running (e.g. from a cancelled pipeline that
+		// left an ECS task running), this will block until it completes.
+		// The lock is released automatically when the session disconnects.
+		await pool.query(`SELECT pg_advisory_lock(hashtext('doc-platform-migrations'))`);
+		console.log('Acquired migration lock');
+
 		// Create migrations table if it doesn't exist
 		await pool.query(`
 			CREATE TABLE IF NOT EXISTS schema_migrations (
