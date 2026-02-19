@@ -26,7 +26,7 @@ jobs:
   cdk:
     name: CDK ${{ inputs.action }} (${{ inputs.environment }})
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    # environment: ${{ inputs.environment }} — re-enable after OIDC trust policy includes environment patterns
     permissions:
       id-token: write
       contents: read

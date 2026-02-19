@@ -1206,12 +1206,15 @@ export class DocPlatformStack extends cdk.Stack {
 						StringEquals: {
 							'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
 						},
-						// StringLike allows both branch-based (staging CD) and
-						// tag-based (production release) deploys
+						// StringLike allows branch-based (staging CD), tag-based
+						// (production release), and environment-based (GitHub
+						// Environment protection) OIDC sub claims.
 						StringLike: {
 							'token.actions.githubusercontent.com:sub': [
 								'repo:kcjonson/doc-platform:ref:refs/heads/main',
 								'repo:kcjonson/doc-platform:ref:refs/tags/v*',
+								'repo:kcjonson/doc-platform:environment:staging',
+								'repo:kcjonson/doc-platform:environment:production',
 							],
 						},
 					},
