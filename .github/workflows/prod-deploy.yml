@@ -72,7 +72,7 @@ jobs:
           SHA="${{ needs.resolve.outputs.sha }}"
           MISSING=""
 
-          for REPO in doc-platform/api doc-platform/frontend doc-platform/mcp; do
+          for REPO in doc-platform/api doc-platform/frontend doc-platform/mcp doc-platform/storage; do
             if ! aws ecr describe-images \
               --repository-name "$REPO" \
               --image-ids imageTag="$SHA" \
@@ -121,6 +121,7 @@ jobs:
     needs: [resolve, setup-aws, migrate]
     if: "!cancelled() && inputs.bootstrap != true && needs.setup-aws.result == 'success' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')"
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       id-token: write
       contents: read
@@ -202,16 +203,17 @@ jobs:
     steps:
       - name: Update release with deploy metadata
         run: |
-          BODY="$(gh api repos/${{ github.repository }}/releases/tags/${{ needs.resolve.outputs.tag }} --jq '.body')"
+          TAG="${{ needs.resolve.outputs.tag }}"
+          SHA="${{ needs.resolve.outputs.sha }}"
+          DEPLOY_TIME="$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 
-          DEPLOY_NOTE="
+          BODY="$(gh api "repos/${{ github.repository }}/releases/tags/$TAG" --jq '.body')"
+          DEPLOY_NOTE=$'\n\n---\n**Deployed to production** at '"$DEPLOY_TIME"$'\nSHA: `'"$SHA"'`'
 
-          ---
-          **Deployed to production** at $(date -u '+%Y-%m-%d %H:%M:%S UTC')
-          SHA: \`${{ needs.resolve.outputs.sha }}\`"
-
-          gh api repos/${{ github.repository }}/releases/tags/${{ needs.resolve.outputs.tag }} \
-            -X PATCH \
-            -f body="${BODY}${DEPLOY_NOTE}"
+          printf '%s' "$BODY$DEPLOY_NOTE" | jq -Rs '{body:.}' | \
+            gh api "repos/${{ github.repository }}/releases/tags/$TAG" \
+              -X PATCH \
+              -H "Content-Type: application/json" \
+              --input -
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

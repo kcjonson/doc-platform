@@ -6,7 +6,7 @@
 
 ## Context
 
-Builds on the work from PR #63 (stale, will be closed) and the deployment spec at `docs/specs/deployment.md` (from that PR). The spec's core architecture is sound — promotion model, release-triggered deploys, environment config — but the implementation needs to be rebuilt on top of the current main, which has diverged significantly (pipeline reordering, health check changes, auth middleware updates).
+Builds on the work from PR #63 (stale, will be closed) and the deployment spec defined in that PR (not merged into this repository). The spec's core architecture is sound — promotion model, release-triggered deploys, environment config — but the implementation needs to be rebuilt on top of the current main, which has diverged significantly (pipeline reordering, health check changes, auth middleware updates).
 
 Also incorporates deployment reliability fixes discovered during the MCP health check deploy failure (2026-02-19), where a CDK-triggered ECS rolling update with stale images caused a 1+ hour stuck deployment.
 
@@ -335,7 +335,7 @@ jobs:
 **New file:** `.github/workflows/prod-deploy.yml`
 
 Triggered by GitHub release publish:
-1. Extract git SHA from release tag
+1. Resolve the commit SHA that the release tag points to (via GitHub API)
 2. **Verify images exist in ECR** for that SHA (fail fast if missing)
 3. CDK deploy production stack (`--context env=production`)
 4. Run migrations against production DB

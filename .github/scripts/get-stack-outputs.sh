@@ -28,14 +28,15 @@ export SECURITY_GROUP=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="ApiSe
 export LOG_GROUP=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="ApiLogGroupName") | .OutputValue')
 export ALB_DNS=$(echo "$OUTPUTS" | jq -r '.[] | select(.OutputKey=="AlbDnsName") | .OutputValue')
 
-# Validate required outputs
+# Validate required outputs (jq -r returns "null" for missing keys)
+is_missing() { [ -z "$1" ] || [ "$1" = "null" ]; }
 MISSING=""
-[ -z "$CLUSTER" ] && MISSING="$MISSING CLUSTER"
-[ -z "$TASK_DEF" ] && MISSING="$MISSING TASK_DEF"
-[ -z "$SUBNETS" ] && MISSING="$MISSING SUBNETS"
-[ -z "$SECURITY_GROUP" ] && MISSING="$MISSING SECURITY_GROUP"
-[ -z "$LOG_GROUP" ] && MISSING="$MISSING LOG_GROUP"
-[ -z "$ALB_DNS" ] && MISSING="$MISSING ALB_DNS"
+is_missing "$CLUSTER" && MISSING="$MISSING CLUSTER"
+is_missing "$TASK_DEF" && MISSING="$MISSING TASK_DEF"
+is_missing "$SUBNETS" && MISSING="$MISSING SUBNETS"
+is_missing "$SECURITY_GROUP" && MISSING="$MISSING SECURITY_GROUP"
+is_missing "$LOG_GROUP" && MISSING="$MISSING LOG_GROUP"
+is_missing "$ALB_DNS" && MISSING="$MISSING ALB_DNS"
 
 if [ -n "$MISSING" ]; then
   echo "ERROR: Missing required stack outputs:$MISSING"

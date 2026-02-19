@@ -173,21 +173,29 @@ export const productionConfig: EnvironmentConfig = {
 	alarmEmail: '', // Set before first deploy
 };
 
-/** Resolve environment config from CDK context */
+/** Resolve environment config from CDK context. Returns a fresh copy — never mutates the exported defaults. */
 export function getEnvironmentConfig(envName: string, context?: {
 	hostedZoneId?: string;
 	certificateArn?: string;
 	alarmEmail?: string;
 }): EnvironmentConfig {
-	const configs: Record<string, EnvironmentConfig> = {
+	const defaults: Record<string, EnvironmentConfig> = {
 		staging: stagingConfig,
 		production: productionConfig,
 	};
 
-	const config = configs[envName];
-	if (!config) {
+	const base = defaults[envName];
+	if (!base) {
 		throw new Error(`Unknown environment: ${envName}. Must be 'staging' or 'production'.`);
 	}
+
+	// Deep clone to avoid mutating the exported singletons
+	const config: EnvironmentConfig = {
+		...base,
+		database: { ...base.database },
+		ecs: { ...base.ecs },
+		shared: base.shared ? { ...base.shared, ecrRepoNames: { ...base.shared.ecrRepoNames } } : undefined,
+	};
 
 	// Apply context overrides for production shared resources
 	if (config.name === 'production' && config.shared) {

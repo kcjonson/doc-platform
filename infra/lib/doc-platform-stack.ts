@@ -117,8 +117,9 @@ export class DocPlatformStack extends cdk.Stack {
 			const createRepo = (id: string, name: string): ecr.Repository =>
 				new ecr.Repository(this, id, {
 					repositoryName: name,
-					removalPolicy: cdk.RemovalPolicy.DESTROY,
-					emptyOnDelete: true,
+					// RETAIN: shared ECR repos serve both staging and production.
+					// Destroying staging must not delete production images.
+					removalPolicy: cdk.RemovalPolicy.RETAIN,
 					lifecycleRules: ecrLifecycleRules,
 					imageScanOnPush: true,
 				});
@@ -1073,6 +1074,14 @@ export class DocPlatformStack extends cdk.Stack {
 			comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 		});
 		target5xxAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
+
+		// ECS deployment alarms reference the alarm by NAME (a string), not a
+		// CDK token. CDK won't create an automatic dependency, so CloudFormation
+		// could try to create the services before the alarm exists. Fix with
+		// explicit dependencies.
+		apiService.node.addDependency(target5xxAlarm);
+		frontendService.node.addDependency(target5xxAlarm);
+		mcpService.node.addDependency(target5xxAlarm);
 
 		// ===========================================
 		// WAF (production only)

@@ -71,7 +71,7 @@ jobs:
           SHA="${{ needs.resolve.outputs.sha }}"
           MISSING=""
 
-          for REPO in doc-platform/api doc-platform/frontend doc-platform/mcp; do
+          for REPO in doc-platform/api doc-platform/frontend doc-platform/mcp doc-platform/storage; do
             if ! aws ecr describe-images \
               --repository-name "$REPO" \
               --image-ids imageTag="$SHA" \
@@ -120,6 +120,7 @@ jobs:
     needs: [resolve, verify-images, cdk-deploy, migrate]
     if: always() && needs.verify-images.result == 'success' && (needs.cdk-deploy.result == 'success' || needs.cdk-deploy.result == 'skipped') && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped')
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       id-token: write
       contents: read
