@@ -29,7 +29,7 @@ jobs:
   run:
     name: ${{ inputs.task_name }} (${{ inputs.environment }})
     runs-on: ubuntu-latest
-    # environment: ${{ inputs.environment }} — sets OIDC sub claim to environment:<name>, requires matching IAM trust policy patterns
+    environment: ${{ inputs.environment }}
     permissions:
       id-token: write
       contents: read
