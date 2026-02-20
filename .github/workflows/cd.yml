@@ -53,7 +53,7 @@ jobs:
 
   build-push:
     name: Build and Push
-    needs: [setup-aws, check]
+    needs: check
     if: needs.check.outputs.should_deploy == 'true'
     permissions:
       id-token: write
@@ -63,9 +63,21 @@ jobs:
       push: true
     secrets: inherit
 
+  setup-aws:
+    name: Setup AWS Resources
+    needs: build-push
+    permissions:
+      id-token: write
+      contents: read
+    uses: ./.github/workflows/_deploy-cdk.yml
+    with:
+      action: deploy
+      environment: staging
+    secrets: inherit
+
   migrate:
     name: Run Migrations
-    needs: build-push
+    needs: setup-aws
     permissions:
       id-token: write
       contents: read
@@ -73,6 +85,7 @@ jobs:
     with:
       task_name: migrate
       command: '["node", "shared/db/src/migrate.ts"]'
+      environment: staging
     secrets: inherit
 
   seed:
@@ -86,23 +99,12 @@ jobs:
       task_name: seed
       command: '["node", "shared/db/seed.mjs"]'
       include_superadmin_env: true
-    secrets: inherit
-
-  setup-aws:
-    name: Setup AWS Resources
-    needs: check
-    if: needs.check.outputs.should_deploy == 'true'
-    permissions:
-      id-token: write
-      contents: read
-    uses: ./.github/workflows/_deploy-cdk.yml
-    with:
-      action: deploy
+      environment: staging
     secrets: inherit
 
   deploy-services:
     name: Deploy Services
-    needs: seed
+    needs: [check, seed]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -116,8 +118,9 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+          role-duration-seconds: 7200
 
       - name: Deploy services
         run: |
-          source .github/scripts/get-stack-outputs.sh
-          .github/scripts/deploy-services.sh
+          source .github/scripts/get-stack-outputs.sh DocPlatformStack
+          .github/scripts/deploy-services.sh "${{ needs.check.outputs.sha }}"
