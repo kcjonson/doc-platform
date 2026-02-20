@@ -85,8 +85,8 @@ echo "Waiting for services to stabilize..."
 if ! aws ecs wait services-stable \
   --cluster "$CLUSTER" \
   --services $SERVICES_TO_WAIT \
-  --region "$AWS_REGION" 2>/dev/null; then
-  echo "First wait timed out, retrying (old deployments may still be draining)..."
+  --region "$AWS_REGION"; then
+  echo "First wait failed; retrying once (services may still be draining)..."
   aws ecs wait services-stable \
     --cluster "$CLUSTER" \
     --services $SERVICES_TO_WAIT \
