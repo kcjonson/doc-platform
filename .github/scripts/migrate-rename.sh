@@ -84,33 +84,56 @@ for stack in "$OLD_PROD_STACK" "$OLD_STAGING_STACK"; do
 done
 
 # ─────────────────────────────────────────────────
-# Phase 3: Clean up RETAIN resources
+# Phase 3: Clean up survivors (RETAIN, SNAPSHOT, and stragglers)
 # ─────────────────────────────────────────────────
 echo ""
-echo "--- Phase 3: Clean up RETAIN resources ---"
+echo "--- Phase 3: Clean up all remaining project resources ---"
 
-# ECR repositories
-echo "  ECR repos:"
-for repo in doc-platform/api doc-platform/frontend doc-platform/mcp doc-platform/storage; do
-  if aws ecr describe-repositories --repository-names "$repo" --region "$REGION" &>/dev/null; then
-    echo "    Deleting $repo"
-    aws ecr delete-repository --repository-name "$repo" --force --region "$REGION" --no-cli-pager >/dev/null
-  fi
+# ── ECR repositories ──
+echo "  ECR repos (doc-platform/*):"
+ECR_REPOS=$(aws ecr describe-repositories --region "$REGION" \
+  --query "repositories[?starts_with(repositoryName,'doc-platform/')].repositoryName" \
+  --output text 2>/dev/null || true)
+for repo in $ECR_REPOS; do
+  echo "    Deleting $repo"
+  aws ecr delete-repository --repository-name "$repo" --force --region "$REGION" --no-cli-pager >/dev/null 2>/dev/null || true
+done
+[ -z "$ECR_REPOS" ] && echo "    None found."
+
+# ── S3 buckets ──
+echo "  S3 buckets (doc-platform*):"
+S3_BUCKETS=$(aws s3api list-buckets \
+  --query "Buckets[?starts_with(Name,'doc-platform')].Name" \
+  --output text 2>/dev/null || true)
+for bucket in $S3_BUCKETS; do
+  echo "    Emptying and deleting $bucket"
+  aws s3 rb "s3://$bucket" --force >/dev/null 2>&1 || true
+done
+[ -z "$S3_BUCKETS" ] && echo "    None found."
+
+# ── RDS final snapshots (created by SNAPSHOT removal policy) ──
+echo "  RDS snapshots:"
+RDS_SNAPS=$(aws rds describe-db-snapshots --region "$REGION" \
+  --query "DBSnapshots[?contains(DBSnapshotIdentifier,'docplatform') || contains(DBSnapshotIdentifier,'doc-platform')].DBSnapshotIdentifier" \
+  --output text 2>/dev/null || true)
+for snap in $RDS_SNAPS; do
+  echo "    Deleting snapshot $snap"
+  aws rds delete-db-snapshot --db-snapshot-identifier "$snap" --region "$REGION" --no-cli-pager >/dev/null 2>/dev/null || true
+done
+[ -z "$RDS_SNAPS" ] && echo "    None found."
+
+# Also check for cluster snapshots
+RDS_CLUSTER_SNAPS=$(aws rds describe-db-cluster-snapshots --region "$REGION" \
+  --query "DBClusterSnapshots[?contains(DBClusterSnapshotIdentifier,'docplatform') || contains(DBClusterSnapshotIdentifier,'doc-platform')].DBClusterSnapshotIdentifier" \
+  --output text 2>/dev/null || true)
+for snap in $RDS_CLUSTER_SNAPS; do
+  echo "    Deleting cluster snapshot $snap"
+  aws rds delete-db-cluster-snapshot --db-cluster-snapshot-identifier "$snap" --region "$REGION" --no-cli-pager >/dev/null 2>/dev/null || true
 done
 
-# S3 buckets
-echo "  S3 buckets:"
-for suffix in "storage" "prod-storage"; do
-  bucket="doc-platform-${suffix}-${ACCOUNT_ID}"
-  if aws s3api head-bucket --bucket "$bucket" 2>/dev/null; then
-    echo "    Deleting $bucket"
-    aws s3 rb "s3://$bucket" --force >/dev/null 2>&1 || true
-  fi
-done
-
-# Secrets Manager
-echo "  Secrets:"
-for prefix in "doc-platform/" "production/doc-platform/"; do
+# ── Secrets Manager ──
+echo "  Secrets (doc-platform*, production/doc-platform*):"
+for prefix in "doc-platform" "production/doc-platform"; do
   secrets=$(aws secretsmanager list-secrets \
     --filter Key=name,Values="$prefix" \
     --query "SecretList[].Name" --output text --region "$REGION" 2>/dev/null || true)
@@ -123,21 +146,63 @@ for prefix in "doc-platform/" "production/doc-platform/"; do
   done
 done
 
-# CloudWatch log groups
+# ── CloudWatch log groups (scan, don't hardcode) ──
 echo "  Log groups:"
-for lg in \
-  /doc-platform/errors /doc-platform-prod/errors \
-  /ecs/api /ecs/frontend /ecs/mcp /ecs/storage \
-  /ecs/production/api /ecs/production/frontend /ecs/production/mcp /ecs/production/storage \
-  /lambda/github-sync /lambda/production/github-sync; do
-  if aws logs describe-log-groups --log-group-name-prefix "$lg" --query "logGroups[?logGroupName=='$lg']" --output text --region "$REGION" 2>/dev/null | grep -q "$lg"; then
+# Scan all prefixes our project could have created
+for prefix in "/ecs/" "/lambda/" "/doc-platform" "/aws/lambda/DocPlatform" "/aws/lambda/doc-platform"; do
+  log_groups=$(aws logs describe-log-groups \
+    --log-group-name-prefix "$prefix" \
+    --query "logGroups[].logGroupName" \
+    --output text --region "$REGION" 2>/dev/null || true)
+  for lg in $log_groups; do
     echo "    Deleting $lg"
     aws logs delete-log-group --log-group-name "$lg" --region "$REGION" 2>/dev/null || true
-  fi
+  done
 done
 
-# Old deploy role (might already be gone with stack, but check)
-echo "  IAM role:"
+# ── CloudWatch alarms ──
+echo "  CloudWatch alarms:"
+CW_ALARMS=$(aws cloudwatch describe-alarms --region "$REGION" \
+  --query "MetricAlarms[?contains(AlarmName,'doc-platform') || contains(AlarmName,'DocPlatform')].AlarmName" \
+  --output text 2>/dev/null || true)
+for alarm in $CW_ALARMS; do
+  echo "    Deleting alarm $alarm"
+  aws cloudwatch delete-alarms --alarm-names "$alarm" --region "$REGION" 2>/dev/null || true
+done
+[ -z "$CW_ALARMS" ] && echo "    None found."
+
+# ── SNS topics ──
+echo "  SNS topics:"
+SNS_TOPICS=$(aws sns list-topics --region "$REGION" \
+  --query "Topics[?contains(TopicArn,'doc-platform') || contains(TopicArn,'DocPlatform')].TopicArn" \
+  --output text 2>/dev/null || true)
+for topic in $SNS_TOPICS; do
+  echo "    Deleting $topic"
+  aws sns delete-topic --topic-arn "$topic" --region "$REGION" 2>/dev/null || true
+done
+[ -z "$SNS_TOPICS" ] && echo "    None found."
+
+# ── SQS queues ──
+echo "  SQS queues:"
+SQS_QUEUES=$(aws sqs list-queues --region "$REGION" \
+  --queue-name-prefix "doc-platform" \
+  --query "QueueUrls[]" --output text 2>/dev/null || true)
+for queue in $SQS_QUEUES; do
+  echo "    Deleting $queue"
+  aws sqs delete-queue --queue-url "$queue" --region "$REGION" 2>/dev/null || true
+done
+# Also check DocPlatform prefix (CDK-generated names)
+SQS_QUEUES2=$(aws sqs list-queues --region "$REGION" \
+  --queue-name-prefix "DocPlatform" \
+  --query "QueueUrls[]" --output text 2>/dev/null || true)
+for queue in $SQS_QUEUES2; do
+  echo "    Deleting $queue"
+  aws sqs delete-queue --queue-url "$queue" --region "$REGION" 2>/dev/null || true
+done
+[ -z "$SQS_QUEUES" ] && [ -z "$SQS_QUEUES2" ] && echo "    None found."
+
+# ── IAM: deploy role ──
+echo "  IAM roles:"
 ROLE_NAME="doc-platform-github-actions-deploy"
 if aws iam get-role --role-name "$ROLE_NAME" 2>/dev/null | grep -q "$ROLE_NAME"; then
   echo "    Cleaning up $ROLE_NAME"
@@ -152,238 +217,364 @@ if aws iam get-role --role-name "$ROLE_NAME" 2>/dev/null | grep -q "$ROLE_NAME";
     aws iam delete-role-policy --role-name "$ROLE_NAME" --policy-name "$policy" 2>/dev/null || true
   done
   aws iam delete-role --role-name "$ROLE_NAME" 2>/dev/null || true
+else
+  echo "    Deploy role already gone."
 fi
 
-# Old OIDC provider (might already be gone with stack, but check)
+# ── IAM: OIDC provider ──
 OIDC_ARN="arn:aws:iam::${ACCOUNT_ID}:oidc-provider/token.actions.githubusercontent.com"
 if aws iam get-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_ARN" &>/dev/null; then
-  echo "    Deleting old OIDC provider"
+  echo "    Deleting OIDC provider"
   aws iam delete-open-id-connect-provider --open-id-connect-provider-arn "$OIDC_ARN" 2>/dev/null || true
 fi
+
+# ── Route53 hosted zones ──
+echo "  Route53 hosted zones (specboard.io):"
+ZONE_IDS=$(aws route53 list-hosted-zones-by-name \
+  --dns-name "specboard.io" \
+  --query "HostedZones[?Name=='specboard.io.'].Id" \
+  --output text 2>/dev/null || true)
+for zone_id in $ZONE_IDS; do
+  # Must delete all non-NS/SOA records first
+  zone_id_short="${zone_id##*/}"
+  echo "    Deleting hosted zone $zone_id_short"
+  # Get all record sets except NS and SOA (required, can't delete)
+  RECORDS=$(aws route53 list-resource-record-sets --hosted-zone-id "$zone_id_short" \
+    --query "ResourceRecordSets[?Type!='NS' && Type!='SOA']" --output json --region "$REGION" 2>/dev/null || echo "[]")
+  if [ "$RECORDS" != "[]" ] && [ -n "$RECORDS" ]; then
+    # Build batch delete
+    CHANGES=$(echo "$RECORDS" | jq '[.[] | {Action: "DELETE", ResourceRecordSet: .}]')
+    if [ "$CHANGES" != "[]" ] && [ "$CHANGES" != "null" ]; then
+      echo "      Deleting $(echo "$CHANGES" | jq length) DNS records..."
+      aws route53 change-resource-record-sets --hosted-zone-id "$zone_id_short" \
+        --change-batch "{\"Changes\": $CHANGES}" --no-cli-pager >/dev/null 2>/dev/null || true
+    fi
+  fi
+  aws route53 delete-hosted-zone --id "$zone_id_short" --no-cli-pager >/dev/null 2>/dev/null || true
+done
+[ -z "$ZONE_IDS" ] && echo "    None found."
+
+# ── ACM certificates ──
+echo "  ACM certificates (specboard.io):"
+CERT_ARNS=$(aws acm list-certificates --region "$REGION" \
+  --query "CertificateSummaryList[?contains(DomainName,'specboard.io')].CertificateArn" \
+  --output text 2>/dev/null || true)
+for cert in $CERT_ARNS; do
+  echo "    Deleting $cert"
+  aws acm delete-certificate --certificate-arn "$cert" --region "$REGION" 2>/dev/null || true
+done
+[ -z "$CERT_ARNS" ] && echo "    None found."
 
 echo "  Done."
 
 # ─────────────────────────────────────────────────
-# Phase 4: Verify no dangling billable resources
+# Phase 4: Verify clean slate (broad sweep of ALL resources)
 # ─────────────────────────────────────────────────
 echo ""
-echo "--- Phase 4: Scanning for dangling billable resources ---"
+echo "--- Phase 4: Verifying clean slate (scanning ALL resource types) ---"
+echo ""
+echo "  Checking that the account looks like a fresh AWS account"
+echo "  (excluding CDK bootstrap resources which are account-level)."
 echo ""
 
 DANGLING=0
 
-# Check for stuck/leftover CloudFormation stacks
+# Helper: flag a dangling resource
+flag() {
+  DANGLING=1
+}
+
+# CloudFormation stacks (except CDKToolkit bootstrap)
 echo "  CloudFormation stacks:"
 STACKS=$(aws cloudformation list-stacks \
-  --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE UPDATE_ROLLBACK_COMPLETE DELETE_FAILED \
-  --query "StackSummaries[?contains(StackName,'DocPlatform') || contains(StackName,'doc-platform')].{Name:StackName,Status:StackStatus}" \
+  --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE UPDATE_ROLLBACK_COMPLETE DELETE_FAILED CREATE_IN_PROGRESS UPDATE_IN_PROGRESS \
+  --query "StackSummaries[?StackName!='CDKToolkit'].{Name:StackName,Status:StackStatus}" \
   --output text --region "$REGION" 2>/dev/null || true)
 if [ -n "$STACKS" ]; then
-  echo "    WARNING: Old stacks still exist!"
+  echo "    WARNING: Stacks still exist!"
   echo "$STACKS" | sed 's/^/    /'
-  DANGLING=1
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# ECS clusters (~$0 themselves, but running tasks cost money)
+# ECS clusters (any)
 echo "  ECS clusters:"
 ECS_CLUSTERS=$(aws ecs list-clusters --region "$REGION" \
-  --query "clusterArns[?contains(@,'doc-platform')]" --output text 2>/dev/null || true)
+  --query "clusterArns" --output text 2>/dev/null || true)
 if [ -n "$ECS_CLUSTERS" ]; then
-  echo "    WARNING: Old ECS clusters still running!"
-  echo "$ECS_CLUSTERS" | sed 's/^/    /'
-  DANGLING=1
+  echo "    WARNING: ECS clusters exist!"
+  echo "$ECS_CLUSTERS" | tr '\t' '\n' | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# RDS instances (t4g.micro ~$12/mo, t4g.medium ~$48/mo)
+# RDS instances (any)
 echo "  RDS instances:"
-RDS_INSTANCES=$(aws rds describe-db-instances --region "$REGION" \
-  --query "DBInstances[?contains(DBInstanceIdentifier,'docplatform') || contains(DBInstanceIdentifier,'doc-platform')].{Id:DBInstanceIdentifier,Class:DBInstanceClass,Status:DBInstanceStatus}" \
-  --output table 2>/dev/null || true)
-if echo "$RDS_INSTANCES" | grep -q "docplatform\|doc-platform"; then
-  echo "    WARNING: Old RDS instances still running!"
-  echo "$RDS_INSTANCES" | sed 's/^/    /'
-  DANGLING=1
+RDS_COUNT=$(aws rds describe-db-instances --region "$REGION" \
+  --query "length(DBInstances)" --output text 2>/dev/null || echo "0")
+if [ "$RDS_COUNT" != "0" ]; then
+  echo "    WARNING: $RDS_COUNT RDS instance(s) still running!"
+  aws rds describe-db-instances --region "$REGION" \
+    --query "DBInstances[].{Id:DBInstanceIdentifier,Class:DBInstanceClass,Status:DBInstanceStatus}" \
+    --output table 2>/dev/null | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# RDS snapshots (storage cost: ~$0.02/GB/month)
-echo "  RDS snapshots:"
-RDS_SNAPSHOTS=$(aws rds describe-db-snapshots --region "$REGION" \
-  --query "DBSnapshots[?contains(DBSnapshotIdentifier,'docplatform') || contains(DBSnapshotIdentifier,'doc-platform')].{Id:DBSnapshotIdentifier,Size:AllocatedStorage,Status:Status}" \
-  --output table 2>/dev/null || true)
-if echo "$RDS_SNAPSHOTS" | grep -q "docplatform\|doc-platform"; then
-  echo "    WARNING: Old RDS snapshots exist (storage cost)!"
-  echo "$RDS_SNAPSHOTS" | sed 's/^/    /'
-  DANGLING=1
+# RDS snapshots (any manual/final snapshots — automated ones are free)
+echo "  RDS snapshots (manual/final):"
+RDS_SNAPS=$(aws rds describe-db-snapshots --region "$REGION" \
+  --snapshot-type manual \
+  --query "DBSnapshots[].{Id:DBSnapshotIdentifier,SizeGB:AllocatedStorage,Status:Status}" \
+  --output text 2>/dev/null || true)
+if [ -n "$RDS_SNAPS" ]; then
+  echo "    WARNING: Manual RDS snapshots exist (~\$0.02/GB/month)!"
+  aws rds describe-db-snapshots --region "$REGION" --snapshot-type manual \
+    --query "DBSnapshots[].{Id:DBSnapshotIdentifier,SizeGB:AllocatedStorage}" \
+    --output table 2>/dev/null | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# ElastiCache clusters (~$12/mo for cache.t4g.micro)
+# ElastiCache (any)
 echo "  ElastiCache clusters:"
-ELASTICACHE=$(aws elasticache describe-cache-clusters --region "$REGION" \
-  --query "CacheClusters[?contains(CacheClusterId,'doc-platform')].{Id:CacheClusterId,Type:CacheNodeType,Status:CacheClusterStatus}" \
-  --output table 2>/dev/null || true)
-if echo "$ELASTICACHE" | grep -q "doc-platform"; then
-  echo "    WARNING: Old ElastiCache clusters still running!"
-  echo "$ELASTICACHE" | sed 's/^/    /'
-  DANGLING=1
+EC_COUNT=$(aws elasticache describe-cache-clusters --region "$REGION" \
+  --query "length(CacheClusters)" --output text 2>/dev/null || echo "0")
+if [ "$EC_COUNT" != "0" ]; then
+  echo "    WARNING: $EC_COUNT ElastiCache cluster(s) still running!"
+  aws elasticache describe-cache-clusters --region "$REGION" \
+    --query "CacheClusters[].{Id:CacheClusterId,Type:CacheNodeType,Status:CacheClusterStatus}" \
+    --output table 2>/dev/null | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# Load balancers (~$16/mo each)
+# Load balancers (any)
 echo "  Load balancers:"
-ALBS=$(aws elbv2 describe-load-balancers --region "$REGION" \
-  --query "LoadBalancers[?contains(LoadBalancerName,'doc-platform') || contains(LoadBalancerName,'DocPl')].{Name:LoadBalancerName,State:State.Code,DNS:DNSName}" \
-  --output table 2>/dev/null || true)
-if echo "$ALBS" | grep -qi "doc-platform\|DocPl"; then
-  echo "    WARNING: Old load balancers still running!"
-  echo "$ALBS" | sed 's/^/    /'
-  DANGLING=1
+ALB_COUNT=$(aws elbv2 describe-load-balancers --region "$REGION" \
+  --query "length(LoadBalancers)" --output text 2>/dev/null || echo "0")
+if [ "$ALB_COUNT" != "0" ]; then
+  echo "    WARNING: $ALB_COUNT load balancer(s) still running (~\$16/month each)!"
+  aws elbv2 describe-load-balancers --region "$REGION" \
+    --query "LoadBalancers[].{Name:LoadBalancerName,State:State.Code}" \
+    --output table 2>/dev/null | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# NAT Gateways (~$32/mo EACH — the most expensive dangler)
+# NAT Gateways (any active — the most expensive dangler)
 echo "  NAT Gateways:"
-NAT_GWS=$(aws ec2 describe-nat-gateways --region "$REGION" \
+NAT_COUNT=$(aws ec2 describe-nat-gateways --region "$REGION" \
   --filter "Name=state,Values=available,pending" \
-  --query "NatGateways[].{Id:NatGatewayId,State:State,VpcId:VpcId,SubnetId:SubnetId}" \
-  --output table 2>/dev/null || true)
-if echo "$NAT_GWS" | grep -q "nat-"; then
-  echo "    WARNING: NAT Gateways still running (~\$32/month EACH)!"
-  echo "$NAT_GWS" | sed 's/^/    /'
-  DANGLING=1
+  --query "length(NatGateways)" --output text 2>/dev/null || echo "0")
+if [ "$NAT_COUNT" != "0" ]; then
+  echo "    WARNING: $NAT_COUNT NAT Gateway(s) running (~\$32/month EACH)!"
+  aws ec2 describe-nat-gateways --region "$REGION" \
+    --filter "Name=state,Values=available,pending" \
+    --query "NatGateways[].{Id:NatGatewayId,VpcId:VpcId}" \
+    --output table 2>/dev/null | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# Elastic IPs not associated ($3.65/mo each since Feb 2024)
+# Elastic IPs (any unassociated)
 echo "  Unassociated Elastic IPs:"
-EIPS=$(aws ec2 describe-addresses --region "$REGION" \
-  --query "Addresses[?AssociationId==null].{PublicIp:PublicIp,AllocationId:AllocationId}" \
-  --output table 2>/dev/null || true)
-if echo "$EIPS" | grep -q "eipalloc-"; then
-  echo "    WARNING: Unassociated Elastic IPs found (~\$3.65/month each)!"
-  echo "$EIPS" | sed 's/^/    /'
-  DANGLING=1
+EIP_COUNT=$(aws ec2 describe-addresses --region "$REGION" \
+  --query "length(Addresses[?AssociationId==null])" --output text 2>/dev/null || echo "0")
+if [ "$EIP_COUNT" != "0" ]; then
+  echo "    WARNING: $EIP_COUNT unassociated EIP(s) (~\$3.65/month each)!"
+  aws ec2 describe-addresses --region "$REGION" \
+    --query "Addresses[?AssociationId==null].{IP:PublicIp,Id:AllocationId}" \
+    --output table 2>/dev/null | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# Non-default VPCs (free but indicate leftover infrastructure)
+# Non-default VPCs (any)
 echo "  Non-default VPCs:"
-VPCS=$(aws ec2 describe-vpcs --region "$REGION" \
-  --query "Vpcs[?IsDefault==\`false\`].{VpcId:VpcId,CidrBlock:CidrBlock,Name:Tags[?Key=='Name']|[0].Value}" \
-  --output table 2>/dev/null || true)
-if echo "$VPCS" | grep -q "vpc-"; then
-  echo "    WARNING: Non-default VPCs found (may contain billable resources)!"
-  echo "$VPCS" | sed 's/^/    /'
-  DANGLING=1
+VPC_COUNT=$(aws ec2 describe-vpcs --region "$REGION" \
+  --query "length(Vpcs[?IsDefault==\`false\`])" --output text 2>/dev/null || echo "0")
+if [ "$VPC_COUNT" != "0" ]; then
+  echo "    WARNING: $VPC_COUNT non-default VPC(s) found (may contain billable resources)!"
+  aws ec2 describe-vpcs --region "$REGION" \
+    --query "Vpcs[?IsDefault==\`false\`].{Id:VpcId,CIDR:CidrBlock,Name:Tags[?Key=='Name']|[0].Value}" \
+    --output table 2>/dev/null | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# ECR repos with old prefix
-echo "  ECR repos (doc-platform/*):"
-ECR_OLD=$(aws ecr describe-repositories --region "$REGION" \
-  --query "repositories[?starts_with(repositoryName,'doc-platform/')].repositoryName" \
+# ECR repos (any)
+echo "  ECR repositories:"
+ECR_REPOS_ALL=$(aws ecr describe-repositories --region "$REGION" \
+  --query "repositories[].repositoryName" --output text 2>/dev/null || true)
+if [ -n "$ECR_REPOS_ALL" ]; then
+  echo "    WARNING: ECR repositories still exist!"
+  echo "$ECR_REPOS_ALL" | tr '\t' '\n' | sed 's/^/    /'
+  flag
+else
+  echo "    Clean."
+fi
+
+# S3 buckets (exclude CDK bootstrap bucket)
+echo "  S3 buckets (non-CDK):"
+S3_ALL=$(aws s3api list-buckets \
+  --query "Buckets[?!starts_with(Name,'cdk-')].Name" \
   --output text 2>/dev/null || true)
-if [ -n "$ECR_OLD" ]; then
-  echo "    WARNING: Old ECR repos still exist!"
-  echo "$ECR_OLD" | sed 's/^/    /'
-  DANGLING=1
+if [ -n "$S3_ALL" ]; then
+  echo "    WARNING: S3 buckets still exist!"
+  echo "$S3_ALL" | tr '\t' '\n' | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# S3 buckets with old prefix
-echo "  S3 buckets (doc-platform*):"
-S3_OLD=$(aws s3api list-buckets \
-  --query "Buckets[?starts_with(Name,'doc-platform')].Name" \
+# Secrets Manager (any)
+echo "  Secrets Manager:"
+SECRET_COUNT=$(aws secretsmanager list-secrets --region "$REGION" \
+  --query "length(SecretList)" --output text 2>/dev/null || echo "0")
+if [ "$SECRET_COUNT" != "0" ]; then
+  echo "    WARNING: $SECRET_COUNT secret(s) still exist (~\$0.40/secret/month)!"
+  aws secretsmanager list-secrets --region "$REGION" \
+    --query "SecretList[].Name" --output text 2>/dev/null | tr '\t' '\n' | sed 's/^/    /'
+  flag
+else
+  echo "    Clean."
+fi
+
+# CloudWatch log groups (exclude CDK and AWS service logs)
+echo "  CloudWatch log groups (non-CDK):"
+LOG_GROUPS=$(aws logs describe-log-groups --region "$REGION" \
+  --query "logGroups[?!starts_with(logGroupName,'/aws/cdk')].logGroupName" \
   --output text 2>/dev/null || true)
-if [ -n "$S3_OLD" ]; then
-  echo "    WARNING: Old S3 buckets still exist!"
-  echo "$S3_OLD" | sed 's/^/    /'
-  DANGLING=1
+if [ -n "$LOG_GROUPS" ]; then
+  echo "    WARNING: Log groups still exist!"
+  echo "$LOG_GROUPS" | tr '\t' '\n' | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# Secrets Manager
-echo "  Secrets (doc-platform*):"
-SECRETS_OLD=$(aws secretsmanager list-secrets --region "$REGION" \
-  --filter Key=name,Values="doc-platform" \
-  --query "SecretList[].Name" --output text 2>/dev/null || true)
-SECRETS_PROD=$(aws secretsmanager list-secrets --region "$REGION" \
-  --filter Key=name,Values="production/doc-platform" \
-  --query "SecretList[].Name" --output text 2>/dev/null || true)
-if [ -n "$SECRETS_OLD" ] || [ -n "$SECRETS_PROD" ]; then
-  echo "    WARNING: Old secrets still exist (~\$0.40/secret/month)!"
-  echo "$SECRETS_OLD $SECRETS_PROD" | sed 's/^/    /'
-  DANGLING=1
+# CloudWatch alarms (any)
+echo "  CloudWatch alarms:"
+ALARM_COUNT=$(aws cloudwatch describe-alarms --region "$REGION" \
+  --query "length(MetricAlarms)" --output text 2>/dev/null || echo "0")
+if [ "$ALARM_COUNT" != "0" ]; then
+  echo "    WARNING: $ALARM_COUNT CloudWatch alarm(s) still exist!"
+  aws cloudwatch describe-alarms --region "$REGION" \
+    --query "MetricAlarms[].AlarmName" --output text 2>/dev/null | tr '\t' '\n' | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# Lambda functions
-echo "  Lambda functions (doc-platform*):"
-LAMBDAS=$(aws lambda list-functions --region "$REGION" \
-  --query "Functions[?contains(FunctionName,'doc-platform')].{Name:FunctionName,Runtime:Runtime}" \
-  --output table 2>/dev/null || true)
-if echo "$LAMBDAS" | grep -q "doc-platform"; then
-  echo "    WARNING: Old Lambda functions still exist!"
-  echo "$LAMBDAS" | sed 's/^/    /'
-  DANGLING=1
+# Lambda functions (exclude CDK bootstrap)
+echo "  Lambda functions:"
+LAMBDA_LIST=$(aws lambda list-functions --region "$REGION" \
+  --query "Functions[?!starts_with(FunctionName,'cdk-')].FunctionName" \
+  --output text 2>/dev/null || true)
+if [ -n "$LAMBDA_LIST" ]; then
+  echo "    WARNING: Lambda functions still exist!"
+  echo "$LAMBDA_LIST" | tr '\t' '\n' | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
 fi
 
-# Route53 hosted zones (check for duplicates — $0.50/mo each)
-echo "  Route53 hosted zones (specboard.io):"
-ZONES=$(aws route53 list-hosted-zones-by-name \
-  --dns-name "specboard.io" \
-  --query "HostedZones[?Name=='specboard.io.'].{Id:Id,Name:Name,Records:ResourceRecordSetCount}" \
-  --output table 2>/dev/null || true)
+# Route53 hosted zones (any for specboard.io)
+echo "  Route53 hosted zones:"
 ZONE_COUNT=$(aws route53 list-hosted-zones-by-name \
   --dns-name "specboard.io" \
   --query "length(HostedZones[?Name=='specboard.io.'])" \
   --output text 2>/dev/null || echo "0")
-if [ "$ZONE_COUNT" -gt "0" ] 2>/dev/null; then
-  echo "    Found $ZONE_COUNT hosted zone(s) for specboard.io (\$0.50/month each):"
-  echo "$ZONES" | sed 's/^/    /'
-  # This is informational — zones may be intentionally kept
+if [ "$ZONE_COUNT" != "0" ] 2>/dev/null; then
+  echo "    WARNING: $ZONE_COUNT hosted zone(s) for specboard.io (\$0.50/month each)!"
+  flag
+else
+  echo "    Clean."
 fi
 
-# WAF WebACLs ($5/mo each)
-echo "  WAF WebACLs:"
-WAF=$(aws wafv2 list-web-acls --scope REGIONAL --region "$REGION" \
-  --query "WebACLs[?contains(Name,'doc-platform')].{Name:Name,Id:Id}" \
-  --output table 2>/dev/null || true)
-if echo "$WAF" | grep -q "doc-platform"; then
-  echo "    WARNING: Old WAF WebACLs still exist (~\$5/month each)!"
-  echo "$WAF" | sed 's/^/    /'
-  DANGLING=1
+# ACM certificates (any)
+echo "  ACM certificates:"
+CERT_COUNT=$(aws acm list-certificates --region "$REGION" \
+  --query "length(CertificateSummaryList)" --output text 2>/dev/null || echo "0")
+if [ "$CERT_COUNT" != "0" ]; then
+  echo "    WARNING: $CERT_COUNT ACM certificate(s) still exist!"
+  aws acm list-certificates --region "$REGION" \
+    --query "CertificateSummaryList[].DomainName" --output text 2>/dev/null | tr '\t' '\n' | sed 's/^/    /'
+  flag
 else
-  echo "    None found."
+  echo "    Clean."
+fi
+
+# WAF WebACLs (any)
+echo "  WAF WebACLs:"
+WAF_COUNT=$(aws wafv2 list-web-acls --scope REGIONAL --region "$REGION" \
+  --query "length(WebACLs)" --output text 2>/dev/null || echo "0")
+if [ "$WAF_COUNT" != "0" ]; then
+  echo "    WARNING: $WAF_COUNT WAF WebACL(s) still exist (~\$5/month each)!"
+  flag
+else
+  echo "    Clean."
+fi
+
+# SNS topics (any)
+echo "  SNS topics:"
+SNS_LIST=$(aws sns list-topics --region "$REGION" \
+  --query "Topics[].TopicArn" --output text 2>/dev/null || true)
+if [ -n "$SNS_LIST" ]; then
+  echo "    WARNING: SNS topics still exist!"
+  echo "$SNS_LIST" | tr '\t' '\n' | sed 's/^/    /'
+  flag
+else
+  echo "    Clean."
+fi
+
+# SQS queues (any)
+echo "  SQS queues:"
+SQS_LIST=$(aws sqs list-queues --region "$REGION" \
+  --query "QueueUrls" --output text 2>/dev/null || true)
+if [ -n "$SQS_LIST" ]; then
+  echo "    WARNING: SQS queues still exist!"
+  echo "$SQS_LIST" | tr '\t' '\n' | sed 's/^/    /'
+  flag
+else
+  echo "    Clean."
+fi
+
+# OIDC providers (check if still lingering)
+echo "  IAM OIDC providers:"
+OIDC_CHECK=$(aws iam list-open-id-connect-providers \
+  --query "OpenIDConnectProviderList[].Arn" --output text 2>/dev/null || true)
+if [ -n "$OIDC_CHECK" ]; then
+  echo "    WARNING: OIDC provider(s) still exist!"
+  echo "$OIDC_CHECK" | tr '\t' '\n' | sed 's/^/    /'
+  flag
+else
+  echo "    Clean."
 fi
 
 # Summary
 echo ""
+echo "  ─────────────────────────────────────────"
 if [ "$DANGLING" -eq 1 ]; then
-  echo "  ⚠ DANGLING RESOURCES DETECTED — review above and clean up manually."
-  echo "  These will incur ongoing charges until deleted."
+  echo "  ⚠ DANGLING RESOURCES DETECTED"
+  echo "  Review the warnings above. These incur ongoing charges."
   echo ""
-  echo "  Press Enter to continue to CDK deploy, or Ctrl+C to abort and clean up first..."
+  echo "  Press Enter to continue to CDK deploy anyway,"
+  echo "  or Ctrl+C to abort and clean up first..."
   read -r
 else
-  echo "  ✓ No dangling billable resources found. Clean slate confirmed."
+  echo "  ✓ Clean slate confirmed. No billable resources found."
+  echo "    (CDK bootstrap resources excluded — they are account-level.)"
 fi
 
 # ─────────────────────────────────────────────────
