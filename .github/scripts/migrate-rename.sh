@@ -28,7 +28,8 @@ echo ""
 echo "This will:"
 echo "  1. Delete old stacks ($OLD_PROD_STACK, $OLD_STAGING_STACK)"
 echo "  2. Clean up leftover resources (ECR, S3, Secrets, logs)"
-echo "  3. Deploy new SpecboardStaging stack via CDK"
+echo "  3. Verify no dangling billable resources remain"
+echo "  4. Deploy new SpecboardStaging stack via CDK"
 echo ""
 echo "Press Enter to continue or Ctrl+C to abort..."
 read -r
@@ -163,10 +164,233 @@ fi
 echo "  Done."
 
 # ─────────────────────────────────────────────────
-# Phase 4: Deploy new staging stack
+# Phase 4: Verify no dangling billable resources
 # ─────────────────────────────────────────────────
 echo ""
-echo "--- Phase 4: Deploy SpecboardStaging via CDK ---"
+echo "--- Phase 4: Scanning for dangling billable resources ---"
+echo ""
+
+DANGLING=0
+
+# Check for stuck/leftover CloudFormation stacks
+echo "  CloudFormation stacks:"
+STACKS=$(aws cloudformation list-stacks \
+  --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE UPDATE_ROLLBACK_COMPLETE DELETE_FAILED \
+  --query "StackSummaries[?contains(StackName,'DocPlatform') || contains(StackName,'doc-platform')].{Name:StackName,Status:StackStatus}" \
+  --output text --region "$REGION" 2>/dev/null || true)
+if [ -n "$STACKS" ]; then
+  echo "    WARNING: Old stacks still exist!"
+  echo "$STACKS" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# ECS clusters (~$0 themselves, but running tasks cost money)
+echo "  ECS clusters:"
+ECS_CLUSTERS=$(aws ecs list-clusters --region "$REGION" \
+  --query "clusterArns[?contains(@,'doc-platform')]" --output text 2>/dev/null || true)
+if [ -n "$ECS_CLUSTERS" ]; then
+  echo "    WARNING: Old ECS clusters still running!"
+  echo "$ECS_CLUSTERS" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# RDS instances (t4g.micro ~$12/mo, t4g.medium ~$48/mo)
+echo "  RDS instances:"
+RDS_INSTANCES=$(aws rds describe-db-instances --region "$REGION" \
+  --query "DBInstances[?contains(DBInstanceIdentifier,'docplatform') || contains(DBInstanceIdentifier,'doc-platform')].{Id:DBInstanceIdentifier,Class:DBInstanceClass,Status:DBInstanceStatus}" \
+  --output table 2>/dev/null || true)
+if echo "$RDS_INSTANCES" | grep -q "docplatform\|doc-platform"; then
+  echo "    WARNING: Old RDS instances still running!"
+  echo "$RDS_INSTANCES" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# RDS snapshots (storage cost: ~$0.02/GB/month)
+echo "  RDS snapshots:"
+RDS_SNAPSHOTS=$(aws rds describe-db-snapshots --region "$REGION" \
+  --query "DBSnapshots[?contains(DBSnapshotIdentifier,'docplatform') || contains(DBSnapshotIdentifier,'doc-platform')].{Id:DBSnapshotIdentifier,Size:AllocatedStorage,Status:Status}" \
+  --output table 2>/dev/null || true)
+if echo "$RDS_SNAPSHOTS" | grep -q "docplatform\|doc-platform"; then
+  echo "    WARNING: Old RDS snapshots exist (storage cost)!"
+  echo "$RDS_SNAPSHOTS" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# ElastiCache clusters (~$12/mo for cache.t4g.micro)
+echo "  ElastiCache clusters:"
+ELASTICACHE=$(aws elasticache describe-cache-clusters --region "$REGION" \
+  --query "CacheClusters[?contains(CacheClusterId,'doc-platform')].{Id:CacheClusterId,Type:CacheNodeType,Status:CacheClusterStatus}" \
+  --output table 2>/dev/null || true)
+if echo "$ELASTICACHE" | grep -q "doc-platform"; then
+  echo "    WARNING: Old ElastiCache clusters still running!"
+  echo "$ELASTICACHE" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# Load balancers (~$16/mo each)
+echo "  Load balancers:"
+ALBS=$(aws elbv2 describe-load-balancers --region "$REGION" \
+  --query "LoadBalancers[?contains(LoadBalancerName,'doc-platform') || contains(LoadBalancerName,'DocPl')].{Name:LoadBalancerName,State:State.Code,DNS:DNSName}" \
+  --output table 2>/dev/null || true)
+if echo "$ALBS" | grep -qi "doc-platform\|DocPl"; then
+  echo "    WARNING: Old load balancers still running!"
+  echo "$ALBS" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# NAT Gateways (~$32/mo EACH — the most expensive dangler)
+echo "  NAT Gateways:"
+NAT_GWS=$(aws ec2 describe-nat-gateways --region "$REGION" \
+  --filter "Name=state,Values=available,pending" \
+  --query "NatGateways[].{Id:NatGatewayId,State:State,VpcId:VpcId,SubnetId:SubnetId}" \
+  --output table 2>/dev/null || true)
+if echo "$NAT_GWS" | grep -q "nat-"; then
+  echo "    WARNING: NAT Gateways still running (~\$32/month EACH)!"
+  echo "$NAT_GWS" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# Elastic IPs not associated ($3.65/mo each since Feb 2024)
+echo "  Unassociated Elastic IPs:"
+EIPS=$(aws ec2 describe-addresses --region "$REGION" \
+  --query "Addresses[?AssociationId==null].{PublicIp:PublicIp,AllocationId:AllocationId}" \
+  --output table 2>/dev/null || true)
+if echo "$EIPS" | grep -q "eipalloc-"; then
+  echo "    WARNING: Unassociated Elastic IPs found (~\$3.65/month each)!"
+  echo "$EIPS" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# Non-default VPCs (free but indicate leftover infrastructure)
+echo "  Non-default VPCs:"
+VPCS=$(aws ec2 describe-vpcs --region "$REGION" \
+  --query "Vpcs[?IsDefault==\`false\`].{VpcId:VpcId,CidrBlock:CidrBlock,Name:Tags[?Key=='Name']|[0].Value}" \
+  --output table 2>/dev/null || true)
+if echo "$VPCS" | grep -q "vpc-"; then
+  echo "    WARNING: Non-default VPCs found (may contain billable resources)!"
+  echo "$VPCS" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# ECR repos with old prefix
+echo "  ECR repos (doc-platform/*):"
+ECR_OLD=$(aws ecr describe-repositories --region "$REGION" \
+  --query "repositories[?starts_with(repositoryName,'doc-platform/')].repositoryName" \
+  --output text 2>/dev/null || true)
+if [ -n "$ECR_OLD" ]; then
+  echo "    WARNING: Old ECR repos still exist!"
+  echo "$ECR_OLD" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# S3 buckets with old prefix
+echo "  S3 buckets (doc-platform*):"
+S3_OLD=$(aws s3api list-buckets \
+  --query "Buckets[?starts_with(Name,'doc-platform')].Name" \
+  --output text 2>/dev/null || true)
+if [ -n "$S3_OLD" ]; then
+  echo "    WARNING: Old S3 buckets still exist!"
+  echo "$S3_OLD" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# Secrets Manager
+echo "  Secrets (doc-platform*):"
+SECRETS_OLD=$(aws secretsmanager list-secrets --region "$REGION" \
+  --filter Key=name,Values="doc-platform" \
+  --query "SecretList[].Name" --output text 2>/dev/null || true)
+SECRETS_PROD=$(aws secretsmanager list-secrets --region "$REGION" \
+  --filter Key=name,Values="production/doc-platform" \
+  --query "SecretList[].Name" --output text 2>/dev/null || true)
+if [ -n "$SECRETS_OLD" ] || [ -n "$SECRETS_PROD" ]; then
+  echo "    WARNING: Old secrets still exist (~\$0.40/secret/month)!"
+  echo "$SECRETS_OLD $SECRETS_PROD" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# Lambda functions
+echo "  Lambda functions (doc-platform*):"
+LAMBDAS=$(aws lambda list-functions --region "$REGION" \
+  --query "Functions[?contains(FunctionName,'doc-platform')].{Name:FunctionName,Runtime:Runtime}" \
+  --output table 2>/dev/null || true)
+if echo "$LAMBDAS" | grep -q "doc-platform"; then
+  echo "    WARNING: Old Lambda functions still exist!"
+  echo "$LAMBDAS" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# Route53 hosted zones (check for duplicates — $0.50/mo each)
+echo "  Route53 hosted zones (specboard.io):"
+ZONES=$(aws route53 list-hosted-zones-by-name \
+  --dns-name "specboard.io" \
+  --query "HostedZones[?Name=='specboard.io.'].{Id:Id,Name:Name,Records:ResourceRecordSetCount}" \
+  --output table 2>/dev/null || true)
+ZONE_COUNT=$(aws route53 list-hosted-zones-by-name \
+  --dns-name "specboard.io" \
+  --query "length(HostedZones[?Name=='specboard.io.'])" \
+  --output text 2>/dev/null || echo "0")
+if [ "$ZONE_COUNT" -gt "0" ] 2>/dev/null; then
+  echo "    Found $ZONE_COUNT hosted zone(s) for specboard.io (\$0.50/month each):"
+  echo "$ZONES" | sed 's/^/    /'
+  # This is informational — zones may be intentionally kept
+fi
+
+# WAF WebACLs ($5/mo each)
+echo "  WAF WebACLs:"
+WAF=$(aws wafv2 list-web-acls --scope REGIONAL --region "$REGION" \
+  --query "WebACLs[?contains(Name,'doc-platform')].{Name:Name,Id:Id}" \
+  --output table 2>/dev/null || true)
+if echo "$WAF" | grep -q "doc-platform"; then
+  echo "    WARNING: Old WAF WebACLs still exist (~\$5/month each)!"
+  echo "$WAF" | sed 's/^/    /'
+  DANGLING=1
+else
+  echo "    None found."
+fi
+
+# Summary
+echo ""
+if [ "$DANGLING" -eq 1 ]; then
+  echo "  ⚠ DANGLING RESOURCES DETECTED — review above and clean up manually."
+  echo "  These will incur ongoing charges until deleted."
+  echo ""
+  echo "  Press Enter to continue to CDK deploy, or Ctrl+C to abort and clean up first..."
+  read -r
+else
+  echo "  ✓ No dangling billable resources found. Clean slate confirmed."
+fi
+
+# ─────────────────────────────────────────────────
+# Phase 5: Deploy new staging stack
+# ─────────────────────────────────────────────────
+echo ""
+echo "--- Phase 5: Deploy SpecboardStaging via CDK ---"
 echo "  Installing dependencies..."
 npm ci --silent
 
