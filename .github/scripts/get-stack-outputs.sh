@@ -5,7 +5,7 @@ set -euo pipefail
 # Usage: source get-stack-outputs.sh [stack-name]
 #
 # Arguments:
-#   stack-name  Optional. Defaults to STACK_NAME env var or 'DocPlatformStack'.
+#   stack-name  Optional. Defaults to STACK_NAME env var or 'SpecboardStaging'.
 #
 # Required environment variables:
 #   AWS_REGION
@@ -13,7 +13,7 @@ set -euo pipefail
 # Exports:
 #   CLUSTER, TASK_DEF, SUBNETS, SECURITY_GROUP, LOG_GROUP, ALB_DNS
 
-STACK="${1:-${STACK_NAME:-DocPlatformStack}}"
+STACK="${1:-${STACK_NAME:-SpecboardStaging}}"
 
 OUTPUTS=$(aws cloudformation describe-stacks \
   --stack-name "$STACK" \

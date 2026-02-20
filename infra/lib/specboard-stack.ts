@@ -24,12 +24,12 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import { type EnvironmentConfig, getFullDomain } from './environment-config';
 
-export interface DocPlatformStackProps extends cdk.StackProps {
+export interface SpecboardStackProps extends cdk.StackProps {
 	config: EnvironmentConfig;
 }
 
-export class DocPlatformStack extends cdk.Stack {
-	constructor(scope: Construct, id: string, props: DocPlatformStackProps) {
+export class SpecboardStack extends cdk.Stack {
+	constructor(scope: Construct, id: string, props: SpecboardStackProps) {
 		super(scope, id, props);
 
 		const { config } = props;
@@ -73,7 +73,7 @@ export class DocPlatformStack extends cdk.Stack {
 			// Staging stack creates the zone and certificate (shared across environments)
 			const zone = new route53.HostedZone(this, 'HostedZone', {
 				zoneName: config.domain,
-				comment: 'Managed by CDK - doc-platform',
+				comment: 'Managed by CDK - specboard',
 			});
 			hostedZone = zone;
 
@@ -123,10 +123,10 @@ export class DocPlatformStack extends cdk.Stack {
 					imageScanOnPush: true,
 				});
 
-			apiRepository = createRepo('ApiRepository', 'doc-platform/api');
-			frontendRepository = createRepo('FrontendRepository', 'doc-platform/frontend');
-			mcpRepository = createRepo('McpRepository', 'doc-platform/mcp');
-			storageRepository = createRepo('StorageRepository', 'doc-platform/storage');
+			apiRepository = createRepo('ApiRepository', config.ecrRepoNames.api);
+			frontendRepository = createRepo('FrontendRepository', config.ecrRepoNames.frontend);
+			mcpRepository = createRepo('McpRepository', config.ecrRepoNames.mcp);
+			storageRepository = createRepo('StorageRepository', config.ecrRepoNames.storage);
 		} else {
 			// Production imports ECR repos by name (no cross-stack refs)
 			const repoNames = config.shared!.ecrRepoNames;
@@ -194,7 +194,7 @@ export class DocPlatformStack extends cdk.Stack {
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
 			securityGroups: [dbSecurityGroup],
 			credentials: rds.Credentials.fromSecret(dbCredentials),
-			databaseName: 'doc_platform',
+			databaseName: 'specboard',
 			allocatedStorage: 20,
 			maxAllocatedStorage: 100,
 			multiAz: config.database.multiAz,
@@ -476,7 +476,7 @@ export class DocPlatformStack extends cdk.Stack {
 				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
+				DB_NAME: 'specboard',
 				DB_USER: 'postgres',
 				ERROR_LOG_GROUP: errorLogGroup.logGroupName,
 				SES_REGION: 'us-west-2',
@@ -567,7 +567,7 @@ export class DocPlatformStack extends cdk.Stack {
 				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
+				DB_NAME: 'specboard',
 				DB_USER: 'postgres',
 			},
 			secrets: {
@@ -626,7 +626,7 @@ export class DocPlatformStack extends cdk.Stack {
 				API_URL: 'http://api.internal:3001',
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
+				DB_NAME: 'specboard',
 				DB_USER: 'postgres',
 				ERROR_LOG_GROUP: errorLogGroup.logGroupName,
 			},
@@ -815,7 +815,7 @@ export class DocPlatformStack extends cdk.Stack {
 				STORAGE_SERVICE_URL: 'http://storage.internal:3003',
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
+				DB_NAME: 'specboard',
 				DB_USER: 'postgres',
 			},
 		});
@@ -1156,7 +1156,7 @@ export class DocPlatformStack extends cdk.Stack {
 			});
 
 			const deployRole = new iam.Role(this, 'GitHubActionsDeployRole', {
-				roleName: 'doc-platform-github-actions-deploy',
+				roleName: 'specboard-github-actions-deploy',
 				assumedBy: new iam.FederatedPrincipal(
 					githubOidcProvider.openIdConnectProviderArn,
 					{
@@ -1221,10 +1221,10 @@ export class DocPlatformStack extends cdk.Stack {
 				resources: ['*'],
 			}));
 
-			// ECS permissions - scoped to doc-platform clusters for mutations
-			// Wildcard covers both staging (doc-platform) and production (doc-platform-prod)
-			const serviceArnPattern = `arn:aws:ecs:${this.region}:${this.account}:service/doc-platform*/*`;
-			const taskArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task/doc-platform*/*`;
+			// ECS permissions - scoped to specboard clusters for mutations
+			// Wildcard covers both staging (specboard-staging) and production (specboard)
+			const serviceArnPattern = `arn:aws:ecs:${this.region}:${this.account}:service/specboard*/*`;
+			const taskArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task/specboard*/*`;
 			const taskDefArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task-definition/*:*`;
 
 			deployRole.addToPolicy(new iam.PolicyStatement({
@@ -1267,7 +1267,7 @@ export class DocPlatformStack extends cdk.Stack {
 					storageTaskDefinition.taskRole.roleArn,
 					storageTaskDefinition.executionRole!.roleArn,
 					// Production stack CDK-generated roles
-					`arn:aws:iam::${this.account}:role/DocPlatformProd-*`,
+					`arn:aws:iam::${this.account}:role/Specboard-*`,
 				],
 			}));
 

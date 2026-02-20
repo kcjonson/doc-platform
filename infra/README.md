@@ -78,13 +78,13 @@ cd infra && npx cdk deploy --require-approval never
 ### Run Migrations Manually
 
 ```bash
-CLUSTER=$(aws cloudformation describe-stacks --stack-name DocPlatformStack \
+CLUSTER=$(aws cloudformation describe-stacks --stack-name SpecboardStaging \
   --query "Stacks[0].Outputs[?OutputKey=='ClusterName'].OutputValue" --output text --region us-west-2)
-TASK_DEF=$(aws cloudformation describe-stacks --stack-name DocPlatformStack \
+TASK_DEF=$(aws cloudformation describe-stacks --stack-name SpecboardStaging \
   --query "Stacks[0].Outputs[?OutputKey=='ApiTaskDefinitionArn'].OutputValue" --output text --region us-west-2)
-SUBNETS=$(aws cloudformation describe-stacks --stack-name DocPlatformStack \
+SUBNETS=$(aws cloudformation describe-stacks --stack-name SpecboardStaging \
   --query "Stacks[0].Outputs[?OutputKey=='PrivateSubnetIds'].OutputValue" --output text --region us-west-2)
-SG=$(aws cloudformation describe-stacks --stack-name DocPlatformStack \
+SG=$(aws cloudformation describe-stacks --stack-name SpecboardStaging \
   --query "Stacks[0].Outputs[?OutputKey=='ApiSecurityGroupId'].OutputValue" --output text --region us-west-2)
 SUBNETS_JSON=$(echo $SUBNETS | tr ',' '\n' | jq -R . | jq -s .)
 
@@ -100,7 +100,7 @@ aws ecs run-task \
 ### Monitor Deployment
 
 ```bash
-CLUSTER=$(aws cloudformation describe-stacks --stack-name DocPlatformStack \
+CLUSTER=$(aws cloudformation describe-stacks --stack-name SpecboardStaging \
   --query "Stacks[0].Outputs[?OutputKey=='ClusterName'].OutputValue" --output text --region us-west-2)
 
 # Service status
@@ -109,7 +109,7 @@ aws ecs describe-services --cluster $CLUSTER --services api frontend mcp \
   --output table --region us-west-2
 
 # ALB URL
-aws cloudformation describe-stacks --stack-name DocPlatformStack \
+aws cloudformation describe-stacks --stack-name SpecboardStaging \
   --query "Stacks[0].Outputs[?OutputKey=='AlbDnsName'].OutputValue" --output text --region us-west-2
 ```
 
@@ -143,7 +143,7 @@ aws ecs describe-services --cluster $CLUSTER --services api \
 
 Check container logs:
 ```bash
-LOG_GROUP=$(aws cloudformation describe-stacks --stack-name DocPlatformStack \
+LOG_GROUP=$(aws cloudformation describe-stacks --stack-name SpecboardStaging \
   --query "Stacks[0].Outputs[?OutputKey=='ApiLogGroupName'].OutputValue" --output text)
 
 aws logs tail $LOG_GROUP --follow
@@ -158,11 +158,11 @@ Services have circuit breakers enabled. If containers fail repeatedly, deploymen
 If a deployment gets stuck:
 ```bash
 # Check stack status
-aws cloudformation describe-stacks --stack-name DocPlatformStack \
+aws cloudformation describe-stacks --stack-name SpecboardStaging \
   --query "Stacks[0].StackStatus"
 
 # Cancel update (if UPDATE_IN_PROGRESS)
-aws cloudformation cancel-update-stack --stack-name DocPlatformStack
+aws cloudformation cancel-update-stack --stack-name SpecboardStaging
 
 # Scale services to 0 if needed
 aws ecs update-service --cluster $CLUSTER --service api --desired-count 0

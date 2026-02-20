@@ -46,13 +46,21 @@ export interface EnvironmentConfig {
 	 */
 	shared?: SharedResourceConfig;
 
+	/** ECR repository names (created manually, shared across environments) */
+	ecrRepoNames: {
+		api: string;
+		frontend: string;
+		mcp: string;
+		storage: string;
+	};
+
 	/** Prefix for named AWS resources (ALB, cluster, Lambda, SQS, SNS, etc.) */
 	resourcePrefix: string;
 
-	/** Prefix for Secrets Manager secret names (e.g., 'doc-platform' or 'production/doc-platform') */
+	/** Prefix for Secrets Manager secret names (e.g., 'specboard' or 'specboard/staging') */
 	secretsPrefix: string;
 
-	/** Infix inserted into log group paths (e.g., '' for staging, 'production/' for production) */
+	/** Infix inserted into log group paths (e.g., '' for production, 'staging/' for staging) */
 	logInfix: string;
 
 	/** Database configuration */
@@ -94,33 +102,29 @@ export function getFullDomain(config: EnvironmentConfig): string {
 
 // ECR repo names are deterministic and shared across environments
 const ECR_REPO_NAMES = {
-	api: 'doc-platform/api',
-	frontend: 'doc-platform/frontend',
-	mcp: 'doc-platform/mcp',
-	storage: 'doc-platform/storage',
+	api: 'specboard/api',
+	frontend: 'specboard/frontend',
+	mcp: 'specboard/mcp',
+	storage: 'specboard/storage',
 };
 
-/**
- * Staging environment configuration.
- * Resource names match existing deployment for backward compatibility.
- */
+/** Staging environment configuration. */
 export const stagingConfig: EnvironmentConfig = {
 	name: 'staging',
-	stackName: 'DocPlatformStack',
+	stackName: 'SpecboardStaging',
 	domain: 'specboard.io',
 	subdomain: 'staging',
 	createSharedResources: true,
-	resourcePrefix: 'doc-platform',
-	secretsPrefix: 'doc-platform',
-	logInfix: '',
+	ecrRepoNames: ECR_REPO_NAMES,
+	resourcePrefix: 'specboard-staging',
+	secretsPrefix: 'specboard/staging',
+	logInfix: 'staging/',
 	database: {
 		instanceClass: ec2.InstanceClass.T4G,
 		instanceSize: ec2.InstanceSize.MICRO,
 		multiAz: false,
 		backupRetentionDays: 1,
-		// Encryption disabled for backward compatibility with existing unencrypted instance.
-		// Enable after staging rebuild (requires instance replacement).
-		storageEncrypted: false,
+		storageEncrypted: true,
 		deletionProtection: false,
 	},
 	ecs: {
@@ -141,7 +145,7 @@ export const stagingConfig: EnvironmentConfig = {
  */
 export const productionConfig: EnvironmentConfig = {
 	name: 'production',
-	stackName: 'DocPlatformProd',
+	stackName: 'Specboard',
 	domain: 'specboard.io',
 	subdomain: undefined,
 	createSharedResources: false,
@@ -151,9 +155,10 @@ export const productionConfig: EnvironmentConfig = {
 		hostedZoneName: 'specboard.io',
 		certificateArn: '', // Set from staging stack output before first deploy
 	},
-	resourcePrefix: 'doc-platform-prod',
-	secretsPrefix: 'production/doc-platform',
-	logInfix: 'production/',
+	ecrRepoNames: ECR_REPO_NAMES,
+	resourcePrefix: 'specboard',
+	secretsPrefix: 'specboard',
+	logInfix: '',
 	database: {
 		instanceClass: ec2.InstanceClass.T4G,
 		instanceSize: ec2.InstanceSize.MEDIUM,
@@ -194,6 +199,7 @@ export function getEnvironmentConfig(envName: string, context?: {
 		...base,
 		database: { ...base.database },
 		ecs: { ...base.ecs },
+		ecrRepoNames: { ...base.ecrRepoNames },
 		shared: base.shared ? { ...base.shared, ecrRepoNames: { ...base.shared.ecrRepoNames } } : undefined,
 	};
 

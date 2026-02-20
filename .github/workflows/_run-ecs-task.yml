@@ -48,9 +48,9 @@ jobs:
         id: stack
         run: |
           if [ "${{ inputs.environment }}" = "production" ]; then
-            echo "name=DocPlatformProd" >> $GITHUB_OUTPUT
+            echo "name=Specboard" >> $GITHUB_OUTPUT
           else
-            echo "name=DocPlatformStack" >> $GITHUB_OUTPUT
+            echo "name=SpecboardStaging" >> $GITHUB_OUTPUT
           fi
 
       - name: Run ${{ inputs.task_name }}
