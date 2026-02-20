@@ -44,9 +44,9 @@ jobs:
         id: prefix
         run: |
           if [ "${{ inputs.push }}" = "true" ]; then
-            echo "value=${{ steps.login-ecr.outputs.registry }}/doc-platform" >> $GITHUB_OUTPUT
+            echo "value=${{ steps.login-ecr.outputs.registry }}/specboard" >> $GITHUB_OUTPUT
           else
-            echo "value=doc-platform" >> $GITHUB_OUTPUT
+            echo "value=specboard" >> $GITHUB_OUTPUT
           fi
 
       - name: Set up Docker Buildx

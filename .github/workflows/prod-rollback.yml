@@ -71,7 +71,7 @@ jobs:
           SHA="${{ needs.resolve.outputs.sha }}"
           MISSING=""
 
-          for REPO in doc-platform/api doc-platform/frontend doc-platform/mcp doc-platform/storage; do
+          for REPO in specboard/api specboard/frontend specboard/mcp specboard/storage; do
             if ! aws ecr describe-images \
               --repository-name "$REPO" \
               --image-ids imageTag="$SHA" \
@@ -139,7 +139,7 @@ jobs:
 
       - name: Deploy services
         run: |
-          source .github/scripts/get-stack-outputs.sh DocPlatformProd
+          source .github/scripts/get-stack-outputs.sh Specboard
           .github/scripts/deploy-services.sh "${{ needs.resolve.outputs.sha }}"
 
   health-check:

@@ -122,5 +122,5 @@ jobs:
 
       - name: Deploy services
         run: |
-          source .github/scripts/get-stack-outputs.sh DocPlatformStack
+          source .github/scripts/get-stack-outputs.sh SpecboardStaging
           .github/scripts/deploy-services.sh "${{ needs.check.outputs.sha }}"

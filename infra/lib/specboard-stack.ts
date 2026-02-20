@@ -24,12 +24,12 @@ import { Construct } from 'constructs';
 import * as path from 'path';
 import { type EnvironmentConfig, getFullDomain } from './environment-config';
 
-export interface DocPlatformStackProps extends cdk.StackProps {
+export interface SpecboardStackProps extends cdk.StackProps {
 	config: EnvironmentConfig;
 }
 
-export class DocPlatformStack extends cdk.Stack {
-	constructor(scope: Construct, id: string, props: DocPlatformStackProps) {
+export class SpecboardStack extends cdk.Stack {
+	constructor(scope: Construct, id: string, props: SpecboardStackProps) {
 		super(scope, id, props);
 
 		const { config } = props;
@@ -73,7 +73,7 @@ export class DocPlatformStack extends cdk.Stack {
 			// Staging stack creates the zone and certificate (shared across environments)
 			const zone = new route53.HostedZone(this, 'HostedZone', {
 				zoneName: config.domain,
-				comment: 'Managed by CDK - doc-platform',
+				comment: 'Managed by CDK - specboard',
 			});
 			hostedZone = zone;
 
@@ -94,47 +94,13 @@ export class DocPlatformStack extends cdk.Stack {
 		}
 
 		// ===========================================
-		// ECR Repositories
+		// ECR Repositories (created manually, imported by all stacks)
 		// ===========================================
-		let apiRepository: ecr.IRepository;
-		let frontendRepository: ecr.IRepository;
-		let mcpRepository: ecr.IRepository;
-		let storageRepository: ecr.IRepository;
-
-		if (config.createSharedResources) {
-			// Staging stack creates ECR repos (shared across environments).
-			// Images are promoted by SHA tag, not rebuilt per environment.
-			const ecrLifecycleRules: ecr.LifecycleRule[] = [
-				{
-					description: 'Keep last 20 images for SHA-based promotion',
-					maxImageCount: 20,
-					rulePriority: 1,
-					tagStatus: ecr.TagStatus.ANY,
-				},
-			];
-
-			const createRepo = (id: string, name: string): ecr.Repository =>
-				new ecr.Repository(this, id, {
-					repositoryName: name,
-					// RETAIN: shared ECR repos serve both staging and production.
-					// Destroying staging must not delete production images.
-					removalPolicy: cdk.RemovalPolicy.RETAIN,
-					lifecycleRules: ecrLifecycleRules,
-					imageScanOnPush: true,
-				});
-
-			apiRepository = createRepo('ApiRepository', 'doc-platform/api');
-			frontendRepository = createRepo('FrontendRepository', 'doc-platform/frontend');
-			mcpRepository = createRepo('McpRepository', 'doc-platform/mcp');
-			storageRepository = createRepo('StorageRepository', 'doc-platform/storage');
-		} else {
-			// Production imports ECR repos by name (no cross-stack refs)
-			const repoNames = config.shared!.ecrRepoNames;
-			apiRepository = ecr.Repository.fromRepositoryName(this, 'ApiRepository', repoNames.api);
-			frontendRepository = ecr.Repository.fromRepositoryName(this, 'FrontendRepository', repoNames.frontend);
-			mcpRepository = ecr.Repository.fromRepositoryName(this, 'McpRepository', repoNames.mcp);
-			storageRepository = ecr.Repository.fromRepositoryName(this, 'StorageRepository', repoNames.storage);
-		}
+		const repoNames = config.ecrRepoNames;
+		const apiRepository = ecr.Repository.fromRepositoryName(this, 'ApiRepository', repoNames.api);
+		const frontendRepository = ecr.Repository.fromRepositoryName(this, 'FrontendRepository', repoNames.frontend);
+		const mcpRepository = ecr.Repository.fromRepositoryName(this, 'McpRepository', repoNames.mcp);
+		const storageRepository = ecr.Repository.fromRepositoryName(this, 'StorageRepository', repoNames.storage);
 
 		// ===========================================
 		// RDS PostgreSQL
@@ -194,7 +160,7 @@ export class DocPlatformStack extends cdk.Stack {
 			vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
 			securityGroups: [dbSecurityGroup],
 			credentials: rds.Credentials.fromSecret(dbCredentials),
-			databaseName: 'doc_platform',
+			databaseName: 'specboard',
 			allocatedStorage: 20,
 			maxAllocatedStorage: 100,
 			multiAz: config.database.multiAz,
@@ -476,7 +442,7 @@ export class DocPlatformStack extends cdk.Stack {
 				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
+				DB_NAME: 'specboard',
 				DB_USER: 'postgres',
 				ERROR_LOG_GROUP: errorLogGroup.logGroupName,
 				SES_REGION: 'us-west-2',
@@ -567,7 +533,7 @@ export class DocPlatformStack extends cdk.Stack {
 				REDIS_URL: `redis://${redis.attrRedisEndpointAddress}:${redis.attrRedisEndpointPort}`,
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
+				DB_NAME: 'specboard',
 				DB_USER: 'postgres',
 			},
 			secrets: {
@@ -626,7 +592,7 @@ export class DocPlatformStack extends cdk.Stack {
 				API_URL: 'http://api.internal:3001',
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
+				DB_NAME: 'specboard',
 				DB_USER: 'postgres',
 				ERROR_LOG_GROUP: errorLogGroup.logGroupName,
 			},
@@ -815,7 +781,7 @@ export class DocPlatformStack extends cdk.Stack {
 				STORAGE_SERVICE_URL: 'http://storage.internal:3003',
 				DB_HOST: database.instanceEndpoint.hostname,
 				DB_PORT: database.instanceEndpoint.port.toString(),
-				DB_NAME: 'doc_platform',
+				DB_NAME: 'specboard',
 				DB_USER: 'postgres',
 			},
 		});
@@ -1156,7 +1122,7 @@ export class DocPlatformStack extends cdk.Stack {
 			});
 
 			const deployRole = new iam.Role(this, 'GitHubActionsDeployRole', {
-				roleName: 'doc-platform-github-actions-deploy',
+				roleName: 'specboard-github-actions-deploy',
 				assumedBy: new iam.FederatedPrincipal(
 					githubOidcProvider.openIdConnectProviderArn,
 					{
@@ -1203,10 +1169,10 @@ export class DocPlatformStack extends cdk.Stack {
 					'ecr:CompleteLayerUpload',
 				],
 				resources: [
-					(apiRepository as ecr.Repository).repositoryArn,
-					(frontendRepository as ecr.Repository).repositoryArn,
-					(mcpRepository as ecr.Repository).repositoryArn,
-					(storageRepository as ecr.Repository).repositoryArn,
+					apiRepository.repositoryArn,
+					frontendRepository.repositoryArn,
+					mcpRepository.repositoryArn,
+					storageRepository.repositoryArn,
 				],
 			}));
 
@@ -1221,10 +1187,10 @@ export class DocPlatformStack extends cdk.Stack {
 				resources: ['*'],
 			}));
 
-			// ECS permissions - scoped to doc-platform clusters for mutations
-			// Wildcard covers both staging (doc-platform) and production (doc-platform-prod)
-			const serviceArnPattern = `arn:aws:ecs:${this.region}:${this.account}:service/doc-platform*/*`;
-			const taskArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task/doc-platform*/*`;
+			// ECS permissions - scoped to specboard clusters for mutations
+			// Wildcard covers both staging (specboard-staging) and production (specboard)
+			const serviceArnPattern = `arn:aws:ecs:${this.region}:${this.account}:service/specboard*/*`;
+			const taskArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task/specboard*/*`;
 			const taskDefArnPattern = `arn:aws:ecs:${this.region}:${this.account}:task-definition/*:*`;
 
 			deployRole.addToPolicy(new iam.PolicyStatement({
@@ -1267,7 +1233,7 @@ export class DocPlatformStack extends cdk.Stack {
 					storageTaskDefinition.taskRole.roleArn,
 					storageTaskDefinition.executionRole!.roleArn,
 					// Production stack CDK-generated roles
-					`arn:aws:iam::${this.account}:role/DocPlatformProd-*`,
+					`arn:aws:iam::${this.account}:role/Specboard-*`,
 				],
 			}));
 
@@ -1369,26 +1335,6 @@ export class DocPlatformStack extends cdk.Stack {
 
 		// Shared resource outputs (only from the stack that creates them)
 		if (config.createSharedResources) {
-			new cdk.CfnOutput(this, 'ApiRepositoryUri', {
-				value: (apiRepository as ecr.Repository).repositoryUri,
-				description: 'ECR Repository URI for API',
-			});
-
-			new cdk.CfnOutput(this, 'FrontendRepositoryUri', {
-				value: (frontendRepository as ecr.Repository).repositoryUri,
-				description: 'ECR Repository URI for Frontend',
-			});
-
-			new cdk.CfnOutput(this, 'McpRepositoryUri', {
-				value: (mcpRepository as ecr.Repository).repositoryUri,
-				description: 'ECR Repository URI for MCP',
-			});
-
-			new cdk.CfnOutput(this, 'StorageRepositoryUri', {
-				value: (storageRepository as ecr.Repository).repositoryUri,
-				description: 'ECR Repository URI for Storage service',
-			});
-
 			new cdk.CfnOutput(this, 'HostedZoneId', {
 				value: (hostedZone as route53.HostedZone).hostedZoneId,
 				description: 'Route53 Hosted Zone ID',
