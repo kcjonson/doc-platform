@@ -1,6 +1,6 @@
 # Project Status
 
-Last Updated: 2026-01-20 (MCP staging deployment complete)
+Last Updated: 2026-02-25 (Production email setup in progress)
 
 ## Epic/Story/Task Template
 
@@ -139,6 +139,39 @@ Use this template for all work items:
 ---
 
 ## In Progress Epics
+
+### Production Email
+**Spec/Documentation:** `/docs/production-email.md`
+**Dependencies:** Authentication System
+**Status:** in progress
+**Priority:** high
+
+**Goal:** Get SES email sending working in production (verification, password reset, etc.).
+
+**Tasks:**
+- [ ] SES domain setup
+  - [x] Create domain identity (specboard.io) in SES
+  - [x] Configure DKIM (add 3 CNAME records to DNS)
+  - [x] Configure SPF (TXT record)
+  - [x] Configure DMARC (TXT record)
+- [ ] Bounce and complaint handling
+  - [x] Create SNS topics (ses-bounces, ses-complaints)
+  - [ ] Subscribe monitoring email to both topics
+  - [x] Wire SNS topics to SES identity notifications
+- [ ] Sandbox testing
+  - [ ] Verify a test recipient email address
+  - [ ] Send test email via CLI
+  - [ ] Test app email flow in staging
+- [ ] Production access request
+  - [ ] Submit request (manually, with detailed use case)
+  - [ ] Follow up if denied
+- [ ] End-to-end verification
+  - [ ] Test signup + verification email in staging
+  - [ ] Test password reset email in staging
+  - [ ] Test signup + verification email in production
+  - [ ] Test password reset email in production
+
+---
 
 ### Expose MCP at Staging
 **Spec/Documentation:** `.claude/plans/expose-mcp-staging.md`
@@ -417,21 +450,6 @@ Use this template for all work items:
   - [ ] "Saved to cloud" indicator (S3/cloud storage mode)
   - [ ] "Pushed to GitHub" confirmation (after successful commit)
   - [ ] Clear visual distinction between pending changes vs committed
-
----
-
-### Production Email
-**Spec/Documentation:** (needs spec)
-**Dependencies:** Authentication System
-**Status:** ready
-**Priority:** high
-
-**Goal:** Get SES email sending working in production (verification, password reset, etc.).
-
-**Tasks:**
-- [ ] Configure SES for production
-- [ ] Verify sending domain
-- [ ] Test verification and password reset flows end-to-end
 
 ---
 
