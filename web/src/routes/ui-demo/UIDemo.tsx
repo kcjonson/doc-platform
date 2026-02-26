@@ -100,15 +100,6 @@ export function UIDemo(): JSX.Element {
 					<p class={styles.sectionDesc}>Single-line text input field. Controlled component (requires value).</p>
 
 					<div class={styles.subsection}>
-						<h3 class={styles.subsectionTitle}>Sizes (via class)</h3>
-						<div class={styles.stack}>
-							<Text class="size-sm" placeholder="Small input" value="" onInput={() => {}} />
-							<Text placeholder="Medium input (default)" value="" onInput={() => {}} />
-							<Text class="size-lg" placeholder="Large input" value="" onInput={() => {}} />
-						</div>
-					</div>
-
-					<div class={styles.subsection}>
 						<h3 class={styles.subsectionTitle}>States</h3>
 						<div class={styles.stack}>
 							<Text placeholder="Default" value={textValue} onInput={(e) => setTextValue((e.target as HTMLInputElement).value)} />
@@ -141,15 +132,6 @@ export function UIDemo(): JSX.Element {
 				<section class={styles.section}>
 					<h2 class={styles.sectionTitle}>Select</h2>
 					<p class={styles.sectionDesc}>Dropdown selection field. Controlled component (requires value).</p>
-
-					<div class={styles.subsection}>
-						<h3 class={styles.subsectionTitle}>Sizes (via class)</h3>
-						<div class={styles.row}>
-							<Select class="size-sm" options={selectOptions} value={selectValue} onChange={(e) => setSelectValue((e.target as HTMLSelectElement).value)} />
-							<Select options={selectOptions} value={selectValue} onChange={(e) => setSelectValue((e.target as HTMLSelectElement).value)} />
-							<Select class="size-lg" options={selectOptions} value={selectValue} onChange={(e) => setSelectValue((e.target as HTMLSelectElement).value)} />
-						</div>
-					</div>
 
 					<div class={styles.subsection}>
 						<h3 class={styles.subsectionTitle}>States</h3>

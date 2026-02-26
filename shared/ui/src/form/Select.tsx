@@ -22,7 +22,7 @@ export interface SelectProps {
 	placeholder?: string;
 	/** Disabled state */
 	disabled?: boolean;
-	/** CSS classes for the select (e.g., "size-sm") */
+	/** CSS classes for the select (e.g., "error") */
 	class?: string;
 	/** Select name */
 	name?: string;

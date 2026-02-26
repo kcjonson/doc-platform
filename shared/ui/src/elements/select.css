@@ -18,7 +18,6 @@ select {
 	color: var(--color-text);
 	cursor: pointer;
 	transition: border-color var(--transition-fast);
-	/* Default size (md) */
 	padding: var(--space-2) calc(var(--space-3) + 10px + var(--space-2)) var(--space-2) var(--space-3);
 	font-size: var(--text-sm);
 	line-height: var(--leading-normal);
@@ -33,17 +32,6 @@ select:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 	background-color: var(--color-surface-hover);
-}
-
-/* Select sizes */
-select.size-sm {
-	padding: var(--space-1) calc(var(--space-3) + 10px + var(--space-2)) var(--space-1) var(--space-2);
-	font-size: var(--text-xs);
-}
-
-select.size-lg {
-	padding: var(--space-3) calc(var(--space-3) + 10px + var(--space-2)) var(--space-3) var(--space-4);
-	font-size: var(--text-base);
 }
 
 /* Select error state */

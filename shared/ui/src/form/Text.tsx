@@ -24,7 +24,7 @@ export interface TextProps {
 	disabled?: boolean;
 	/** Read-only state */
 	readOnly?: boolean;
-	/** CSS classes for the input (e.g., "size-sm") */
+	/** CSS classes for the input (e.g., "error") */
 	class?: string;
 	/** Input name */
 	name?: string;
