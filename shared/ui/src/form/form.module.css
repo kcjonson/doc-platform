@@ -21,6 +21,33 @@
 	visibility: visible;
 }
 
+/* Select wrapper — positions the custom dropdown arrow via ::after */
+.selectWrapper {
+	position: relative;
+}
+
+.selectWrapper::after {
+	content: '';
+	position: absolute;
+	right: var(--space-3);
+	top: 50%;
+	transform: translateY(-50%);
+	width: 10px;
+	height: 6px;
+	background-color: var(--color-text-muted);
+	-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-size: 10px 6px;
+	mask-size: 10px 6px;
+	pointer-events: none;
+}
+
+.selectWrapper:has(select:disabled)::after {
+	opacity: 0.5;
+}
+
 /* Apply error styling to inputs when error is present */
 .hasError input,
 .hasError select,
