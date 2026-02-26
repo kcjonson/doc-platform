@@ -1169,10 +1169,10 @@ export class SpecboardStack extends cdk.Stack {
 						// Note: `environment:` on a job REPLACES the ref in the sub claim (it's either/or, not both)
 						StringLike: {
 							'token.actions.githubusercontent.com:sub': [
-								'repo:kcjonson/doc-platform:ref:refs/heads/main',
-								'repo:kcjonson/doc-platform:ref:refs/tags/v*',
-								'repo:kcjonson/doc-platform:environment:staging',
-								'repo:kcjonson/doc-platform:environment:production',
+								'repo:kcjonson/specboard:ref:refs/heads/main',
+								'repo:kcjonson/specboard:ref:refs/tags/v*',
+								'repo:kcjonson/specboard:environment:staging',
+								'repo:kcjonson/specboard:environment:production',
 							],
 						},
 					},
