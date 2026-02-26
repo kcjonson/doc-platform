@@ -17,7 +17,7 @@ button {
 	font-size: var(--text-sm);
 	background: var(--color-primary);
 	color: var(--color-text-inverse);
-	border: none;
+	border: 1px solid transparent;
 }
 
 button:hover:not(:disabled) {

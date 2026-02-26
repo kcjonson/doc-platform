@@ -8,7 +8,7 @@
  *
  * Components pass through CSS classes for styling:
  * - <Button class="secondary size-sm">
- * - <Text class="size-lg error">
+ * - <Text class="error">
  * - <Textarea class="error">
  *
  * Native HTML elements are styled automatically by elements.css,

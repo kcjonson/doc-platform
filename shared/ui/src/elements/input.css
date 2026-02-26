@@ -16,9 +16,9 @@ input[type="number"] {
 	background: var(--color-surface);
 	color: var(--color-text);
 	transition: border-color var(--transition-fast);
-	/* Default size (md) */
 	padding: var(--space-2) var(--space-3);
 	font-size: var(--text-sm);
+	line-height: var(--leading-normal);
 }
 
 input::placeholder {
@@ -38,17 +38,6 @@ input:disabled {
 
 input:read-only {
 	background: var(--color-surface-hover);
-}
-
-/* Input sizes */
-input.size-sm {
-	padding: var(--space-1) var(--space-2);
-	font-size: var(--text-xs);
-}
-
-input.size-lg {
-	padding: var(--space-3) var(--space-4);
-	font-size: var(--text-base);
 }
 
 /* Input error state */

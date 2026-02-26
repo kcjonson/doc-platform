@@ -6,28 +6,28 @@
 	height: 16px;
 }
 
-/* Size variants */
-:global(.size-xs) {
+/* Size variants - scoped to .icon to avoid colliding with button/badge size classes */
+.icon:global(.size-xs) {
 	width: 12px;
 	height: 12px;
 }
 
-:global(.size-sm) {
+.icon:global(.size-sm) {
 	width: 14px;
 	height: 14px;
 }
 
-:global(.size-lg) {
+.icon:global(.size-lg) {
 	width: 20px;
 	height: 20px;
 }
 
-:global(.size-xl) {
+.icon:global(.size-xl) {
 	width: 24px;
 	height: 24px;
 }
 
-:global(.size-2xl) {
+.icon:global(.size-2xl) {
 	width: 32px;
 	height: 32px;
 }

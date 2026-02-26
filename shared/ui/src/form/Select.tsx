@@ -22,7 +22,7 @@ export interface SelectProps {
 	placeholder?: string;
 	/** Disabled state */
 	disabled?: boolean;
-	/** CSS classes for the select (e.g., "size-sm") */
+	/** CSS classes for the select (e.g., "error") */
 	class?: string;
 	/** Select name */
 	name?: string;
@@ -48,14 +48,15 @@ export function Select({
 	return (
 		<div class={fieldClasses}>
 			{label && <label class={styles.label} htmlFor={id}>{label}</label>}
-			<select
-				class={className || undefined}
-				value={value}
-				onChange={onChange}
-				disabled={disabled}
-				name={name}
-				id={id}
-			>
+			<div class={styles.selectWrapper}>
+				<select
+					class={className || undefined}
+					value={value}
+					onChange={onChange}
+					disabled={disabled}
+					name={name}
+					id={id}
+				>
 				{placeholder && (
 					<option value="" disabled>
 						{placeholder}
@@ -71,6 +72,7 @@ export function Select({
 					</option>
 				))}
 			</select>
+			</div>
 			<span class={errorClasses}>{error || '\u00A0'}</span>
 		</div>
 	);
