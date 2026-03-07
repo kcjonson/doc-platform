@@ -214,10 +214,13 @@ export function ProjectDialog({
 	const branchesLoading = branchesCollection?.$meta.working ?? false;
 
 	const handleRefreshRepos = useCallback(() => {
+		setSelectedRepo('');
+		setSelectedBranch('');
 		githubRepos?.fetch();
 	}, [githubRepos]);
 
 	const handleRefreshBranches = useCallback(() => {
+		setSelectedBranch('');
 		branchesCollection?.fetch();
 	}, [branchesCollection]);
 
@@ -382,7 +385,7 @@ export function ProjectDialog({
 												) : (
 													branchesCollection.map(branch => (
 														<option key={branch.name} value={branch.name}>
-															{branch.name} {branch.protected ? '(protected)' : ''}
+															{branch.name}
 														</option>
 													))
 												)}

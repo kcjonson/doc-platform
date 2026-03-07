@@ -659,27 +659,27 @@ export async function handleListGitHubBranches(
 			errors?: Array<{ message: string }>;
 		};
 
-		if (result.errors?.length) {
-			throw new Error(result.errors[0]!.message);
-		}
-
+		// GitHub GraphQL returns HTTP 200 with `repository: null` and an error
+		// like "Could not resolve to a Repository" when the repo doesn't exist.
+		// Check for this before treating other errors as internal failures.
 		if (!result.data?.repository) {
 			return context.json({ error: 'Repository not found' }, 404);
+		}
+
+		if (result.errors?.length) {
+			throw new Error(result.errors[0]!.message);
 		}
 
 		const repoData = result.data.repository;
 		const defaultBranchName = repoData.defaultBranchRef?.name ?? 'main';
 		const branchNames = repoData.refs.nodes.map(n => n.name);
 
-		// Always include main/default branch at the top
+		// Always include the default branch, prepending if not already present
 		if (!branchNames.includes(defaultBranchName)) {
 			branchNames.unshift(defaultBranchName);
 		}
 
-		const formattedBranches = branchNames.map(name => ({
-			name,
-			protected: name === defaultBranchName,
-		}));
+		const formattedBranches = branchNames.map(name => ({ name }));
 
 		// Cache for 5 minutes
 		await redis.setex(cacheKey, BRANCHES_CACHE_TTL_SECONDS, JSON.stringify(formattedBranches));

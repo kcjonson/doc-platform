@@ -180,7 +180,6 @@ export class GitHubBranchModel extends SyncModel {
 	static override url = '';
 
 	@prop accessor name!: string;
-	@prop accessor protected!: boolean;
 }
 
 /**
