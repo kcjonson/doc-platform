@@ -2,11 +2,12 @@
  * Validation utilities
  */
 
-import type { EpicStatus } from '@specboard/db';
+import type { EpicStatus, EpicType } from '@specboard/db';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const VALID_STATUSES: EpicStatus[] = ['ready', 'in_progress', 'done'];
+const VALID_TYPES: EpicType[] = ['epic', 'chore', 'bug'];
 
 export const MAX_TITLE_LENGTH = 255;
 export const MAX_DESCRIPTION_LENGTH = 2000;
@@ -22,6 +23,10 @@ export function isValidOptionalUUID(value: string | undefined): boolean {
 
 export function isValidStatus(status: unknown): status is EpicStatus {
 	return typeof status === 'string' && VALID_STATUSES.includes(status as EpicStatus);
+}
+
+export function isValidType(type: unknown): type is EpicType {
+	return typeof type === 'string' && VALID_TYPES.includes(type as EpicType);
 }
 
 export function isValidTitle(title: string): boolean {

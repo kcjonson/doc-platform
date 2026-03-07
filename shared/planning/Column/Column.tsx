@@ -116,7 +116,7 @@ export function Column({
 					onDrop={handleDrop}
 				>
 					{epics.length === 0 ? (
-						<div class={styles.empty}>No epics</div>
+						<div class={styles.empty}>No items</div>
 					) : (
 						epics.map((epic, index) => (
 							<div key={epic.id} class={styles.cardWrapper}>

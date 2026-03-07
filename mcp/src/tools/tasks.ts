@@ -24,7 +24,7 @@ export const taskTools: Tool[] = [
 	{
 		name: 'create_task',
 		description:
-			'Create a single task under an epic. Use this to add implementation steps after reading the epic spec.',
+			'Create a single task under a work item. Use this to add implementation steps after reading the item details.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -34,7 +34,7 @@ export const taskTools: Tool[] = [
 				},
 				epic_id: {
 					type: 'string',
-					description: 'The UUID of the parent epic',
+					description: 'The UUID of the parent work item (epic, chore, or bug)',
 				},
 				title: {
 					type: 'string',
@@ -51,7 +51,7 @@ export const taskTools: Tool[] = [
 	{
 		name: 'create_tasks',
 		description:
-			'Create multiple tasks under an epic at once. Use this to add your initial breakdown of the epic into implementation steps.',
+			'Create multiple tasks under a work item at once. Use this to add your initial breakdown into implementation steps.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -61,7 +61,7 @@ export const taskTools: Tool[] = [
 				},
 				epic_id: {
 					type: 'string',
-					description: 'The UUID of the parent epic',
+					description: 'The UUID of the parent work item (epic, chore, or bug)',
 				},
 				tasks: {
 					type: 'array',
@@ -114,7 +114,7 @@ export const taskTools: Tool[] = [
 	{
 		name: 'start_task',
 		description:
-			'Mark a task as in_progress. Use this before beginning work on a task. Also sets the epic to in_progress if it was ready.',
+			'Mark a task as in_progress. Use this before beginning work on a task. Also sets the parent work item to in_progress if it was ready.',
 		inputSchema: {
 			type: 'object',
 			properties: {

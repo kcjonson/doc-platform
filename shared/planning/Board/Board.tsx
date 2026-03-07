@@ -1,8 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'preact/hooks';
 import type { JSX } from 'preact';
 import type { RouteProps } from '@specboard/router';
-import { useModel, EpicsCollection, type EpicModel, type Status } from '@specboard/models';
-import { Button, Page } from '@specboard/ui';
+import { useModel, EpicsCollection, type EpicModel, type Status, type ItemType } from '@specboard/models';
+import { Page, SplitButton, type SplitButtonOption } from '@specboard/ui';
 import { Column } from '../Column/Column';
 import { EpicDialog } from '../EpicDialog/EpicDialog';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
@@ -27,6 +27,7 @@ export function Board(props: RouteProps): JSX.Element {
 	const [selectedEpicId, setSelectedEpicId] = useState<string | undefined>();
 	const [dialogEpic, setDialogEpic] = useState<EpicModel | null>(null);
 	const [isNewEpicDialogOpen, setIsNewEpicDialogOpen] = useState(false);
+	const [createType, setCreateType] = useState<ItemType>('epic');
 	const [highlightedEpicId, setHighlightedEpicId] = useState<string | undefined>();
 
 	// Read highlight param from URL and clear after timeout
@@ -83,21 +84,28 @@ export function Board(props: RouteProps): JSX.Element {
 		[epics]
 	);
 
-	const handleOpenNewEpicDialog = useCallback((): void => {
+	const handleOpenNewItemDialog = useCallback((type: ItemType): void => {
+		setCreateType(type);
 		setIsNewEpicDialogOpen(true);
 	}, []);
 
 	const handleCreateEpic = useCallback(
-		(data: { title: string; description?: string; status: Status }): void => {
-			epics.add({ ...data, rank: epics.length + 1 });
+		(data: { title: string; description?: string; status: Status; type?: ItemType }): void => {
+			epics.add({ ...data, type: data.type || createType, rank: epics.length + 1 });
 			setIsNewEpicDialogOpen(false);
 		},
-		[epics]
+		[epics, createType]
 	);
 
 	const handleCloseNewEpicDialog = useCallback((): void => {
 		setIsNewEpicDialogOpen(false);
 	}, []);
+
+	const createOptions: SplitButtonOption[] = useMemo(() => [
+		{ label: 'Epic', value: 'epic', icon: 'file' as const, onClick: () => handleOpenNewItemDialog('epic') },
+		{ label: 'Chore', value: 'chore', icon: 'wrench' as const, onClick: () => handleOpenNewItemDialog('chore') },
+		{ label: 'Bug', value: 'bug', icon: 'bug' as const, onClick: () => handleOpenNewItemDialog('bug') },
+	], [handleOpenNewItemDialog]);
 
 	// Keyboard navigation hook
 	useKeyboardNavigation({
@@ -106,7 +114,7 @@ export function Board(props: RouteProps): JSX.Element {
 		dialogOpen: dialogEpic !== null || isNewEpicDialogOpen,
 		onSelectEpic: handleSelectEpic,
 		onOpenEpic: handleOpenEpic,
-		onCreateEpic: handleOpenNewEpicDialog,
+		onCreateEpic: () => handleOpenNewItemDialog('epic'),
 		onMoveEpic: handleMoveEpic,
 	});
 
@@ -219,7 +227,7 @@ export function Board(props: RouteProps): JSX.Element {
 	return (
 		<Page projectId={projectId} activeTab="Planning">
 			<div class={styles.toolbar}>
-				<Button onClick={handleOpenNewEpicDialog}>+ New Epic</Button>
+				<SplitButton options={createOptions} prefix="+ New" />
 			</div>
 
 			<div class={styles.board}>
@@ -253,6 +261,7 @@ export function Board(props: RouteProps): JSX.Element {
 			{isNewEpicDialogOpen && (
 				<EpicDialog
 					isNew
+					createType={createType}
 					onClose={handleCloseNewEpicDialog}
 					onCreate={handleCreateEpic}
 				/>

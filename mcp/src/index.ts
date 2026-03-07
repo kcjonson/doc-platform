@@ -37,7 +37,7 @@ installErrorHandlers('mcp');
 const port = parseInt(process.env.PORT || '3002', 10);
 
 // Tool routing configuration
-const epicToolNames = new Set(['get_ready_epics', 'get_epic', 'get_current_work']);
+const epicToolNames = new Set(['get_ready_epics', 'get_epic', 'get_current_work', 'create_item']);
 const taskToolNames = new Set([
 	'create_task',
 	'create_tasks',

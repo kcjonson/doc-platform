@@ -14,6 +14,9 @@ import { SyncCollection } from './SyncCollection';
 /** Status type for epics and tasks */
 export type Status = 'ready' | 'in_progress' | 'done';
 
+/** Work item type */
+export type ItemType = 'epic' | 'chore' | 'bug';
+
 /**
  * Task model (non-syncing for now, nested within Epic)
  */
@@ -44,6 +47,7 @@ export class EpicModel extends SyncModel {
 	@prop accessor id!: string;
 	@prop accessor projectId!: string;
 	@prop accessor title!: string;
+	@prop accessor type!: ItemType;
 	@prop accessor description!: string | undefined;
 	@prop accessor status!: Status;
 	@prop accessor creator!: string | undefined;
@@ -94,5 +98,12 @@ export class EpicsCollection extends SyncCollection<EpicModel> {
 	 */
 	byStatus(status: Status): EpicModel[] {
 		return this.filter((e) => e.status === status).sort((a, b) => a.rank - b.rank);
+	}
+
+	/**
+	 * Get epics filtered by type.
+	 */
+	byType(type: ItemType): EpicModel[] {
+		return this.filter((e) => e.type === type);
 	}
 }

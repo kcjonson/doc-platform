@@ -28,7 +28,9 @@ export type IconName =
 	| 'plus'
 	| 'trash-2'
 	| 'rotate-ccw'
-	| 'key';
+	| 'key'
+	| 'bug'
+	| 'wrench';
 
 export interface IconProps {
 	/** The icon to display */
@@ -200,6 +202,20 @@ const icons: Record<IconName, JSX.Element> = {
 		<>
 			<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4" />
 		</>
+	),
+	bug: (
+		<>
+			<circle cx="12" cy="15" r="5" />
+			<line x1="12" y1="10" x2="12" y2="5" />
+			<line x1="9" y1="5" x2="15" y2="5" />
+			<line x1="5" y1="12" x2="7" y2="12" />
+			<line x1="17" y1="12" x2="19" y2="12" />
+			<line x1="5" y1="17" x2="7.5" y2="15.5" />
+			<line x1="16.5" y1="15.5" x2="19" y2="17" />
+		</>
+	),
+	wrench: (
+		<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
 	),
 };
 

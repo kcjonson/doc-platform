@@ -1,6 +1,7 @@
 import type { JSX } from 'preact';
 import type { EpicModel } from '@specboard/models';
 import { Icon } from '@specboard/ui';
+import { TypeBadge } from '../TypeBadge/TypeBadge';
 import styles from './EpicCard.module.css';
 
 interface EpicCardProps {
@@ -96,7 +97,10 @@ export function EpicCard({
 			aria-selected={isSelected}
 		>
 			<div class={styles.header}>
-				<h3 class={styles.title}>{epic.title}</h3>
+				<div class={styles.titleRow}>
+					<TypeBadge type={epic.type} />
+					<h3 class={styles.title}>{epic.title}</h3>
+				</div>
 				<div class={styles.headerActions}>
 					<button
 						type="button"

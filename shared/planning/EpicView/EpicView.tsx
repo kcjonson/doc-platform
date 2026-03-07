@@ -2,17 +2,24 @@ import { useState, useMemo, useEffect, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
 import type { Descendant } from 'slate';
 import { navigate } from '@specboard/router';
-import { useModel, EpicModel, type TaskModel, type Status } from '@specboard/models';
+import { useModel, EpicModel, type TaskModel, type Status, type ItemType } from '@specboard/models';
 import { fetchClient } from '@specboard/fetch';
 import { Button, Select, Text } from '@specboard/ui';
 import { TaskCard } from '../TaskCard/TaskCard';
 import { RichTextEditor, serializeToText, deserializeFromText } from '../RichTextEditor';
 import styles from './EpicView.module.css';
 
+const TYPE_LABELS: Record<ItemType, string> = {
+	epic: 'Epic',
+	chore: 'Chore',
+	bug: 'Bug',
+};
+
 /** Props for viewing/editing an existing epic */
 interface EpicViewExistingProps {
 	epic: EpicModel;
 	isNew?: false;
+	createType?: never;
 	onDelete?: (epic: EpicModel) => void;
 	onCreate?: never;
 }
@@ -21,8 +28,9 @@ interface EpicViewExistingProps {
 interface EpicViewCreateProps {
 	epic?: never;
 	isNew: true;
+	createType?: ItemType;
 	onDelete?: never;
-	onCreate: (data: { title: string; description?: string; status: Status }) => void;
+	onCreate: (data: { title: string; description?: string; status: Status; type?: ItemType }) => void;
 }
 
 export type EpicViewProps = EpicViewExistingProps | EpicViewCreateProps;
@@ -38,6 +46,8 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 	const epic = isNew ? undefined : props.epic;
 	const onDelete = isNew ? undefined : props.onDelete;
 	const onCreate = isNew ? props.onCreate : undefined;
+	const createType: ItemType = isNew ? (props.createType || 'epic') : (epic?.type || 'epic');
+	const typeLabel = TYPE_LABELS[createType];
 
 	// Always call hook unconditionally (hook now handles undefined)
 	useModel(epic);
@@ -174,7 +184,7 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 		}
 	};
 
-	// Create epic
+	// Create item
 	const handleCreate = (): void => {
 		if (!titleDraft.trim()) return;
 		const descriptionText = serializeToText(descriptionAst);
@@ -182,12 +192,13 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 			title: titleDraft.trim(),
 			description: descriptionText || undefined,
 			status: statusDraft,
+			type: createType,
 		});
 	};
 
-	// Delete epic
+	// Delete item
 	const handleDelete = (): void => {
-		if (epic && confirm('Are you sure you want to delete this epic?')) {
+		if (epic && confirm(`Are you sure you want to delete this ${typeLabel.toLowerCase()}?`)) {
 			onDelete?.(epic);
 		}
 	};
@@ -200,7 +211,7 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 					<Text
 						value={titleDraft}
 						onInput={(e) => setTitleDraft((e.target as HTMLInputElement).value)}
-						placeholder="Epic title..."
+						placeholder={`${typeLabel} title...`}
 						label="Title"
 					/>
 				</div>
@@ -273,8 +284,8 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 				</section>
 			)}
 
-			{/* Specification Document - only show for existing epics */}
-			{!isNew && (
+			{/* Specification Document - only show for epics */}
+			{!isNew && epic?.type === 'epic' && (
 				<section class={styles.section}>
 					<div class={styles.sectionHeader}>
 						<h3 class={styles.sectionTitle}>Specification</h3>
@@ -329,11 +340,11 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 			<div class={styles.footer}>
 				{isNew ? (
 					<Button onClick={handleCreate} disabled={!titleDraft.trim()}>
-						Create Epic
+						Create {typeLabel}
 					</Button>
 				) : (
 					<Button class="danger" onClick={handleDelete}>
-						Delete Epic
+						Delete {typeLabel}
 					</Button>
 				)}
 			</div>

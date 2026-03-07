@@ -10,6 +10,7 @@ import {
 	Badge,
 	StatusDot,
 	Icon,
+	SplitButton,
 } from '@specboard/ui';
 import styles from './UIDemo.module.css';
 
@@ -18,6 +19,7 @@ export function UIDemo(): JSX.Element {
 	const [textValue, setTextValue] = useState('');
 	const [textareaValue, setTextareaValue] = useState('');
 	const [selectValue, setSelectValue] = useState('ready');
+	const [splitButtonValue, setSplitButtonValue] = useState('');
 	const [disabledTextValue] = useState('');
 	const [readonlyTextValue] = useState('Read-only value');
 	const [errorTextValue, setErrorTextValue] = useState('');
@@ -68,6 +70,51 @@ export function UIDemo(): JSX.Element {
 						<div class={styles.row}>
 							<Button>Default</Button>
 							<Button disabled>Disabled</Button>
+						</div>
+					</div>
+				</section>
+
+				{/* SplitButton */}
+				<section class={styles.section}>
+					<h2 class={styles.sectionTitle}>SplitButton</h2>
+					<p class={styles.sectionDesc}>Primary action with a dropdown for alternatives. First option is the default action.</p>
+
+					<div class={styles.subsection}>
+						<h3 class={styles.subsectionTitle}>Default</h3>
+						<div class={styles.row}>
+							<SplitButton options={[
+								{ label: 'Save', value: 'save', onClick: () => setSplitButtonValue('Saved!') },
+								{ label: 'Save as Draft', value: 'draft', onClick: () => setSplitButtonValue('Saved as draft!') },
+								{ label: 'Save & Close', value: 'close', onClick: () => setSplitButtonValue('Saved & closed!') },
+							]} />
+							<span class={styles.statusItem}>{splitButtonValue}</span>
+						</div>
+					</div>
+
+					<div class={styles.subsection}>
+						<h3 class={styles.subsectionTitle}>With prefix and icons</h3>
+						<div class={styles.row}>
+							<SplitButton
+								prefix="+ New"
+								options={[
+									{ label: 'Epic', value: 'epic', icon: 'file', onClick: () => setSplitButtonValue('New Epic!') },
+									{ label: 'Chore', value: 'chore', icon: 'wrench', onClick: () => setSplitButtonValue('New Chore!') },
+									{ label: 'Bug', value: 'bug', icon: 'bug', onClick: () => setSplitButtonValue('New Bug!') },
+								]}
+							/>
+						</div>
+					</div>
+
+					<div class={styles.subsection}>
+						<h3 class={styles.subsectionTitle}>Disabled</h3>
+						<div class={styles.row}>
+							<SplitButton
+								disabled
+								options={[
+									{ label: 'Save', value: 'save', onClick: () => {} },
+									{ label: 'Save as Draft', value: 'draft', onClick: () => {} },
+								]}
+							/>
 						</div>
 					</div>
 				</section>

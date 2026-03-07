@@ -6,6 +6,7 @@ export { EpicDialog } from './EpicDialog/EpicDialog';
 export { EpicDetail } from './EpicDetail/EpicDetail';
 export { EpicView } from './EpicView/EpicView';
 export { TaskCard } from './TaskCard/TaskCard';
+export { TypeBadge } from './TypeBadge/TypeBadge';
 
 // Hooks
 export { useKeyboardNavigation } from './hooks/useKeyboardNavigation';
