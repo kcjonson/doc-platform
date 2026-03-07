@@ -6,10 +6,11 @@
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type Context } from 'hono';
+import { getCookie } from 'hono/cookie';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 import { Redis } from 'ioredis';
-import { authMiddleware, type AuthVariables } from '@specboard/auth';
-import { reportError, installErrorHandlers, logRequest } from '@specboard/core';
+import { authMiddleware, sessionExists, SESSION_COOKIE_NAME, type AuthVariables } from '@specboard/auth';
+import { reportError, captureException, installErrorHandlers, logRequest } from '@specboard/core';
 import { pages, spaIndex, type CachedPage } from './static-pages.ts';
 
 // Vite dev server URL for hot reloading (set in docker-compose for dev mode)
@@ -60,14 +61,18 @@ async function proxyToVite(c: Context, path: string): Promise<Response> {
  * SPA index uses private caching to avoid cache poisoning between auth states.
  * In dev mode, skip preload headers since production CSS paths don't exist.
  */
-function servePage(c: Context, page: CachedPage, status: ContentfulStatusCode = 200): Response {
-	const isSpaIndex = page === spaIndex;
-	const cacheControl = isSpaIndex
+function servePage(
+	c: Context,
+	page: CachedPage,
+	status: ContentfulStatusCode = 200,
+	cacheControlOverride?: string,
+): Response {
+	const defaultCacheControl = page === spaIndex
 		? 'private, no-cache, no-store, must-revalidate'
 		: 'public, max-age=3600';
 
 	const headers: Record<string, string> = {
-		'Cache-Control': cacheControl,
+		'Cache-Control': cacheControlOverride || defaultCacheControl,
 	};
 
 	// Only send preload headers in production - dev mode uses Vite-served source CSS
@@ -144,39 +149,31 @@ app.get('/home', (c) => servePage(c, pages.home));
 // so the unauthenticated response must use private/no-cache to prevent
 // browsers from caching the marketing page and serving it after login.
 app.get('/', async (c) => {
-	// Check for session cookie (cookie name is 'session_id')
-	const cookieHeader = c.req.header('Cookie') || '';
-	const sessionMatch = cookieHeader.match(/session_id=([^;]+)/);
-	const sessionId = sessionMatch?.[1];
+	const sessionId = getCookie(c, SESSION_COOKIE_NAME);
 
 	if (sessionId) {
 		try {
-			// Verify session exists in Redis
-			const sessionData = await redis.get(`session:${sessionId}`);
-			if (sessionData) {
+			const hasSession = await sessionExists(redis, sessionId);
+			if (hasSession) {
 				// Authenticated - serve SPA
 				if (VITE_DEV_SERVER) {
-					// Dev mode: proxy to Vite for HMR
 					return proxyToVite(c, '/');
 				}
-				// Production: serve cached SPA
 				return servePage(c, spaIndex);
 			}
 		} catch (error) {
-			console.error('Redis error checking session:', error);
+			captureException(
+				error instanceof Error ? error : new Error(String(error)),
+				'frontend',
+				{ context: 'session-check-root-route' },
+			);
 			// Fall through to marketing page on Redis error
 		}
 	}
 
 	// Unauthenticated (or Redis error) - serve marketing home page
 	// Must use private no-cache since this URL varies by auth state
-	const headers: Record<string, string> = {
-		'Cache-Control': 'private, no-cache, no-store, must-revalidate',
-	};
-	if (!VITE_DEV_SERVER && pages.home.preloadHeader) {
-		headers['Link'] = pages.home.preloadHeader;
-	}
-	return c.html(pages.home.html, 200, headers);
+	return servePage(c, pages.home, 200, 'private, no-cache, no-store, must-revalidate');
 });
 
 // API URL for proxying
