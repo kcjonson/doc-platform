@@ -86,8 +86,14 @@ export class SyncModel extends Model {
 	/**
 	 * Updates $meta state.
 	 */
-	private setMeta(updates: Partial<ModelMeta>): void {
+	protected setMeta(updates: Partial<ModelMeta>): void {
 		Object.assign(this.$meta, updates);
+		const listeners = this.__listeners['change'];
+		if (listeners) {
+			for (const listener of listeners) {
+				listener();
+			}
+		}
 	}
 
 	/**
