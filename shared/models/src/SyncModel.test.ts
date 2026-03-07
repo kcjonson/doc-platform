@@ -216,6 +216,62 @@ describe('SyncModel', () => {
 		});
 	});
 
+	describe('$meta change events', () => {
+		it('should notify listeners when $meta changes during fetch', async () => {
+			const post = new Post({ id: 1, title: 'Test', body: 'Content' });
+			const changeHandler = vi.fn();
+			post.on('change', changeHandler);
+
+			vi.mocked(fetchClient.get).mockResolvedValue({ id: 1, title: 'New', body: 'Body' });
+
+			await post.fetch();
+
+			expect(changeHandler).toHaveBeenCalled();
+			expect(post.$meta.working).toBe(false);
+		});
+
+		it('should notify listeners when fetch fails', async () => {
+			const post = new Post({ id: 1, title: 'Test', body: 'Content' });
+			const changeHandler = vi.fn();
+			post.on('change', changeHandler);
+
+			const error = new Error('Network error');
+			vi.mocked(fetchClient.get).mockRejectedValue(error);
+
+			await expect(post.fetch()).rejects.toThrow('Network error');
+
+			expect(changeHandler).toHaveBeenCalled();
+			expect(post.$meta.error).toBe(error);
+			expect(post.$meta.working).toBe(false);
+		});
+
+		it('should notify listeners when $meta changes during save', async () => {
+			const post = new Post({ id: 1, title: 'Test', body: 'Content' });
+			const changeHandler = vi.fn();
+			post.on('change', changeHandler);
+
+			vi.mocked(fetchClient.put).mockResolvedValue({ id: 1, title: 'Test', body: 'Content' });
+
+			await post.save();
+
+			expect(changeHandler).toHaveBeenCalled();
+			expect(post.$meta.working).toBe(false);
+		});
+
+		it('should notify listeners when $meta changes during delete', async () => {
+			const post = new Post({ id: 1, title: 'Test', body: 'Content' });
+			const changeHandler = vi.fn();
+			post.on('change', changeHandler);
+
+			vi.mocked(fetchClient.delete).mockResolvedValue(undefined);
+
+			await post.delete();
+
+			expect(changeHandler).toHaveBeenCalled();
+			expect(post.$meta.working).toBe(false);
+		});
+	});
+
 	describe('custom idField', () => {
 		it('should use custom idField for determining POST vs PUT', async () => {
 			const comment = new Comment({ text: 'New comment' });

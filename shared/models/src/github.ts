@@ -6,11 +6,10 @@
  */
 
 import { fetchClient } from '@specboard/fetch';
-import { Model } from './Model';
 import { SyncModel } from './SyncModel';
 import { SyncCollection } from './SyncCollection';
 import { prop } from './prop';
-import type { ModelMeta, ModelData } from './types';
+import type { ModelData } from './types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GitHub Connection Model
@@ -19,10 +18,9 @@ import type { ModelMeta, ModelData } from './types';
 /**
  * GitHubConnectionModel - manages GitHub OAuth connection status
  *
- * Not a SyncModel because GitHub connection has custom endpoints:
- * - GET /api/github/connection - check status
- * - GET /api/auth/github - start OAuth (redirect)
- * - DELETE /api/auth/github - disconnect
+ * Singleton SyncModel (no :id in URL). Custom methods for OAuth flow:
+ * - connect() - redirects to GitHub OAuth
+ * - disconnect() - DELETEs via a separate auth endpoint
  *
  * @example
  * ```tsx
@@ -34,13 +32,13 @@ import type { ModelMeta, ModelData } from './types';
  * return <Connected username={connection.username} onDisconnect={connection.disconnect} />;
  * ```
  */
-export class GitHubConnectionModel extends Model {
+export class GitHubConnectionModel extends SyncModel {
+	static override url = '/api/github/connection';
+
 	@prop accessor connected!: boolean;
 	@prop accessor username!: string | null;
 	@prop accessor scopes!: string[];
 	@prop accessor connectedAt!: string | null;
-
-	declare readonly $meta: ModelMeta;
 
 	constructor() {
 		super({
@@ -50,53 +48,7 @@ export class GitHubConnectionModel extends Model {
 			connectedAt: null,
 		});
 
-		// Override $meta with working/error tracking
-		Object.defineProperty(this, '$meta', {
-			value: {
-				working: false,
-				error: null,
-				lastFetched: null,
-			},
-			enumerable: false,
-			writable: false,
-		});
-
-		// Auto-fetch on construction
-		this.fetch();
-	}
-
-	private setMeta(updates: Partial<ModelMeta>): void {
-		Object.assign(this.$meta, updates);
-	}
-
-	/**
-	 * Fetch connection status from API
-	 */
-	async fetch(): Promise<void> {
-		this.setMeta({ working: true, error: null });
-
-		try {
-			const data = await fetchClient.get<{
-				connected: boolean;
-				username?: string;
-				scopes?: string[];
-				connectedAt?: string;
-			}>('/api/github/connection');
-
-			this.set({
-				connected: data.connected,
-				username: data.username ?? null,
-				scopes: data.scopes ?? [],
-				connectedAt: data.connectedAt ?? null,
-			} as unknown as Partial<ModelData<this>>);
-
-			this.setMeta({ working: false, lastFetched: Date.now() });
-		} catch (error) {
-			this.setMeta({
-				working: false,
-				error: error instanceof Error ? error : new Error(String(error)),
-			});
-		}
+		this.fetch().catch(() => {});
 	}
 
 	/**

@@ -86,8 +86,9 @@ export class SyncModel extends Model {
 	/**
 	 * Updates $meta state.
 	 */
-	private setMeta(updates: Partial<ModelMeta>): void {
+	protected setMeta(updates: Partial<ModelMeta>): void {
 		Object.assign(this.$meta, updates);
+		this.__notifyChange();
 	}
 
 	/**
