@@ -167,7 +167,8 @@ describe('FileTreeModel', () => {
 			expect(mockPost).toHaveBeenCalledTimes(1);
 			expect(mockPost).toHaveBeenCalledWith(
 				'/api/projects/project-1/tree',
-				{ expanded: {} }
+				{ expanded: {} },
+				expect.objectContaining({ signal: expect.any(AbortSignal) })
 			);
 		});
 
@@ -212,7 +213,8 @@ describe('FileTreeModel', () => {
 
 			expect(mockPost).toHaveBeenCalledWith(
 				'/api/projects/project-1/tree',
-				{ expanded: { docs: {} } }
+				{ expanded: { docs: {} } },
+				expect.objectContaining({ signal: expect.any(AbortSignal) })
 			);
 			expect(model.isExpanded('/docs')).toBe(true);
 		});
