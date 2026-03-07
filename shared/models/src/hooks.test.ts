@@ -81,6 +81,16 @@ describe('useModel', () => {
 		expect(result2.current.count).toBe(42);
 	});
 
+	it('should subscribe synchronously after render, not deferred', () => {
+		const counter = new Counter({ count: 0 });
+		const listenersBefore = (counter as unknown as { __listeners: Record<string, unknown[]> }).__listeners['change']?.length ?? 0;
+
+		renderHook(() => useModel(counter));
+
+		const listenersAfter = (counter as unknown as { __listeners: Record<string, unknown[]> }).__listeners['change']?.length ?? 0;
+		expect(listenersAfter).toBe(listenersBefore + 1);
+	});
+
 	it('should re-subscribe when model changes', () => {
 		const counter1 = new Counter({ count: 1 });
 		const counter2 = new Counter({ count: 2 });
