@@ -604,23 +604,36 @@ export async function handleListGitHubBranches(
 		}
 	}
 
-	// Fetch branches from GitHub
-	try {
-		const response = await fetch(
-			`${GITHUB_API_URL}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=100`,
-			{
-				headers: {
-					'Accept': 'application/vnd.github+json',
-					'Authorization': `Bearer ${accessToken}`,
-					'X-GitHub-Api-Version': '2022-11-28',
-				},
+	// Fetch 50 most recent branches via GitHub GraphQL API (sorted by commit date)
+	const graphqlQuery = `
+		query($owner: String!, $name: String!) {
+			repository(owner: $owner, name: $name) {
+				defaultBranchRef {
+					name
+				}
+				refs(refPrefix: "refs/heads/", first: 50, orderBy: {field: TAG_COMMIT_DATE, direction: DESC}) {
+					nodes {
+						name
+					}
+				}
 			}
-		);
+		}
+	`;
+
+	try {
+		const response = await fetch(`${GITHUB_API_URL}/graphql`, {
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${accessToken}`,
+				'Content-Type': 'application/json',
+			},
+			body: JSON.stringify({
+				query: graphqlQuery,
+				variables: { owner, name: repo },
+			}),
+		});
 
 		if (!response.ok) {
-			if (response.status === 404) {
-				return context.json({ error: 'Repository not found' }, 404);
-			}
 			if (response.status === 401) {
 				return context.json({ error: 'GitHub authorization expired. Please reconnect.' }, 401);
 			}
@@ -634,14 +647,38 @@ export async function handleListGitHubBranches(
 			throw new Error('Failed to fetch branches');
 		}
 
-		const branches = await response.json() as Array<{
-			name: string;
-			protected: boolean;
-		}>;
+		const result = await response.json() as {
+			data?: {
+				repository?: {
+					defaultBranchRef?: { name: string } | null;
+					refs: {
+						nodes: Array<{ name: string }>;
+					};
+				} | null;
+			};
+			errors?: Array<{ message: string }>;
+		};
 
-		const formattedBranches = branches.map(b => ({
-			name: b.name,
-			protected: b.protected,
+		if (result.errors?.length) {
+			throw new Error(result.errors[0]!.message);
+		}
+
+		if (!result.data?.repository) {
+			return context.json({ error: 'Repository not found' }, 404);
+		}
+
+		const repoData = result.data.repository;
+		const defaultBranchName = repoData.defaultBranchRef?.name ?? 'main';
+		const branchNames = repoData.refs.nodes.map(n => n.name);
+
+		// Always include main/default branch at the top
+		if (!branchNames.includes(defaultBranchName)) {
+			branchNames.unshift(defaultBranchName);
+		}
+
+		const formattedBranches = branchNames.map(name => ({
+			name,
+			protected: name === defaultBranchName,
 		}));
 
 		// Cache for 5 minutes

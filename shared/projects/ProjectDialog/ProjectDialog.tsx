@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'preact/hooks';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { Dialog, Button, Icon } from '@specboard/ui';
 import {
@@ -213,6 +213,14 @@ export function ProjectDialog({
 	const reposLoading = githubRepos?.$meta.working ?? false;
 	const branchesLoading = branchesCollection?.$meta.working ?? false;
 
+	const handleRefreshRepos = useCallback(() => {
+		githubRepos?.fetch();
+	}, [githubRepos]);
+
+	const handleRefreshBranches = useCallback(() => {
+		branchesCollection?.fetch();
+	}, [branchesCollection]);
+
 	return (
 		<Dialog
 			title={isEditMode ? 'Edit Project' : 'Create Project'}
@@ -309,59 +317,89 @@ export function ProjectDialog({
 								<p>Connect your GitHub account in Settings to link repositories.</p>
 								<a href="/settings" class={styles.settingsLink}>Go to Settings</a>
 							</div>
-						) : reposLoading ? (
-							<div class={styles.loadingText}>Loading repositories...</div>
-						) : !githubRepos || githubRepos.length === 0 ? (
-							<div class={styles.noRepos}>No repositories found. Make sure you have access to at least one repository.</div>
 						) : (
 							<>
 								<div class={styles.field}>
 									<label class={styles.label}>
 										<span class={styles.labelText}>Repository</span>
-										<select
-											class={styles.select}
-											value={selectedRepo}
-											aria-label="Select GitHub repository"
-											onChange={(e) => {
-												setSelectedRepo((e.target as HTMLSelectElement).value);
-												setSelectedBranch('');
-											}}
-										>
-											<option value="">Select a repository...</option>
-											{githubRepos.map(repo => (
-												<option key={repo.id} value={repo.fullName}>
-													{repo.fullName} {repo.private ? '(private)' : ''}
-												</option>
-											))}
-										</select>
+										<div class={styles.selectRow}>
+											<select
+												class={styles.select}
+												value={selectedRepo}
+												aria-label="Select GitHub repository"
+												disabled={reposLoading}
+												onChange={(e) => {
+													setSelectedRepo((e.target as HTMLSelectElement).value);
+													setSelectedBranch('');
+												}}
+											>
+												{reposLoading ? (
+													<option value="">Loading repositories...</option>
+												) : !githubRepos || githubRepos.length === 0 ? (
+													<option value="">No repositories found</option>
+												) : (
+													<>
+														<option value="">Select a repository...</option>
+														{githubRepos.map(repo => (
+															<option key={repo.id} value={repo.fullName}>
+																{repo.fullName} {repo.private ? '(private)' : ''}
+															</option>
+														))}
+													</>
+												)}
+											</select>
+											<button
+												type="button"
+												class={styles.refreshButton}
+												onClick={handleRefreshRepos}
+												disabled={reposLoading}
+												aria-label="Refresh repositories"
+												title="Refresh repositories"
+											>
+												<Icon name="rotate-ccw" class={`size-xs ${reposLoading ? styles.spinning : ''}`} />
+											</button>
+										</div>
 									</label>
 								</div>
 
-								{selectedRepo && (
-									<div class={styles.field}>
-										<label class={styles.label}>
-											<span class={styles.labelText}>Branch</span>
-											{branchesLoading ? (
-												<div class={styles.loadingText}>Loading branches...</div>
-											) : branchesCollection && branchesCollection.length > 0 ? (
-												<select
-													class={styles.select}
-													value={selectedBranch}
-													aria-label="Select branch"
-													onChange={(e) => setSelectedBranch((e.target as HTMLSelectElement).value)}
-												>
-													{branchesCollection.map(branch => (
+								<div class={styles.field}>
+									<label class={styles.label}>
+										<span class={styles.labelText}>Branch</span>
+										<div class={styles.selectRow}>
+											<select
+												class={styles.select}
+												value={selectedBranch}
+												aria-label="Select branch"
+												disabled={!selectedRepo || branchesLoading}
+												onChange={(e) => setSelectedBranch((e.target as HTMLSelectElement).value)}
+											>
+												{!selectedRepo ? (
+													<option value="">Select a repository first...</option>
+												) : branchesLoading ? (
+													<option value="">Loading branches...</option>
+												) : !branchesCollection || branchesCollection.length === 0 ? (
+													<option value="">No branches found</option>
+												) : (
+													branchesCollection.map(branch => (
 														<option key={branch.name} value={branch.name}>
 															{branch.name} {branch.protected ? '(protected)' : ''}
 														</option>
-													))}
-												</select>
-											) : (
-												<div class={styles.noRepos}>No branches found.</div>
-											)}
-										</label>
-									</div>
-								)}
+													))
+												)}
+											</select>
+											<button
+												type="button"
+												class={styles.refreshButton}
+												onClick={handleRefreshBranches}
+												disabled={!selectedRepo || branchesLoading}
+												aria-label="Refresh branches"
+												title="Refresh branches"
+											>
+												<Icon name="rotate-ccw" class={`size-xs ${branchesLoading ? styles.spinning : ''}`} />
+											</button>
+										</div>
+									</label>
+								</div>
 							</>
 						)}
 					</div>

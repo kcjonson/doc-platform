@@ -154,10 +154,55 @@
 	cursor: pointer;
 }
 
+.select:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
 .select:focus {
 	outline: none;
 	border-color: var(--color-primary);
 	box-shadow: 0 0 0 2px var(--color-primary-alpha, rgba(59, 130, 246, 0.2));
+}
+
+.selectRow {
+	display: flex;
+	gap: var(--space-2);
+	align-items: center;
+}
+
+.selectRow .select {
+	flex: 1;
+	min-width: 0;
+}
+
+.refreshButton {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-md);
+	background: var(--color-surface);
+	color: var(--color-text-muted);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.refreshButton:hover:not(:disabled) {
+	color: var(--color-text);
+	border-color: var(--color-text-muted);
+}
+
+.refreshButton:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+.spinning {
+	animation: spin 0.8s linear infinite;
 }
 
 /* Repository info (read-only in edit mode) */
