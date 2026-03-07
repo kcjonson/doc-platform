@@ -21,8 +21,8 @@ export function EpicDetail({ params }: RouteProps): JSX.Element {
 		});
 	};
 
-	// Loading state
-	if (epic.$meta.working && !epic.title) {
+	// Loading state - show while fetching and data hasn't arrived yet
+	if (!epic.$meta.lastFetched && !epic.$meta.error) {
 		return (
 			<div class={styles.container}>
 				<div class={styles.loading}>Loading...</div>
@@ -44,12 +44,12 @@ export function EpicDetail({ params }: RouteProps): JSX.Element {
 
 	return (
 		<div class={styles.container}>
+			<nav class={styles.nav}>
+				<a href={`/projects/${projectId}/planning`} class={styles.backLink}>
+					<Icon name="arrow-left" class="size-sm" /> Back to Board
+				</a>
+			</nav>
 			<div class={styles.content}>
-				<nav class={styles.nav}>
-					<a href={`/projects/${projectId}/planning`} class={styles.backLink}>
-						<Icon name="arrow-left" class="size-sm" /> Back to Board
-					</a>
-				</nav>
 				<EpicView epic={epic} onDelete={handleDelete} />
 			</div>
 		</div>

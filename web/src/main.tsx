@@ -103,7 +103,7 @@ const routes = [
 
 	// Project-scoped routes
 	{ route: '/projects/:projectId/planning', entry: Board },
-	{ route: '/projects/:projectId/planning/epics/:id', entry: EpicDetail },
+	{ route: '/projects/:projectId/planning/items/:id', entry: EpicDetail },
 	{ route: '/projects/:projectId/pages', entry: Editor },
 
 	// App routes (not project-scoped)

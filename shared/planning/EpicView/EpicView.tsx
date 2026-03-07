@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'preact/hooks';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 import type { Descendant } from 'slate';
 import { navigate } from '@specboard/router';
@@ -6,6 +6,7 @@ import { useModel, EpicModel, type TaskModel, type Status, type ItemType } from 
 import { fetchClient } from '@specboard/fetch';
 import { Button, Select, Text } from '@specboard/ui';
 import { TaskCard } from '../TaskCard/TaskCard';
+import { TypeBadge } from '../TypeBadge/TypeBadge';
 import { RichTextEditor, serializeToText, deserializeFromText } from '../RichTextEditor';
 import styles from './EpicView.module.css';
 
@@ -46,8 +47,8 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 	const epic = isNew ? undefined : props.epic;
 	const onDelete = isNew ? undefined : props.onDelete;
 	const onCreate = isNew ? props.onCreate : undefined;
-	const createType: ItemType = isNew ? (props.createType || 'epic') : (epic?.type || 'epic');
-	const typeLabel = TYPE_LABELS[createType];
+	const itemType: ItemType = isNew ? (props.createType || 'epic') : (epic?.type || 'epic');
+	const typeLabel = TYPE_LABELS[itemType];
 
 	// Always call hook unconditionally (hook now handles undefined)
 	useModel(epic);
@@ -58,21 +59,31 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 		[epic?.description]
 	);
 
-	// State for create mode
+	// State
 	const [titleDraft, setTitleDraft] = useState(epic?.title || '');
-	const [isEditingDescription, setIsEditingDescription] = useState(isNew);
 	const [descriptionAst, setDescriptionAst] = useState<Descendant[]>(initialDescriptionAst);
 	const [statusDraft, setStatusDraft] = useState<Status>(epic?.status || 'ready');
 	const [newTaskTitle, setNewTaskTitle] = useState('');
+
+	// Track whether description has unsaved changes
+	const descriptionDirtyRef = useRef(false);
 
 	// Spec document existence check: null = checking, true = exists, false = missing
 	const [specDocExists, setSpecDocExists] = useState<boolean | null>(null);
 
 	const taskStats = epic?.taskStats || { total: 0, done: 0 };
 
+	// Sync title draft when epic data loads
+	useEffect(() => {
+		if (epic?.title) {
+			setTitleDraft(epic.title);
+		}
+	}, [epic?.title]);
+
 	// Sync description AST state when epic changes (for navigation between epics)
 	useEffect(() => {
 		setDescriptionAst(initialDescriptionAst);
+		descriptionDirtyRef.current = false;
 	}, [initialDescriptionAst]);
 
 	// Check if spec document exists when epic changes
@@ -128,39 +139,40 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 	// Task status toggle
 	const handleToggleTaskStatus = (task: TaskModel): void => {
 		task.status = task.status === 'done' ? 'ready' : 'done';
-		// Note: Task saving would need API integration
 	};
 
-	// Description editing
-	const handleEditDescription = (): void => {
-		setDescriptionAst(deserializeFromText(epic?.description || ''));
-		setIsEditingDescription(true);
-	};
-
-	const handleDescriptionChange = (value: Descendant[]): void => {
-		setDescriptionAst(value);
-	};
-
-	const handleSaveDescription = (): void => {
-		if (epic) {
-			epic.description = serializeToText(descriptionAst);
+	// Title — save on blur
+	const handleTitleBlur = (): void => {
+		if (!epic || isNew) return;
+		const trimmed = titleDraft.trim();
+		if (trimmed && trimmed !== epic.title) {
+			epic.title = trimmed;
 			epic.save();
 		}
-		setIsEditingDescription(false);
 	};
 
-	const handleCancelDescription = (): void => {
-		setIsEditingDescription(false);
-		if (isNew) {
-			setDescriptionAst(deserializeFromText(''));
+	const handleTitleKeyDown = (e: KeyboardEvent): void => {
+		if (e.key === 'Enter') {
+			(e.target as HTMLInputElement).blur();
 		}
+	};
+
+	// Description — save on blur
+	const handleDescriptionChange = (value: Descendant[]): void => {
+		setDescriptionAst(value);
+		descriptionDirtyRef.current = true;
+	};
+
+	const handleDescriptionBlur = (): void => {
+		if (!epic || isNew || !descriptionDirtyRef.current) return;
+		epic.description = serializeToText(descriptionAst);
+		epic.save();
+		descriptionDirtyRef.current = false;
 	};
 
 	// Add task
 	const handleAddTask = (): void => {
 		if (!newTaskTitle.trim()) return;
-		// For now, create task locally - API integration needed
-		// epic.tasks.add({ title: newTaskTitle.trim(), status: 'ready', rank: epic.tasks.length + 1 });
 		setNewTaskTitle('');
 	};
 
@@ -192,7 +204,7 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 			title: titleDraft.trim(),
 			description: descriptionText || undefined,
 			status: statusDraft,
-			type: createType,
+			type: itemType,
 		});
 	};
 
@@ -205,62 +217,67 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 
 	return (
 		<div class={styles.container}>
-			{/* Title input for new epic */}
-			{isNew && (
-				<div class={styles.titleEdit}>
-					<Text
-						value={titleDraft}
-						onInput={(e) => setTitleDraft((e.target as HTMLInputElement).value)}
-						placeholder={`${typeLabel} title...`}
-						label="Title"
-					/>
-				</div>
-			)}
-
-			{/* Description */}
-			<section class={styles.section}>
-				<div class={styles.sectionHeader}>
-					<h3 class={styles.sectionTitle}>Description</h3>
-					{!isNew && !isEditingDescription && (
-						<Button class="text" onClick={handleEditDescription}>
-							Edit
-						</Button>
-					)}
-				</div>
-				{isEditingDescription || isNew ? (
-					<div class={styles.descriptionEdit}>
-						<RichTextEditor
-							key={epic?.id || 'new'}
-							value={descriptionAst}
-							onChange={handleDescriptionChange}
-							placeholder="Add a description..."
+			{/* Header: Title, Type, and Metadata */}
+			<div class={styles.header}>
+				{isNew ? (
+					<div class={styles.titleEdit}>
+						<Text
+							value={titleDraft}
+							onInput={(e) => setTitleDraft((e.target as HTMLInputElement).value)}
+							placeholder={`${typeLabel} title...`}
+							label="Title"
 						/>
-						{!isNew && (
-							<div class={styles.descriptionActions}>
-								<Button onClick={handleSaveDescription}>
-									Save
-								</Button>
-								<Button class="text" onClick={handleCancelDescription}>
-									Cancel
-								</Button>
-							</div>
-						)}
 					</div>
 				) : (
-					<p class={styles.description}>
-						{epic?.description || <span class={styles.placeholder}>No description</span>}
-					</p>
+					<div class={styles.titleRow}>
+						<TypeBadge type={itemType} />
+						<input
+							class={styles.titleInput}
+							value={titleDraft}
+							onInput={(e) => setTitleDraft((e.target as HTMLInputElement).value)}
+							onBlur={handleTitleBlur}
+							onKeyDown={handleTitleKeyDown}
+							placeholder={`${typeLabel} title...`}
+						/>
+					</div>
 				)}
+				<div class={styles.fields}>
+					<div class={styles.field}>
+						<label class={styles.fieldLabel}>Status</label>
+						<Select
+							value={isNew ? statusDraft : (epic?.status || 'ready')}
+							options={STATUS_OPTIONS}
+							onChange={handleStatusChange}
+						/>
+					</div>
+					{!isNew && (
+						<div class={styles.field}>
+							<label class={styles.fieldLabel}>Assignee</label>
+							<span class={styles.fieldValue}>{epic?.assignee || 'Unassigned'}</span>
+						</div>
+					)}
+				</div>
+			</div>
+
+			{/* Description — always editable */}
+			<section class={styles.section}>
+				<h3 class={styles.sectionTitle}>Description</h3>
+				<div onBlur={handleDescriptionBlur}>
+					<RichTextEditor
+						key={epic?.id || 'new'}
+						value={descriptionAst}
+						onChange={handleDescriptionChange}
+						placeholder="Add a description..."
+					/>
+				</div>
 			</section>
 
-			{/* Tasks - only show for existing epics */}
+			{/* Tasks — only show for existing items */}
 			{!isNew && epic && (
 				<section class={styles.section}>
-					<div class={styles.sectionHeader}>
-						<h3 class={styles.sectionTitle}>
-							Tasks ({taskStats.done}/{taskStats.total})
-						</h3>
-					</div>
+					<h3 class={styles.sectionTitle}>
+						Tasks ({taskStats.done}/{taskStats.total})
+					</h3>
 					<div class={styles.taskList} role="list">
 						{epic.tasks.map((task) => (
 							<TaskCard key={task.id} task={task} onToggleStatus={handleToggleTaskStatus} />
@@ -284,12 +301,10 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 				</section>
 			)}
 
-			{/* Specification Document - only show for epics */}
+			{/* Specification Document — only show for epics */}
 			{!isNew && epic?.type === 'epic' && (
 				<section class={styles.section}>
-					<div class={styles.sectionHeader}>
-						<h3 class={styles.sectionTitle}>Specification</h3>
-					</div>
+					<h3 class={styles.sectionTitle}>Specification</h3>
 					{epic?.specDocPath ? (
 						<div class={styles.specContainer}>
 							{specDocExists === false && (
@@ -317,24 +332,6 @@ export function EpicView(props: EpicViewProps): JSX.Element {
 					)}
 				</section>
 			)}
-
-			{/* Controls */}
-			<section class={styles.controls}>
-				<div class={styles.controlGroup}>
-					<label class={styles.controlLabel}>Status</label>
-					<Select
-						value={isNew ? statusDraft : (epic?.status || 'ready')}
-						options={STATUS_OPTIONS}
-						onChange={handleStatusChange}
-					/>
-				</div>
-				{!isNew && (
-					<div class={styles.controlGroup}>
-						<label class={styles.controlLabel}>Assignee</label>
-						<span class={styles.assigneeValue}>{epic?.assignee || 'Unassigned'}</span>
-					</div>
-				)}
-			</section>
 
 			{/* Footer */}
 			<div class={styles.footer}>
