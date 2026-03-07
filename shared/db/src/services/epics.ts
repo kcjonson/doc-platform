@@ -3,7 +3,7 @@
  */
 
 import { query } from '../index.ts';
-import type { Epic, Task, ProgressNote, EpicStatus } from '../types.ts';
+import type { Epic, Task, ProgressNote, EpicStatus, EpicType } from '../types.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Response types (camelCase for API/MCP responses)
@@ -19,6 +19,7 @@ export interface TaskStats {
 export interface EpicSummary {
 	id: string;
 	title: string;
+	type: EpicType;
 	description: string | null;
 	specDocPath: string | null;
 	createdAt: Date;
@@ -42,6 +43,7 @@ export interface ProgressNoteSummary {
 export interface EpicResponse {
 	id: string;
 	title: string;
+	type: EpicType;
 	description: string | null;
 	status: EpicStatus;
 	creator: string | null;
@@ -64,6 +66,7 @@ export interface EpicWithDetails extends EpicWithTasks {
 export interface CurrentWorkEpic {
 	id: string;
 	title: string;
+	type: EpicType;
 	status: EpicStatus;
 	specDocPath: string | null;
 	taskStats: TaskStats;
@@ -84,6 +87,7 @@ function transformEpic(epic: Epic): Omit<EpicResponse, 'taskStats'> {
 	return {
 		id: epic.id,
 		title: epic.title,
+		type: epic.type,
 		description: epic.description,
 		status: epic.status,
 		creator: epic.creator,
@@ -162,20 +166,27 @@ export async function getEpics(projectId: string, status?: EpicStatus): Promise<
 }
 
 /**
- * Get ready epics (available for work)
+ * Get ready epics (available for work), optionally filtered by type
  */
-export async function getReadyEpics(projectId: string): Promise<EpicSummary[]> {
-	const result = await query<Epic>(
-		`SELECT id, title, description, spec_doc_path, created_at
+export async function getReadyEpics(projectId: string, type?: EpicType): Promise<EpicSummary[]> {
+	let sql = `SELECT id, title, type, description, spec_doc_path, created_at
 		 FROM epics
-		 WHERE project_id = $1 AND status = 'ready'
-		 ORDER BY rank ASC`,
-		[projectId]
-	);
+		 WHERE project_id = $1 AND status = 'ready'`;
+	const params: unknown[] = [projectId];
+
+	if (type) {
+		sql += ` AND type = $2`;
+		params.push(type);
+	}
+
+	sql += ` ORDER BY rank ASC`;
+
+	const result = await query<Epic>(sql, params);
 
 	return result.rows.map((epic) => ({
 		id: epic.id,
 		title: epic.title,
+		type: epic.type,
 		description: epic.description,
 		specDocPath: epic.spec_doc_path,
 		createdAt: epic.created_at,
@@ -246,7 +257,7 @@ export async function getCurrentWork(projectId: string): Promise<CurrentWorkResp
 
 	// Get ready epics for context
 	const readyResult = await query<Epic>(
-		`SELECT id, title, description, spec_doc_path, created_at
+		`SELECT id, title, type, description, spec_doc_path, created_at
 		 FROM epics
 		 WHERE project_id = $1 AND status = 'ready'
 		 ORDER BY rank ASC
@@ -273,6 +284,7 @@ export async function getCurrentWork(projectId: string): Promise<CurrentWorkResp
 			return {
 				id: epic.id,
 				title: epic.title,
+				type: epic.type,
 				status: epic.status,
 				specDocPath: epic.spec_doc_path,
 				taskStats: calculateTaskStats(tasks),
@@ -290,6 +302,7 @@ export async function getCurrentWork(projectId: string): Promise<CurrentWorkResp
 		readyEpics: readyResult.rows.map((e) => ({
 			id: e.id,
 			title: e.title,
+			type: e.type,
 			description: e.description,
 			specDocPath: e.spec_doc_path,
 			createdAt: e.created_at,
@@ -302,6 +315,7 @@ export async function getCurrentWork(projectId: string): Promise<CurrentWorkResp
  */
 export interface CreateEpicInput {
 	title: string;
+	type?: EpicType;
 	description?: string;
 	status?: EpicStatus;
 	creator?: string;
@@ -324,12 +338,13 @@ export async function createEpic(
 	}
 
 	const result = await query<Epic>(
-		`INSERT INTO epics (project_id, title, description, status, creator, rank, spec_doc_path)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO epics (project_id, title, type, description, status, creator, rank, spec_doc_path)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING *`,
 		[
 			projectId,
 			data.title,
+			data.type || 'epic',
 			data.description || null,
 			data.status || 'ready',
 			data.creator || null,

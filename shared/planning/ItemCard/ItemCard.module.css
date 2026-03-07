@@ -77,6 +77,13 @@
 	opacity: 1;
 }
 
+.titleRow {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
 .title {
 	font-size: 14px;
 	font-weight: 500;

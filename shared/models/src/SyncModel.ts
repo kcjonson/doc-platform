@@ -20,6 +20,8 @@
 
 import { fetchClient } from '@specboard/fetch';
 import { Model } from './Model';
+import { COLLECTIONS } from './collection-decorator';
+import { NESTED_MODELS } from './model-decorator';
 import type { ModelMeta, ModelData } from './types';
 
 interface SyncModelConstructor {
@@ -52,11 +54,34 @@ export class SyncModel extends Model {
 
 		// Auto-fetch if we have an ID but no other data (loading existing record)
 		// Skip auto-fetch if already hydrated with data (e.g., created by collection)
-		const ctor = this.constructor as unknown as SyncModelConstructor;
+		const ctor = this.constructor as unknown as SyncModelConstructor & { [Symbol.metadata]?: Record<symbol, unknown> };
 		const idField = ctor.idField || 'id';
 		const internalData = (this as unknown as { __data: Record<string, unknown> }).__data;
 		const id = internalData[idField];
-		const dataKeys = Object.keys(internalData).filter(k => k !== idField && k !== 'projectId');
+
+		// Build set of keys that don't count as "real data":
+		// - URL template params (e.g. :id, :projectId) — identity/routing only
+		// - Auto-initialized @collection and @model fields — empty defaults
+		const excludedKeys = new Set<string>();
+		const urlTemplate = ctor.url || '';
+		for (const match of urlTemplate.matchAll(/:(\w+)/g)) {
+			if (match[1]) excludedKeys.add(match[1]);
+		}
+		const metadata = ctor[Symbol.metadata];
+		const collectionKeys = metadata?.[COLLECTIONS] as Map<string, unknown> | undefined;
+		const nestedModelKeys = metadata?.[NESTED_MODELS] as Map<string, unknown> | undefined;
+		if (collectionKeys) {
+			for (const key of collectionKeys.keys()) {
+				excludedKeys.add(key);
+			}
+		}
+		if (nestedModelKeys) {
+			for (const key of nestedModelKeys.keys()) {
+				excludedKeys.add(key);
+			}
+		}
+
+		const dataKeys = Object.keys(internalData).filter(k => !excludedKeys.has(k));
 		const needsFetch = id && dataKeys.length === 0;
 		if (needsFetch) {
 			this.fetch();

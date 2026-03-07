@@ -9,6 +9,7 @@ export function dbEpicToApi(epic: DbEpic): ApiEpic {
 	return {
 		id: epic.id,
 		title: epic.title,
+		type: epic.type,
 		description: epic.description ?? undefined,
 		status: epic.status,
 		creator: epic.creator ?? undefined,

@@ -10,6 +10,7 @@ import {
 	isValidUUID,
 	isValidOptionalUUID,
 	isValidStatus,
+	isValidType,
 	isValidTitle,
 	normalizeOptionalString,
 	MAX_TITLE_LENGTH,
@@ -24,27 +25,32 @@ export async function handleListEpics(context: Context): Promise<Response> {
 
 	try {
 		const statusParam = context.req.query('status');
+		const typeParam = context.req.query('type');
 		const specDocPath = context.req.query('specDocPath');
 		const validStatuses = ['ready', 'in_progress', 'in_review', 'done'];
+		const validTypes = ['epic', 'chore', 'bug'];
 
-		let result;
+		// Build query with optional filters
+		let sql = `SELECT * FROM epics WHERE project_id = $1`;
+		const params: unknown[] = [projectId];
+		let paramIndex = 2;
+
 		if (specDocPath) {
-			// Filter by spec document path
-			result = await query<DbEpic>(
-				`SELECT * FROM epics WHERE project_id = $1 AND spec_doc_path = $2 ORDER BY rank ASC`,
-				[projectId, specDocPath]
-			);
-		} else if (statusParam && validStatuses.includes(statusParam)) {
-			result = await query<DbEpic>(
-				`SELECT * FROM epics WHERE project_id = $1 AND status = $2 ORDER BY rank ASC`,
-				[projectId, statusParam]
-			);
-		} else {
-			result = await query<DbEpic>(
-				`SELECT * FROM epics WHERE project_id = $1 ORDER BY rank ASC`,
-				[projectId]
-			);
+			sql += ` AND spec_doc_path = $${paramIndex++}`;
+			params.push(specDocPath);
 		}
+		if (statusParam && validStatuses.includes(statusParam)) {
+			sql += ` AND status = $${paramIndex++}`;
+			params.push(statusParam);
+		}
+		if (typeParam && validTypes.includes(typeParam)) {
+			sql += ` AND type = $${paramIndex++}`;
+			params.push(typeParam);
+		}
+
+		sql += ` ORDER BY rank ASC`;
+
+		const result = await query<DbEpic>(sql, params);
 
 		const epicIds = result.rows.map((e) => e.id);
 		let statsMap = new Map<string, { total: number; done: number }>();
@@ -137,10 +143,15 @@ export async function handleCreateEpic(context: Context): Promise<Response> {
 
 	const body = await context.req.json<Partial<ApiEpic>>();
 	const status = body.status || 'ready';
+	const type = body.type || 'epic';
 	const title = body.title || 'Untitled Epic';
 
 	if (body.status !== undefined && !isValidStatus(body.status)) {
 		return context.json({ error: 'Invalid status. Must be one of: ready, in_progress, done' }, 400);
+	}
+
+	if (body.type !== undefined && !isValidType(body.type)) {
+		return context.json({ error: 'Invalid type. Must be one of: epic, chore, bug' }, 400);
 	}
 
 	if (!isValidTitle(title)) {
@@ -167,12 +178,13 @@ export async function handleCreateEpic(context: Context): Promise<Response> {
 		const newRank = minRank - 1;
 
 		const result = await query<DbEpic>(
-			`INSERT INTO epics (project_id, title, description, status, creator, assignee, rank, spec_doc_path)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			`INSERT INTO epics (project_id, title, type, description, status, creator, assignee, rank, spec_doc_path)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 			 RETURNING *`,
 			[
 				projectId,
 				title,
+				type,
 				normalizeOptionalString(body.description) ?? null,
 				status,
 				normalizeOptionalString(body.creator) ?? null,
@@ -357,6 +369,7 @@ export async function handleGetCurrentWork(context: Context): Promise<Response> 
 				readyEpics: readyResult.rows.map((epic) => ({
 					id: epic.id,
 					title: epic.title,
+					type: epic.type,
 					specDocPath: epic.spec_doc_path ?? undefined,
 					createdAt: epic.created_at.toISOString(),
 				})),
@@ -424,6 +437,7 @@ export async function handleGetCurrentWork(context: Context): Promise<Response> 
 			readyEpics: readyResult.rows.map((epic) => ({
 				id: epic.id,
 				title: epic.title,
+				type: epic.type,
 				specDocPath: epic.spec_doc_path ?? undefined,
 				createdAt: epic.created_at.toISOString(),
 			})),

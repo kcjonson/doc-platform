@@ -28,8 +28,8 @@ export type { ChangeCallback, ModelMeta, ModelData, Observable } from './types';
 export type { ModelConstructor } from './Collection';
 
 // Planning models
-export { TaskModel, EpicModel, EpicsCollection } from './planning';
-export type { Status, TaskStats } from './planning';
+export { TaskModel, ItemModel, ItemsCollection } from './planning';
+export type { Status, ItemType, TaskStats } from './planning';
 
 // Document models
 export { DocumentModel, EMPTY_DOCUMENT } from './DocumentModel';

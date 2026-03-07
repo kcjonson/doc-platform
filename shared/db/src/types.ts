@@ -144,6 +144,7 @@ export interface Project {
 }
 
 export type EpicStatus = 'ready' | 'in_progress' | 'in_review' | 'done';
+export type EpicType = 'epic' | 'chore' | 'bug';
 export type TaskStatus = 'ready' | 'in_progress' | 'blocked' | 'done';
 
 export interface Epic {
@@ -152,6 +153,7 @@ export interface Epic {
 	title: string;
 	description: string | null;
 	status: EpicStatus;
+	type: EpicType;
 	creator: string | null;
 	assignee: string | null;
 	rank: number;

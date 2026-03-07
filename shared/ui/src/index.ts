@@ -83,5 +83,9 @@ export type {
 export { Icon } from './Icon/Icon';
 export type { IconProps, IconName } from './Icon/Icon';
 
+// SplitButton - primary action with dropdown alternatives
+export { SplitButton } from './SplitButton/SplitButton';
+export type { SplitButtonProps, SplitButtonOption } from './SplitButton/SplitButton';
+
 // ErrorBoundary - catches JS errors in child components
 export { ErrorBoundary, withErrorBoundary } from './ErrorBoundary/ErrorBoundary';

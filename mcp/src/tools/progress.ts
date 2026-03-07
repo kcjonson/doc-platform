@@ -30,7 +30,7 @@ export const progressTools: Tool[] = [
 				},
 				epic_id: {
 					type: 'string',
-					description: 'The UUID of the epic (use this OR task_id)',
+					description: 'The UUID of the work item (epic, chore, or bug) — use this OR task_id',
 				},
 				task_id: {
 					type: 'string',
@@ -47,7 +47,7 @@ export const progressTools: Tool[] = [
 	{
 		name: 'signal_ready_for_review',
 		description:
-			'Signal that an epic is ready for human review by providing the PR URL. This sets the epic status to "in_review".',
+			'Signal that a work item is ready for human review by providing the PR URL. This sets the item status to "in_review".',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -57,7 +57,7 @@ export const progressTools: Tool[] = [
 				},
 				epic_id: {
 					type: 'string',
-					description: 'The UUID of the epic',
+					description: 'The UUID of the work item (epic, chore, or bug)',
 				},
 				pr_url: {
 					type: 'string',
