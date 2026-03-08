@@ -68,7 +68,7 @@ function createApp(): Hono {
 	return app;
 }
 
-function postSignup(app: Hono, body: unknown): Promise<Response> {
+function postSignup(app: Hono, body: unknown): Response | Promise<Response> {
 	return app.request('http://localhost/api/auth/signup', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
