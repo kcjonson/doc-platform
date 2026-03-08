@@ -42,6 +42,27 @@
 	flex-shrink: 0;
 }
 
+/* Spinning animation for pull-in-progress */
+.pulling {
+	animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.pulling {
+		animation: pulse 1.5s ease-in-out infinite;
+	}
+
+	@keyframes pulse {
+		0%, 100% { opacity: 0.5; }
+		50% { opacity: 1; }
+	}
+}
+
 /* Error notice styling */
 .errorNotice {
 	justify-content: space-between;

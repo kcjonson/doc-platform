@@ -4,19 +4,46 @@ import { Badge, Button, Icon, Notice } from '@specboard/ui';
 import type { GitStatusModel } from '@specboard/models';
 import { CommitErrorBanner } from './CommitErrorBanner';
 import { CommitDialog } from './CommitDialog';
+import { ConfirmDialog } from './ConfirmDialog';
 import styles from './GitStatusBar.module.css';
 
 export interface GitStatusBarProps {
 	gitStatus: GitStatusModel;
+	/** Whether the editor has unsaved changes */
+	hasUnsavedChanges?: boolean;
+	/** Called before pull starts - use to save dirty content. */
+	onBeforePull?: () => Promise<void>;
+	/** Called after a successful pull completes */
+	onPullComplete?: () => void | Promise<void>;
 }
 
-export function GitStatusBar({ gitStatus }: GitStatusBarProps): JSX.Element {
+export function GitStatusBar({ gitStatus, hasUnsavedChanges, onBeforePull, onPullComplete }: GitStatusBarProps): JSX.Element {
 	const [showCommitDialog, setShowCommitDialog] = useState(false);
+	const [showPullConfirm, setShowPullConfirm] = useState(false);
 	// Track last commit message for retry scenarios
 	const lastCommitMessageRef = useRef<string>('');
 
-	const handlePull = async (): Promise<void> => {
-		await gitStatus.pull();
+	const executePull = async (): Promise<void> => {
+		if (onBeforePull) {
+			await onBeforePull();
+		}
+		const result = await gitStatus.pull();
+		if (result.success) {
+			await onPullComplete?.();
+		}
+	};
+
+	const handlePullClick = (): void => {
+		if (hasUnsavedChanges) {
+			setShowPullConfirm(true);
+		} else {
+			executePull();
+		}
+	};
+
+	const handlePullConfirm = (): void => {
+		setShowPullConfirm(false);
+		executePull();
 	};
 
 	const handleCommit = async (message?: string): Promise<void> => {
@@ -76,13 +103,16 @@ export function GitStatusBar({ gitStatus }: GitStatusBarProps): JSX.Element {
 						</Badge>
 					)}
 					<Button
-						onClick={handlePull}
+						onClick={handlePullClick}
 						class="icon"
 						disabled={gitStatus.pulling}
 						aria-label={gitStatus.pulling ? 'Pulling...' : 'Pull latest'}
 						title={gitStatus.pulling ? 'Pulling...' : 'Pull latest'}
 					>
-						<Icon name="download" />
+						<Icon
+							name="download"
+							class={gitStatus.pulling ? styles.pulling : undefined}
+						/>
 					</Button>
 
 					{/* Commit button - always visible, disabled when no changes */}
@@ -105,6 +135,19 @@ export function GitStatusBar({ gitStatus }: GitStatusBarProps): JSX.Element {
 				onClose={() => setShowCommitDialog(false)}
 				onCommit={handleCommit}
 				initialMessage={lastCommitMessageRef.current}
+			/>
+
+			{/* Pull confirmation when there are unsaved changes */}
+			<ConfirmDialog
+				open={showPullConfirm}
+				title="Unsaved changes"
+				message="You have unsaved changes in the editor. Pulling will save your changes first, then update with the latest from remote."
+				warning="If someone else edited the same file, your changes may need to be merged."
+				confirmText="Save & Pull"
+				confirmVariant="primary"
+				cancelText="Cancel"
+				onConfirm={handlePullConfirm}
+				onCancel={() => setShowPullConfirm(false)}
 			/>
 		</div>
 	);
