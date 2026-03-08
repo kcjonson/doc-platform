@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Hono } from 'hono';
+import type pg from 'pg';
 
 // Mock dependencies before imports
 vi.mock('@specboard/db', () => ({
@@ -57,17 +58,17 @@ const mockUser = {
 	updated_at: new Date(),
 };
 
-function mockQueryResult(rows: unknown[] = [], rowCount = rows.length) {
+function mockQueryResult(rows: pg.QueryResultRow[] = [], rowCount = rows.length): pg.QueryResult {
 	return { rows, rowCount, command: 'SELECT', oid: 0, fields: [] };
 }
 
-function createApp() {
+function createApp(): Hono {
 	const app = new Hono();
 	app.post('/api/auth/signup', handleSignup);
 	return app;
 }
 
-function postSignup(app: Hono, body: unknown) {
+function postSignup(app: Hono, body: unknown): Promise<Response> {
 	return app.request('http://localhost/api/auth/signup', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
@@ -79,7 +80,7 @@ function postSignup(app: Hono, body: unknown) {
  * Set up mocks for a successful signup flow.
  * Individual tests can override specific mocks after calling this.
  */
-function setupSuccessMocks() {
+function setupSuccessMocks(): void {
 	process.env.INVITE_KEYS = 'valid-key,other-key';
 	process.env.APP_URL = 'http://localhost:3000';
 
@@ -96,7 +97,7 @@ function setupSuccessMocks() {
 	vi.mocked(sendEmail).mockResolvedValue(undefined);
 
 	// Default query mock: username check, email check, insert user, insert password, insert token
-	vi.mocked(query).mockImplementation(async (sql: string) => {
+	vi.mocked(query).mockImplementation(async (sql: string): Promise<pg.QueryResult> => {
 		if (sql.includes('SELECT id FROM users WHERE username')) {
 			return mockQueryResult([]); // username available
 		}
@@ -177,7 +178,7 @@ describe('handleSignup', () => {
 
 	it('returns 400 for weak password', async () => {
 		process.env.INVITE_KEYS = 'valid-key';
-		vi.mocked(validatePassword).mockReturnValue({ valid: false, errors: ['too weak'] });
+		vi.mocked(validatePassword).mockReturnValue({ valid: false, errors: [{ code: 'too_weak', message: 'too weak' }] });
 		const app = createApp();
 		const res = await postSignup(app, validBody);
 		expect(res.status).toBe(400);
@@ -206,7 +207,7 @@ describe('handleSignup', () => {
 
 	it('returns 409 when username is taken', async () => {
 		setupSuccessMocks();
-		vi.mocked(query).mockImplementation(async (sql: string) => {
+		vi.mocked(query).mockImplementation(async (sql: string): Promise<pg.QueryResult> => {
 			if (sql.includes('SELECT id FROM users WHERE username')) {
 				return mockQueryResult([{ id: 'existing-user' }]); // taken
 			}
@@ -220,7 +221,7 @@ describe('handleSignup', () => {
 
 	it('returns 409 when email is already registered', async () => {
 		setupSuccessMocks();
-		vi.mocked(query).mockImplementation(async (sql: string) => {
+		vi.mocked(query).mockImplementation(async (sql: string): Promise<pg.QueryResult> => {
 			if (sql.includes('SELECT id FROM users WHERE username')) {
 				return mockQueryResult([]); // username available
 			}
@@ -257,7 +258,7 @@ describe('handleSignup', () => {
 			([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO users')
 		);
 		expect(insertCall).toBeDefined();
-		const params = insertCall![1] as string[];
+		const params = insertCall![1] as unknown[];
 		expect(params[0]).toBe('testuser'); // lowercase username
 		expect(params[3]).toBe('test@example.com'); // lowercase email
 	});
@@ -270,7 +271,7 @@ describe('handleSignup', () => {
 		const insertCall = vi.mocked(query).mock.calls.find(
 			([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO users')
 		);
-		const params = insertCall![1] as string[];
+		const params = insertCall![1] as unknown[];
 		expect(params[1]).toBe('Test'); // trimmed first_name
 		expect(params[2]).toBe('User'); // trimmed last_name
 	});
@@ -316,8 +317,8 @@ describe('handleSignup', () => {
 		const insertCall = vi.mocked(query).mock.calls.find(
 			([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO users')
 		);
-		const params = insertCall![1] as string[];
-		const metadata = JSON.parse(params[4]);
+		const params = insertCall![1] as unknown[];
+		const metadata = JSON.parse(String(params[4]));
 		expect(metadata.invite_key).toBe('valid-key');
 	});
 
@@ -329,8 +330,8 @@ describe('handleSignup', () => {
 		const insertCall = vi.mocked(query).mock.calls.find(
 			([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO users')
 		);
-		const params = insertCall![1] as string[];
-		const metadata = JSON.parse(params[4]);
+		const params = insertCall![1] as unknown[];
+		const metadata = JSON.parse(String(params[4]));
 		expect(metadata.invite_key).toBe('valid-key');
 	});
 
@@ -347,8 +348,8 @@ describe('handleSignup', () => {
 		const insertCall = vi.mocked(query).mock.calls.find(
 			([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO users')
 		);
-		const params = insertCall![1] as string[];
-		const metadata = JSON.parse(params[4]);
+		const params = insertCall![1] as unknown[];
+		const metadata = JSON.parse(String(params[4]));
 		expect(metadata.utm_source).toBe('twitter');
 		expect(metadata.utm_medium).toBe('social');
 		expect(metadata.utm_campaign).toBe('launch');
@@ -362,8 +363,8 @@ describe('handleSignup', () => {
 		const insertCall = vi.mocked(query).mock.calls.find(
 			([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO users')
 		);
-		const params = insertCall![1] as string[];
-		const metadata = JSON.parse(params[4]);
+		const params = insertCall![1] as unknown[];
+		const metadata = JSON.parse(String(params[4]));
 		expect(Object.keys(metadata)).toEqual(['invite_key']);
 	});
 
@@ -376,8 +377,8 @@ describe('handleSignup', () => {
 		const insertCall = vi.mocked(query).mock.calls.find(
 			([sql]) => typeof sql === 'string' && sql.includes('INSERT INTO users')
 		);
-		const params = insertCall![1] as string[];
-		const metadata = JSON.parse(params[4]);
+		const params = insertCall![1] as unknown[];
+		const metadata = JSON.parse(String(params[4]));
 		expect(metadata.utm_source).toHaveLength(500);
 	});
 
@@ -389,7 +390,7 @@ describe('handleSignup', () => {
 			code: '23505',
 			detail: 'Key (username)=(testuser) already exists.',
 		});
-		vi.mocked(query).mockImplementation(async (sql: string) => {
+		vi.mocked(query).mockImplementation(async (sql: string): Promise<pg.QueryResult> => {
 			if (sql.includes('SELECT id FROM users WHERE username')) {
 				return mockQueryResult([]); // passes initial check
 			}
@@ -413,7 +414,7 @@ describe('handleSignup', () => {
 			code: '23505',
 			detail: 'Key (email)=(test@example.com) already exists.',
 		});
-		vi.mocked(query).mockImplementation(async (sql: string) => {
+		vi.mocked(query).mockImplementation(async (sql: string): Promise<pg.QueryResult> => {
 			if (sql.includes('SELECT id FROM users WHERE username')) {
 				return mockQueryResult([]);
 			}
