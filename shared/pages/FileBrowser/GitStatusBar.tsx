@@ -14,7 +14,7 @@ export interface GitStatusBarProps {
 	/** Called before pull starts - use to save dirty content. */
 	onBeforePull?: () => Promise<void>;
 	/** Called after a successful pull completes */
-	onPullComplete?: () => void;
+	onPullComplete?: () => void | Promise<void>;
 }
 
 export function GitStatusBar({ gitStatus, hasUnsavedChanges, onBeforePull, onPullComplete }: GitStatusBarProps): JSX.Element {
@@ -29,7 +29,7 @@ export function GitStatusBar({ gitStatus, hasUnsavedChanges, onBeforePull, onPul
 		}
 		const result = await gitStatus.pull();
 		if (result.success) {
-			onPullComplete?.();
+			await onPullComplete?.();
 		}
 	};
 

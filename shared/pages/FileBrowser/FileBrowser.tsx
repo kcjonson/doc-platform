@@ -60,7 +60,7 @@ export interface FileBrowserProps {
 	/** Called before pull starts - use to save dirty content */
 	onBeforePull?: () => Promise<void>;
 	/** Called after a successful pull completes (file tree is already reloaded) */
-	onPullComplete?: () => void;
+	onPullComplete?: () => void | Promise<void>;
 	/** Additional CSS class */
 	class?: string;
 }
@@ -324,7 +324,7 @@ export function FileBrowser({
 	// Handle pull complete - reload file tree and notify parent
 	const handlePullComplete = useCallback(async () => {
 		await model.reload();
-		onPullComplete?.();
+		await onPullComplete?.();
 	}, [model, onPullComplete]);
 
 	// Handle add folder
