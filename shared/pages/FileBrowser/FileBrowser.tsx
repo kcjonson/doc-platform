@@ -55,6 +55,12 @@ export interface FileBrowserProps {
 	onStartNewFileRef?: (startNewFile: (parentPath?: string) => void) => void;
 	/** Callback to receive the renameFile function. Returns new path on success */
 	onRenameFileRef?: (renameFile: (path: string, newFilename: string) => Promise<string>) => void;
+	/** Whether the editor has unsaved changes */
+	hasUnsavedChanges?: boolean;
+	/** Called before pull starts - use to save dirty content */
+	onBeforePull?: () => Promise<void>;
+	/** Called after a successful pull completes (file tree is already reloaded) */
+	onPullComplete?: () => void;
 	/** Additional CSS class */
 	class?: string;
 }
@@ -70,6 +76,9 @@ export function FileBrowser({
 	onFileDeleted,
 	onStartNewFileRef,
 	onRenameFileRef,
+	hasUnsavedChanges,
+	onBeforePull,
+	onPullComplete,
 	class: className,
 }: FileBrowserProps): JSX.Element {
 	// Create model instance once per component
@@ -312,6 +321,12 @@ export function FileBrowser({
 		model.startNewFile(folderPath);
 	};
 
+	// Handle pull complete - reload file tree and notify parent
+	const handlePullComplete = useCallback(async () => {
+		await model.reload();
+		onPullComplete?.();
+	}, [model, onPullComplete]);
+
 	// Handle add folder
 	const handleAddFolder = async (): Promise<void> => {
 		const path = window.prompt('Enter folder path (absolute path to a git repository folder):');
@@ -502,7 +517,14 @@ export function FileBrowser({
 
 	return (
 		<div class={`${styles.container} ${className || ''}`}>
-			{gitStatus && <GitStatusBar gitStatus={gitStatus} />}
+			{gitStatus && (
+				<GitStatusBar
+					gitStatus={gitStatus}
+					hasUnsavedChanges={hasUnsavedChanges}
+					onBeforePull={onBeforePull}
+					onPullComplete={handlePullComplete}
+				/>
+			)}
 			<div class={styles.header}>
 				<span>Files</span>
 				{gitStatus && gitStatus.changedCount > 0 && (

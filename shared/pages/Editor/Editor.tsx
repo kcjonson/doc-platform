@@ -525,6 +525,20 @@ export function Editor(props: RouteProps): JSX.Element {
 		setIsCreatingFile(false);
 	}, []);
 
+	// Save dirty content before pulling remote changes
+	const handleBeforePull = useCallback(async () => {
+		if (documentModel.isDirty && documentModel.filePath) {
+			await performServerSave();
+		}
+	}, [documentModel, performServerSave]);
+
+	// Reload the current file after a successful pull
+	const handlePullComplete = useCallback(async () => {
+		if (documentModel.filePath) {
+			await loadFileFromServer(documentModel.filePath);
+		}
+	}, [documentModel, loadFileFromServer]);
+
 	// Handle file deleted - clear selection if deleted file was open
 	const handleFileDeleted = useCallback((deletedPath: string) => {
 		if (documentModel.filePath === deletedPath) {
@@ -604,6 +618,9 @@ export function Editor(props: RouteProps): JSX.Element {
 					onFileDeleted={handleFileDeleted}
 					onStartNewFileRef={handleStartNewFileRef}
 					onRenameFileRef={handleRenameFileRef}
+					hasUnsavedChanges={documentModel.isDirty}
+					onBeforePull={handleBeforePull}
+					onPullComplete={handlePullComplete}
 					class={styles.sidebar}
 				/>
 				<main class={styles.main}>

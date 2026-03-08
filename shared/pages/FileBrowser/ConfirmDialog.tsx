@@ -15,6 +15,8 @@ export interface ConfirmDialogProps {
 	confirmText?: string;
 	/** Cancel button text */
 	cancelText?: string;
+	/** Confirm button variant (default: "danger") */
+	confirmVariant?: 'danger' | 'primary';
 	/** Called when confirmed */
 	onConfirm: () => void;
 	/** Called when cancelled or closed */
@@ -28,6 +30,7 @@ export function ConfirmDialog({
 	warning,
 	confirmText = 'Confirm',
 	cancelText = 'Cancel',
+	confirmVariant = 'danger',
 	onConfirm,
 	onCancel,
 }: ConfirmDialogProps): JSX.Element | null {
@@ -47,7 +50,7 @@ export function ConfirmDialog({
 					<Button onClick={onCancel} class="secondary">
 						{cancelText}
 					</Button>
-					<Button onClick={onConfirm} class="danger">
+					<Button onClick={onConfirm} class={confirmVariant}>
 						{confirmText}
 					</Button>
 				</div>
