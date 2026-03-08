@@ -6,7 +6,7 @@ import { getCookie, setCookie } from '@specboard/core/cookies';
 import { fetchClient } from '@specboard/fetch';
 import { Button, Page } from '@specboard/ui';
 import { ProjectCard, type Project } from '../ProjectCard/ProjectCard';
-import { ProjectDialog } from '../ProjectDialog/ProjectDialog';
+import { ProjectDialog, type RepositoryConfig } from '../ProjectDialog/ProjectDialog';
 import { SyncProgressDialog } from '../SyncProgressDialog/SyncProgressDialog';
 import styles from './ProjectsList.module.css';
 
@@ -55,7 +55,7 @@ export function ProjectsList(_props: RouteProps): JSX.Element {
 		setDialogProject(null);
 	}
 
-	async function handleSaveProject(data: { name: string; description?: string; repository?: { provider: string; owner: string; repo: string; branch: string; url: string } }): Promise<void> {
+	async function handleSaveProject(data: { name: string; description?: string; repository?: RepositoryConfig }): Promise<void> {
 		try {
 			if (dialogProject === undefined) {
 				// Create mode

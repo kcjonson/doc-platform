@@ -14,7 +14,7 @@ function isCloudRepository(repo: unknown): repo is RepositoryConfigCloud {
 	return typeof repo === 'object' && repo !== null && 'type' in repo && (repo as RepositoryConfigCloud).type === 'cloud';
 }
 
-interface RepositoryConfig {
+export interface RepositoryConfig {
 	provider: 'github';
 	owner: string;
 	repo: string;

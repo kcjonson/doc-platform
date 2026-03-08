@@ -51,17 +51,18 @@ export function SyncProgressDialog({
 	}, []);
 
 	useEffect(() => {
-		let cancelled = false;
+		const controller = new AbortController();
 		let pollCount = 0;
 		let consecutiveErrors = 0;
 
 		async function poll(): Promise<void> {
 			try {
 				const data = await fetchClient.get<SyncStatusResponse>(
-					`/api/projects/${projectId}/sync/status`
+					`/api/projects/${projectId}/sync/status`,
+					{ signal: controller.signal }
 				);
 
-				if (cancelled) return;
+				if (controller.signal.aborted) return;
 
 				consecutiveErrors = 0;
 				setSyncStatus(data.status);
@@ -78,7 +79,7 @@ export function SyncProgressDialog({
 					}
 				}
 			} catch {
-				if (cancelled) return;
+				if (controller.signal.aborted) return;
 				consecutiveErrors++;
 				// Backoff on repeated errors: 3s, 6s, 9s... capped at 15s
 				const backoff = Math.min(POLL_INTERVAL_MS * consecutiveErrors, 15000);
@@ -89,7 +90,7 @@ export function SyncProgressDialog({
 		poll();
 
 		return () => {
-			cancelled = true;
+			controller.abort();
 			if (timerRef.current) {
 				clearTimeout(timerRef.current);
 				timerRef.current = null;

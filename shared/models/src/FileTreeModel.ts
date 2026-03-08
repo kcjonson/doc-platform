@@ -522,7 +522,7 @@ export class FileTreeModel extends Model {
 	// ─────────────────────────────────────────────────────────────────────────
 
 	private async loadTree(currentFilePath?: string, providedExpandedTree?: ExpandedTree, isSyncPoll = false): Promise<void> {
-		// B1 fix: Only show loading indicator for user-initiated loads, not background polls
+		// Avoid toggling loading state during background sync polls to prevent UI flicker
 		if (!isSyncPoll) {
 			this.loading = true;
 			this.error = null;
@@ -582,7 +582,7 @@ export class FileTreeModel extends Model {
 				if (!isSyncPoll) {
 					this.loading = false;
 				}
-				// B2 fix: Schedule poll in finally block so network errors don't kill the loop
+				// Schedule poll in finally block so transient network errors don't stop the poll loop
 				this._scheduleSyncPoll();
 			}
 		}
