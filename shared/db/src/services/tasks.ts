@@ -274,7 +274,7 @@ export async function startTask(taskId: string): Promise<TaskResponse | null> {
 export async function completeTask(taskId: string, note?: string): Promise<TaskResponse | null> {
 	const result = await query<Task>(
 		`UPDATE tasks SET status = 'done', note = COALESCE($2, note), updated_at = NOW() WHERE id = $1 RETURNING *`,
-		[taskId, note || null]
+		[taskId, note ?? null]
 	);
 
 	if (result.rows.length === 0) return null;

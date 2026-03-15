@@ -4,6 +4,12 @@
 # Returns: worktrees, remote branches with recent activity, and incomplete plan files.
 set -euo pipefail
 
+# Verify jq is available (required for JSON assembly)
+if ! command -v jq >/dev/null 2>&1; then
+	echo '{"error":"jq is required but not installed. Install it via: brew install jq (macOS) or apt-get install jq (Linux)"}' >&2
+	exit 1
+fi
+
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || echo '.')"
 
 # ── Worktrees ──
@@ -12,8 +18,10 @@ if git worktree list --porcelain >/dev/null 2>&1; then
 	worktrees=$(git worktree list --porcelain | awk '
 		/^worktree / { path = substr($0, 10) }
 		/^branch /   { branch = substr($0, 12); sub(/^refs\/heads\//, "", branch) }
-		/^$/ || END  { if (path != "") printf "{\"path\":\"%s\",\"branch\":\"%s\"}\n", path, branch; path=""; branch="" }
-	' | jq -s '.')
+		/^$/ || END  { if (path != "") print path "\t" branch; path=""; branch="" }
+	' | while IFS=$'\t' read -r wt_path wt_branch; do
+		jq -n --arg path "$wt_path" --arg branch "$wt_branch" '{path: $path, branch: $branch}'
+	done | jq -s '.')
 fi
 
 # ── Remote branches with recent activity (last 7 days) ──
@@ -25,7 +33,7 @@ if [ "$cutoff" != "0" ]; then
 		if [ "$epoch" -ge "$cutoff" ] 2>/dev/null; then
 			short="${branch#origin/}"
 			date_str=$(date -r "$epoch" +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -d "@$epoch" +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo "unknown")
-			printf '{"branch":"%s","lastCommitDate":"%s"}\n' "$short" "$date_str"
+			jq -n --arg branch "$short" --arg lastCommitDate "$date_str" '{branch: $branch, lastCommitDate: $lastCommitDate}'
 		fi
 	done | jq -s '.' 2>/dev/null || echo '[]')
 fi
@@ -40,7 +48,7 @@ if [ -d "$plans_dir" ]; then
 			title=$(grep -m1 '^# ' "$file" | sed 's/^# //' || basename "$file" .md)
 			modified=$(stat -f %m "$file" 2>/dev/null || stat -c %Y "$file" 2>/dev/null || echo 0)
 			mod_date=$(date -r "$modified" +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -d "@$modified" +%Y-%m-%dT%H:%M:%S 2>/dev/null || echo "unknown")
-			printf '{"file":"%s","title":"%s","modified":"%s"}\n' "$file" "$title" "$mod_date"
+			jq -n --arg file "$file" --arg title "$title" --arg modified "$mod_date" '{file: $file, title: $title, modified: $modified}'
 		fi
 	done | jq -s '.' 2>/dev/null || echo '[]')
 fi

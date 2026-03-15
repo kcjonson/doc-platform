@@ -201,8 +201,8 @@ export async function updateItem(
 			};
 		}
 
-		if (status === 'ready' && !args?.title && !args?.description) {
-			// Unblock shorthand
+		if (status === 'ready' && !args?.title && !args?.description && note === undefined) {
+			// Unblock shorthand (only when no other fields provided)
 			const task = await unblockTaskService(itemId);
 			if (!task) return { content: [{ type: 'text', text: 'Task not found' }], isError: true };
 			return {

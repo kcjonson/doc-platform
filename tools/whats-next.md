@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(git checkout:*), Bash(git push:*), Bash(git rev-parse:*), Bash(bash ~/.claude/scripts/assess-git-state.sh), Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr create:*), Glob, Grep, Read, mcp__specboard__list_projects, mcp__specboard__get_current_work, mcp__specboard__get_ready_epics, mcp__specboard__get_epic, mcp__specboard__create_item, mcp__specboard__create_items, mcp__specboard__update_item, mcp__specboard__delete_item
+allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(git checkout:*), Bash(git push:*), Bash(git rev-parse:*), Bash(git worktree list:*), Bash(git fetch:*), Bash(git for-each-ref:*), Bash(bash ~/.claude/scripts/assess-git-state.sh), Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr create:*), Glob, Grep, Read, mcp__specboard__list_projects, mcp__specboard__get_current_work, mcp__specboard__get_ready_epics, mcp__specboard__get_epic, mcp__specboard__create_item, mcp__specboard__create_items, mcp__specboard__update_item, mcp__specboard__delete_item
 description: Check current work, find what to do next, and manage your development workflow via Specboard
 ---
 
@@ -45,8 +45,8 @@ For each in-progress item from MCP, cross-reference with local state:
 
 | sub_status | Local Worktree? | Remote Activity? | Classification |
 |------------|----------------|-------------------|----------------|
-| in_development/scoping | yes | — | **Active locally** — skip |
-| in_development/scoping | no | recent (<2h) | **Active elsewhere** — skip |
+| scoping or in_development | yes | — | **Active locally** — skip |
+| scoping or in_development | no | recent (<2h) | **Active elsewhere** — skip |
 | paused | — | — | **Needs continuation** — suggest |
 | needs_input | — | — | **Blocked on input** — show, don't suggest |
 | pr_open | — | — | **In review** — check for PR feedback |

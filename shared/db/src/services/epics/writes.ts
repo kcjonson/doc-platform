@@ -28,6 +28,19 @@ function deriveStatusFromSubStatus(subStatus: SubStatus): EpicStatus | undefined
 }
 
 /**
+ * Derive a reasonable sub_status from a board status.
+ * Used when creating epics with a non-default status to keep fields consistent.
+ */
+function deriveSubStatusFromStatus(status: EpicStatus): SubStatus {
+	switch (status) {
+		case 'in_progress': return 'in_development';
+		case 'in_review': return 'pr_open';
+		case 'done': return 'complete';
+		default: return 'not_started';
+	}
+}
+
+/**
  * Create a new epic
  */
 export async function createEpic(
@@ -44,16 +57,21 @@ export async function createEpic(
 		rank = (rankResult.rows[0]?.max ?? 0) + 1;
 	}
 
+	// Derive initial sub_status from status to keep them consistent
+	const initialStatus = data.status || 'ready';
+	const initialSubStatus = deriveSubStatusFromStatus(initialStatus);
+
 	const result = await query<Epic>(
-		`INSERT INTO epics (project_id, title, type, description, status, creator, rank, spec_doc_path)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO epics (project_id, title, type, description, status, sub_status, creator, rank, spec_doc_path)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING *`,
 		[
 			projectId,
 			data.title,
 			data.type || 'epic',
 			data.description || null,
-			data.status || 'ready',
+			initialStatus,
+			initialSubStatus,
 			data.creator || null,
 			rank,
 			data.specDocPath || null,
