@@ -443,7 +443,7 @@ export async function handleBlockTask(context: Context): Promise<Response> {
 		}
 
 		const result = await query<DbTask>(
-			`UPDATE tasks SET status = 'blocked', block_reason = $2 WHERE id = $1 RETURNING *`,
+			`UPDATE tasks SET status = 'blocked', note = $2 WHERE id = $1 RETURNING *`,
 			[id, body.reason]
 		);
 
@@ -483,7 +483,7 @@ export async function handleUnblockTask(context: Context): Promise<Response> {
 		}
 
 		const result = await query<DbTask>(
-			`UPDATE tasks SET status = 'ready', block_reason = NULL WHERE id = $1 RETURNING *`,
+			`UPDATE tasks SET status = 'ready' WHERE id = $1 RETURNING *`,
 			[id]
 		);
 

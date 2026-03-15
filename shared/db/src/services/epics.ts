@@ -3,7 +3,7 @@
  */
 
 import { query } from '../index.ts';
-import type { Epic, Task, ProgressNote, EpicStatus, EpicType } from '../types.ts';
+import type { Epic, Task, ProgressNote, EpicStatus, EpicType, SubStatus } from '../types.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Response types (camelCase for API/MCP responses)
@@ -30,7 +30,7 @@ export interface TaskSummary {
 	title: string;
 	status: string;
 	details: string | null;
-	blockReason: string | null;
+	note: string | null;
 }
 
 export interface ProgressNoteSummary {
@@ -46,10 +46,13 @@ export interface EpicResponse {
 	type: EpicType;
 	description: string | null;
 	status: EpicStatus;
+	subStatus: SubStatus;
 	creator: string | null;
 	rank: number;
 	specDocPath: string | null;
 	prUrl: string | null;
+	branchName: string | null;
+	notes: string | null;
 	createdAt: Date;
 	updatedAt: Date;
 	taskStats: TaskStats;
@@ -68,7 +71,10 @@ export interface CurrentWorkEpic {
 	title: string;
 	type: EpicType;
 	status: EpicStatus;
+	subStatus: SubStatus;
 	specDocPath: string | null;
+	prUrl: string | null;
+	branchName: string | null;
 	taskStats: TaskStats;
 	currentTask: TaskSummary | null;
 	recentNotes: Array<{ note: string; createdAt: Date }>;
@@ -90,10 +96,13 @@ function transformEpic(epic: Epic): Omit<EpicResponse, 'taskStats'> {
 		type: epic.type,
 		description: epic.description,
 		status: epic.status,
+		subStatus: epic.sub_status,
 		creator: epic.creator,
 		rank: epic.rank,
 		specDocPath: epic.spec_doc_path,
 		prUrl: epic.pr_url,
+		branchName: epic.branch_name,
+		notes: epic.notes,
 		createdAt: epic.created_at,
 		updatedAt: epic.updated_at,
 	};
@@ -105,7 +114,7 @@ function transformTask(task: Task): TaskSummary {
 		title: task.title,
 		status: task.status,
 		details: task.details,
-		blockReason: task.block_reason,
+		note: task.note,
 	};
 }
 
@@ -286,7 +295,10 @@ export async function getCurrentWork(projectId: string): Promise<CurrentWorkResp
 				title: epic.title,
 				type: epic.type,
 				status: epic.status,
+				subStatus: epic.sub_status,
 				specDocPath: epic.spec_doc_path,
+				prUrl: epic.pr_url,
+				branchName: epic.branch_name,
 				taskStats: calculateTaskStats(tasks),
 				currentTask: currentTask ? transformTask(currentTask) : null,
 				recentNotes: notesResult.rows.map((n) => ({
@@ -367,9 +379,31 @@ export interface UpdateEpicInput {
 	title?: string;
 	description?: string;
 	status?: EpicStatus;
+	subStatus?: SubStatus;
 	rank?: number;
 	specDocPath?: string;
 	prUrl?: string;
+	branchName?: string;
+	notes?: string;
+}
+
+/**
+ * Derive board status from sub_status at key transitions.
+ * Returns the new status, or undefined if sub_status doesn't force a transition.
+ */
+function deriveStatusFromSubStatus(subStatus: SubStatus): EpicStatus | undefined {
+	switch (subStatus) {
+		case 'scoping':
+		case 'in_development':
+			return 'in_progress';
+		case 'pr_open':
+			return 'in_review';
+		case 'complete':
+			return 'done';
+		default:
+			// paused, needs_input, not_started: no auto-transition
+			return undefined;
+	}
 }
 
 export async function updateEpic(
@@ -380,6 +414,14 @@ export async function updateEpic(
 	const updates: string[] = [];
 	const values: unknown[] = [];
 	let paramIndex = 1;
+
+	// Auto-derive board status from sub_status if provided (and status not explicitly set)
+	if (data.subStatus !== undefined && data.status === undefined) {
+		const derivedStatus = deriveStatusFromSubStatus(data.subStatus);
+		if (derivedStatus) {
+			data.status = derivedStatus;
+		}
+	}
 
 	if (data.title !== undefined) {
 		updates.push(`title = $${paramIndex++}`);
@@ -393,6 +435,10 @@ export async function updateEpic(
 		updates.push(`status = $${paramIndex++}`);
 		values.push(data.status);
 	}
+	if (data.subStatus !== undefined) {
+		updates.push(`sub_status = $${paramIndex++}`);
+		values.push(data.subStatus);
+	}
 	if (data.rank !== undefined) {
 		updates.push(`rank = $${paramIndex++}`);
 		values.push(data.rank);
@@ -404,6 +450,17 @@ export async function updateEpic(
 	if (data.prUrl !== undefined) {
 		updates.push(`pr_url = $${paramIndex++}`);
 		values.push(data.prUrl);
+	}
+	if (data.branchName !== undefined) {
+		updates.push(`branch_name = $${paramIndex++}`);
+		values.push(data.branchName);
+	}
+	if (data.notes !== undefined) {
+		// Append to existing notes with timestamp
+		const timestamp = new Date().toISOString().split('T')[0];
+		const entry = `[${timestamp}] ${data.notes}`;
+		updates.push(`notes = CASE WHEN notes IS NULL THEN $${paramIndex++} ELSE notes || E'\\n' || $${paramIndex - 1} END`);
+		values.push(entry);
 	}
 
 	if (updates.length === 0) {
