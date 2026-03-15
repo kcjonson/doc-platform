@@ -27,7 +27,7 @@ import {
 import { installErrorHandlers, logRequest } from '@specboard/core';
 import { mcpAuthMiddleware, type McpAuthVariables } from '@specboard/auth';
 
-import { epicTools, handleEpicTool } from './tools/epics.ts';
+import { epicTools, handleEpicTool } from './tools/items/index.ts';
 import { projectTools, handleProjectTool } from './tools/projects.ts';
 
 // Install global error handlers for uncaught exceptions
