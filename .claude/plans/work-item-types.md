@@ -1,3 +1,5 @@
+# COMPLETE - 2026-03-07
+
 # Add Work Item Types (Chore, Bug) to Planning Board
 
 ## Context

@@ -1,3 +1,5 @@
+# COMPLETE - 2026-03-07
+
 # Rename Epic → Item in Planning UI Layer
 
 ## Context
