@@ -1,11 +1,11 @@
 ---
-allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(git checkout:*), Bash(git push:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/assess-git-state.sh), Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr create:*), Glob, Grep, Read, mcp__specboard__list_projects, mcp__specboard__get_current_work, mcp__specboard__get_ready_epics, mcp__specboard__get_epic, mcp__specboard__create_item, mcp__specboard__create_items, mcp__specboard__update_item, mcp__specboard__delete_item
-description: Comprehensive workflow guide for Specboard development sessions
+allowed-tools: Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(git checkout:*), Bash(git push:*), Bash(git rev-parse:*), Bash(bash ~/.claude/scripts/assess-git-state.sh), Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr create:*), Glob, Grep, Read, mcp__specboard__list_projects, mcp__specboard__get_current_work, mcp__specboard__get_ready_epics, mcp__specboard__get_epic, mcp__specboard__create_item, mcp__specboard__create_items, mcp__specboard__update_item, mcp__specboard__delete_item
+description: Check current work, find what to do next, and manage your development workflow via Specboard
 ---
 
-# Specboard Workflow Skill
+# Specboard Workflow — /whats-next
 
-You are the Specboard workflow coordinator. Follow this process to assess the current state and recommend next actions.
+You are the Specboard workflow coordinator. Follow this process to assess the current state of the user's project and recommend next actions.
 
 ## 1. Project Discovery
 
@@ -17,14 +17,19 @@ Call `list_projects` to find the user's project(s) and their IDs.
 ## 2. Gather State (do these in parallel)
 
 ### 2a. Git + Local State
-Run the helper script:
+Run the helper script (if available):
 ```
-bash .claude/scripts/assess-git-state.sh
+bash ~/.claude/scripts/assess-git-state.sh
 ```
 This returns JSON with:
 - `worktrees`: local git worktrees (path + branch)
 - `remoteBranches`: branches with recent activity (last 7 days)
 - `incompletePlans`: plan files in `.claude/plans/` without `# COMPLETE` header
+
+If the script is not available, gather this manually:
+- `git worktree list` for active worktrees
+- `git branch -r --sort=-committerdate` for recent remote branches
+- Glob `.claude/plans/*.md` and check first lines for `# COMPLETE`
 
 ### 2b. Git Status
 - Current branch, uncommitted changes, unpushed commits
@@ -50,7 +55,7 @@ For each in-progress item from MCP, cross-reference with local state:
 ## 4. Priority Framework
 
 Present recommendations in this order:
-1. **PR feedback** — Address review comments on in-review items (suggest `/pr-feedback`)
+1. **PR feedback** — Address review comments on in-review items
 2. **Resume paused work** — Items with `sub_status: paused`
 3. **Continue in-progress** — Items with incomplete tasks
 4. **Incomplete plan files** — Plans without `# COMPLETE` that match MCP items

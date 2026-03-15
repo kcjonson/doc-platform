@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Gathers local git and plan file state as JSON for the /whats-next skill.
+# Designed to run from any git repository.
 # Returns: worktrees, remote branches with recent activity, and incomplete plan files.
 set -euo pipefail
 
