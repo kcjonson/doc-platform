@@ -124,7 +124,7 @@ export const epicTools: Tool[] = [
 	{
 		name: 'update_item',
 		description:
-			'Update any work item or task. For work items (epic/chore/bug): supports title, description, status, sub_status, branch_name, pr_url, notes. Setting sub_status auto-updates board status (scoping/in_development→in_progress, pr_open→in_review, complete→done). For tasks: supports title, details, status (ready/in_progress/blocked/done), note.',
+			'Update any work item or task. For work items (epic/chore/bug): supports title, description, status, sub_status, branch_name, pr_url, notes. Setting sub_status auto-updates board status (scoping/in_development/pr_open→in_progress, complete→done). For tasks: supports title, details, status (ready/in_progress/blocked/done), note.',
 		inputSchema: {
 			type: 'object',
 			properties: {

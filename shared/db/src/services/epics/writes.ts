@@ -16,9 +16,8 @@ function deriveStatusFromSubStatus(subStatus: SubStatus): EpicStatus | undefined
 	switch (subStatus) {
 		case 'scoping':
 		case 'in_development':
-			return 'in_progress';
 		case 'pr_open':
-			return 'in_review';
+			return 'in_progress';
 		case 'complete':
 			return 'done';
 		default:
@@ -34,7 +33,6 @@ function deriveStatusFromSubStatus(subStatus: SubStatus): EpicStatus | undefined
 function deriveSubStatusFromStatus(status: EpicStatus): SubStatus {
 	switch (status) {
 		case 'in_progress': return 'in_development';
-		case 'in_review': return 'pr_open';
 		case 'done': return 'complete';
 		default: return 'not_started';
 	}
@@ -197,5 +195,5 @@ export async function signalReadyForReview(
 	epicId: string,
 	prUrl: string
 ): Promise<EpicResponse | null> {
-	return updateEpic(projectId, epicId, { status: 'in_review', prUrl });
+	return updateEpic(projectId, epicId, { status: 'in_progress', subStatus: 'pr_open', prUrl });
 }
